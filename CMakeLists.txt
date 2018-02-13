@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 3.10)
 
 project(VulkanViewer)
@@ -6,6 +7,7 @@ set(TARGET_NAME ${PROJECT_NAME})
 
 find_package(Vulkan REQUIRED)
 
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
 
 include_directories(${Vulkan_INCLUDE_DIRS})
