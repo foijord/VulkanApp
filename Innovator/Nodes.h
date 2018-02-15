@@ -194,8 +194,8 @@ public:
   {
     if (!this->gpu_buffer) {
       size_t size = sizeof(uint32_t) * this->values.size();
-      this->cpu_buffer = std::make_unique<VulkanHostVisibleBufferObject<uint32_t>>(action->device->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-      this->gpu_buffer = std::make_unique<VulkanDeviceLocalBufferObject<uint32_t>>(action->device->device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+      this->cpu_buffer = std::make_unique<VulkanHostVisibleBufferObject<uint32_t>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+      this->gpu_buffer = std::make_unique<VulkanDeviceLocalBufferObject<uint32_t>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
       this->cpu_buffer->setValues(this->values);
       this->gpu_buffer->setValues(action->staging_command->buffer(), this->cpu_buffer, size);
@@ -241,7 +241,7 @@ public:
   {
     size_t size = sizeof(T) * this->values.size();
     if (!this->buffer) {
-      this->buffer = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device->device, size, this->usage);
+      this->buffer = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device, size, this->usage);
       this->buffer->setValues(this->values);
     }
     VulkanBufferDescription description;
@@ -296,7 +296,7 @@ public:
     size_t size = sizeof(T) * this->values.size();
 
     if (!this->attribute) {
-      this->attribute = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+      this->attribute = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
       this->attribute->setValues(this->values);
     }
 
@@ -378,7 +378,7 @@ public:
       };
 
       this->vulkantexture = std::make_unique<TextureObject>(
-        action->device->device,
+        action->device,
         component_mapping,
         subresource_range,
         vulkan_target[this->texture.target()],

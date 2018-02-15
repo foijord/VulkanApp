@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <memory>
+#include <algorithm>
 #include <stdexcept>
 
 class VkException : public std::runtime_error {
@@ -68,14 +69,123 @@ namespace {
     THROW_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data()));
     return physical_devices;
   }
+
+  template<class PropertyType>
+  std::vector<std::string> extract_layer_names(std::vector<PropertyType> properties)
+  {
+    std::vector<std::string> layer_names;
+    std::transform(properties.begin(), properties.end(), std::back_inserter(layer_names), [](auto p) { return p.layerName; });
+    return layer_names;
+  }
+
+  template<class PropertyType>
+  std::vector<std::string> extract_extension_names(std::vector<PropertyType> properties)
+  {
+    std::vector<std::string> exension_names;
+    std::transform(properties.begin(), properties.end(), std::back_inserter(exension_names), [](auto p) { return p.extensionName; });
+    return exension_names;
+  }
+
+  std::vector<std::string> get_set_difference(std::vector<std::string> required, std::vector<std::string> supported)
+  {
+    std::sort(required.begin(), required.end());
+    std::sort(supported.begin(), supported.end());
+
+    std::vector<std::string> difference;
+    std::set_difference(required.begin(), required.end(), supported.begin(), supported.end(), std::back_inserter(difference));
+    return difference;
+  }
+
+  std::vector<const char*> get_instance_layer_names(const std::vector<std::string> & instance_layers)
+  {
+    std::vector<std::string> supported_instance_layer_names = extract_layer_names(EnumerateInstanceLayerProperties());
+    std::vector<std::string> unsupported_layers = get_set_difference(instance_layers, supported_instance_layer_names);
+    if (!unsupported_layers.empty()) {
+      throw std::runtime_error("unsupported instance layers");
+    }
+    std::vector<const char*> instance_layer_names;
+    for (const std::string & name : instance_layers) {
+      instance_layer_names.push_back(name.c_str());
+    }
+    return instance_layer_names;
+  }
+
+  std::vector<const char*> get_instance_extension_names(const std::vector<std::string> & instance_extensions)
+  {
+    std::vector<std::string> supported_instance_extension_names = extract_extension_names(EnumerateInstanceExtensionProperties());
+    std::vector<std::string> unsupported_extensions = get_set_difference(instance_extensions, supported_instance_extension_names);
+    if (!unsupported_extensions.empty()) {
+      throw std::runtime_error("unsupported instance extensions");
+    }
+    std::vector<const char*> instance_extension_names;
+    for (const std::string & name : instance_extensions) {
+      instance_extension_names.push_back(name.c_str());
+    }
+    return instance_extension_names;
+  }
+
+  std::vector<const char*> get_device_layer_names(const std::vector<std::string> & device_layers, VkPhysicalDevice physical_device)
+  {
+    std::vector<std::string> supported_device_layer_names = extract_layer_names(EnumerateDeviceLayerProperties(physical_device));
+    std::vector<std::string> unsupported_layers = get_set_difference(device_layers, supported_device_layer_names);
+    if (!unsupported_layers.empty()) {
+      throw std::runtime_error("unsupported device layers");
+    }
+    std::vector<const char*> device_layer_names;
+    for (const std::string & name : device_layers) {
+      device_layer_names.push_back(name.c_str());
+    }
+    return device_layer_names;
+  }
+
+  std::vector<const char*> get_device_extension_names(const std::vector<std::string> & device_extensions, VkPhysicalDevice physical_device)
+  {
+    std::vector<std::string> supported_device_extension_names = extract_extension_names(EnumerateDeviceExtensionProperties(physical_device));
+    std::vector<std::string> unsupported_extensions = get_set_difference(device_extensions, supported_device_extension_names);
+    if (!unsupported_extensions.empty()) {
+      throw std::runtime_error("unsupported device extensions");
+    }
+    std::vector<const char*> device_extension_names;
+    for (const std::string & name : device_extensions) {
+      device_extension_names.push_back(name.c_str());
+    }
+    return device_extension_names;
+  }
 }
+
+class VulkanPhysicalDevice {
+public:
+  VulkanPhysicalDevice(VkPhysicalDevice device)
+    : device(device)
+  {
+    vkGetPhysicalDeviceFeatures(this->device, &this->features);
+    vkGetPhysicalDeviceProperties(this->device, &this->properties);
+    vkGetPhysicalDeviceMemoryProperties(this->device, &this->memory_properties);
+
+    uint32_t count;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &count, nullptr);
+    queue_family_properties.resize(count);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &count, queue_family_properties.data());
+  }
+
+  ~VulkanPhysicalDevice() {}
+
+  VkPhysicalDevice device;
+  VkPhysicalDeviceFeatures features;
+  VkPhysicalDeviceProperties properties;
+  VkPhysicalDeviceMemoryProperties memory_properties;
+  std::vector<VkQueueFamilyProperties> queue_family_properties;
+};
 
 class VulkanInstance {
 public:
   VulkanInstance(const VkApplicationInfo & application_info,
-                 const std::vector<const char*> & enabled_layer_names, 
-                 const std::vector<const char*> & enabled_extension_names)
+    const std::vector<std::string> & instance_layers,
+    const std::vector<std::string> & instance_extensions)
   {
+    std::vector<const char *> enabled_layer_names = get_instance_layer_names(instance_layers);
+    std::vector<const char *> enabled_extension_names = get_instance_extension_names(instance_extensions);
+
     VkInstanceCreateInfo create_info;
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pNext = nullptr;
@@ -87,6 +197,37 @@ public:
     create_info.ppEnabledExtensionNames = enabled_extension_names.data();
 
     THROW_ERROR(vkCreateInstance(&create_info, nullptr, &this->instance));
+
+    for (const VkPhysicalDevice & physical_device : EnumeratePhysicalDevices(this->instance)) {
+      physical_devices.push_back(std::make_shared<VulkanPhysicalDevice>(physical_device));
+    }
+
+    vkQueuePresent = (PFN_vkQueuePresentKHR)vkGetInstanceProcAddr(this->instance, "vkQueuePresentKHR");
+    vkCreateSwapchain = (PFN_vkCreateSwapchainKHR)vkGetInstanceProcAddr(this->instance, "vkCreateSwapchainKHR");
+    vkAcquireNextImage = (PFN_vkAcquireNextImageKHR)vkGetInstanceProcAddr(this->instance, "vkAcquireNextImageKHR");
+    vkDestroySwapchain = (PFN_vkDestroySwapchainKHR)vkGetInstanceProcAddr(this->instance, "vkDestroySwapchainKHR");
+    vkGetSwapchainImages = (PFN_vkGetSwapchainImagesKHR)vkGetInstanceProcAddr(this->instance, "vkGetSwapchainImagesKHR");
+    vkCreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(this->instance, "vkCreateDebugReportCallbackEXT");
+    vkDestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(this->instance, "vkDestroyDebugReportCallbackEXT");
+    vkGetPhysicalDeviceSurfaceSupport = (PFN_vkGetPhysicalDeviceSurfaceSupportKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfaceSupportKHR");
+    vkGetPhysicalDeviceSurfaceFormats = (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
+    vkGetPhysicalDeviceSurfaceCapabilities = (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+    vkGetPhysicalDeviceSurfacePresentModes = (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
+
+    if (!(this->vkQueuePresent &&
+          this->vkCreateSwapchain &&
+          this->vkAcquireNextImage &&
+          this->vkDestroySwapchain &&
+          this->vkGetSwapchainImages &&
+          this->vkCreateDebugReportCallback &&
+          this->vkDestroyDebugReportCallback &&
+          this->vkGetPhysicalDeviceSurfaceSupport &&
+          this->vkGetPhysicalDeviceSurfaceFormats &&
+          this->vkGetPhysicalDeviceSurfaceCapabilities &&
+          this->vkGetPhysicalDeviceSurfacePresentModes))
+    {
+      throw std::runtime_error("VulkanFunctions::VulkanFunctions(): vkGetInstanceProcAddr failed.");
+    }
   }
 
   ~VulkanInstance()
@@ -95,11 +236,25 @@ public:
   }
 
   VkInstance instance;
+
+  PFN_vkQueuePresentKHR vkQueuePresent;
+  PFN_vkCreateSwapchainKHR vkCreateSwapchain;
+  PFN_vkAcquireNextImageKHR vkAcquireNextImage;
+  PFN_vkDestroySwapchainKHR vkDestroySwapchain;
+  PFN_vkGetSwapchainImagesKHR vkGetSwapchainImages;
+  PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallback;
+  PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallback;
+  PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupport;
+  PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormats;
+  PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilities;
+  PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModes;
+
+  std::vector<std::shared_ptr<VulkanPhysicalDevice>> physical_devices;
 };
 
 class VulkanDevice {
 public:
-  VulkanDevice(VkPhysicalDevice physical_device, 
+  VulkanDevice(const std::shared_ptr<VulkanPhysicalDevice> & physical_device, 
                const VkPhysicalDeviceFeatures & enabled_features, 
                const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos,
                const std::vector<const char*> & enabled_layer_names, 
@@ -117,9 +272,7 @@ public:
     create_info.ppEnabledExtensionNames = enabled_extension_names.data();
     create_info.pEnabledFeatures = &enabled_features;
 
-    THROW_ERROR(vkCreateDevice(physical_device, &create_info, nullptr, &this->device));
-
-    vkGetPhysicalDeviceMemoryProperties(physical_device, &this->memory_properties);
+    THROW_ERROR(vkCreateDevice(physical_device->device, &create_info, nullptr, &this->device));
   }
 
   ~VulkanDevice()
@@ -127,14 +280,62 @@ public:
     vkDestroyDevice(this->device, nullptr);
   }
 
-  void waitIdle() 
+  VkDevice device;
+};
+
+class VulkanSwapchain {
+public:
+  VulkanSwapchain(const std::shared_ptr<VulkanDevice> & device, 
+                  const std::shared_ptr<VulkanInstance> & vulkan,
+                  VkSurfaceKHR surface,
+                  uint32_t minImageCount,
+                  VkFormat imageFormat,
+                  VkColorSpaceKHR imageColorSpace,
+                  VkExtent2D imageExtent,
+                  uint32_t imageArrayLayers,
+                  VkImageUsageFlags imageUsage,
+                  VkSharingMode imageSharingMode,
+                  std::vector<uint32_t> queueFamilyIndices,
+                  VkSurfaceTransformFlagBitsKHR preTransform,
+                  VkCompositeAlphaFlagBitsKHR compositeAlpha,
+                  VkPresentModeKHR presentMode,
+                  VkBool32 clipped,
+                  VkSwapchainKHR oldSwapchain)
+    : vulkan(vulkan), device(device)
   {
-    vkDeviceWaitIdle(this->device);
+    VkSwapchainCreateInfoKHR create_info;
+    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    create_info.pNext = nullptr;
+    create_info.flags = 0; // reserved for future use
+    create_info.surface = surface;
+    create_info.minImageCount = minImageCount;
+    create_info.imageFormat = imageFormat;
+    create_info.imageColorSpace = imageColorSpace;
+    create_info.imageExtent = imageExtent;
+    create_info.imageArrayLayers = imageArrayLayers;
+    create_info.imageUsage = imageUsage;
+    create_info.imageSharingMode = imageSharingMode;
+    create_info.queueFamilyIndexCount = static_cast<uint32_t>(queueFamilyIndices.size());
+    create_info.pQueueFamilyIndices = queueFamilyIndices.data();
+    create_info.preTransform = preTransform;
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    create_info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    create_info.clipped = clipped;
+    create_info.oldSwapchain = oldSwapchain;
+
+    THROW_ERROR(this->vulkan->vkCreateSwapchain(this->device->device, &create_info, nullptr, &this->swapchain));
   }
 
-  VkDevice device;
-  VkPhysicalDeviceMemoryProperties memory_properties;
+  ~VulkanSwapchain()
+  {
+    this->vulkan->vkDestroySwapchain(this->device->device, this->swapchain, nullptr);
+  }
+
+  VkSwapchainKHR swapchain;
+  std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanInstance> vulkan;
 };
+
 
 class VulkanCommandPool {
 public:
@@ -385,82 +586,6 @@ namespace {
     throw std::runtime_error("VulkanMemory: could not find suitable memory type");
   };
 }
-
-class VulkanMemory {
-public:
-  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, VkMemoryRequirements requirements, VkMemoryPropertyFlags flags)
-    : device(device)
-  {
-    VkAllocationCallbacks allocation_callbacks;
-    allocation_callbacks.pUserData = nullptr;
-    allocation_callbacks.pfnAllocation = (PFN_vkAllocationFunction)&VulkanMemory::allocate;
-    allocation_callbacks.pfnReallocation = (PFN_vkReallocationFunction)&VulkanMemory::reallocate;
-    allocation_callbacks.pfnFree = (PFN_vkFreeFunction)&VulkanMemory::free;
-    allocation_callbacks.pfnInternalAllocation = nullptr;
-    allocation_callbacks.pfnInternalFree = nullptr;
-
-    VkMemoryAllocateInfo allocate_info;
-    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocate_info.pNext = nullptr;
-    allocate_info.allocationSize = requirements.size;
-    allocate_info.memoryTypeIndex = get_memory_type_index(this->device->memory_properties, requirements, flags);
-
-    THROW_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
-  }
-
-  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, VkImage image, VkMemoryPropertyFlags flags)
-    : VulkanMemory(device, get_memory_requirements(device->device, image), flags)
-  {
-    THROW_ERROR(vkBindImageMemory(this->device->device, image, this->memory, 0));
-  }
-
-  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, VkBuffer buffer, VkMemoryPropertyFlags flags)
-    : VulkanMemory(device, get_memory_requirements(device->device, buffer), flags)
-  {
-    THROW_ERROR(vkBindBufferMemory(this->device->device, buffer, this->memory, 0));
-  }
-
-  ~VulkanMemory()
-  {
-    vkFreeMemory(this->device->device, this->memory, nullptr);
-  }
-
-  static void * allocate(void * userdata, size_t size, size_t alignment, VkSystemAllocationScope scope)
-  {
-    return _aligned_malloc(size, alignment);
-  }
-
-  static void free(void * userdata, void * block)
-  {
-    _aligned_free(block);
-  }
-
-  static void * reallocate(void * userdata, void * block, size_t size, size_t alignment, VkSystemAllocationScope scope)
-  {
-    return _aligned_realloc(block, size, alignment);
-  }
-
-  void * map(size_t size)
-  {
-    void * data;
-    THROW_ERROR(vkMapMemory(this->device->device, this->memory, 0, size, 0, &data));
-    return data;
-  }
-
-  void unmap()
-  {
-    vkUnmapMemory(this->device->device, this->memory);
-  }
-
-  void memcpy(const void * data, size_t size)
-  {
-    ::memcpy(this->map(size), data, size);
-    this->unmap();
-  }
-
-  VkDeviceMemory memory;
-  std::shared_ptr<VulkanDevice> device;
-};
 
 class VulkanImage {
 public:

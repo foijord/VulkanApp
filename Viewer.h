@@ -10,10 +10,11 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <algorithm>
 
 class VulkanSurfaceWin32 {
 public:
-  VulkanSurfaceWin32(const std::shared_ptr<Vulkan> & vulkan, HWND hwnd, HINSTANCE hinstance)
+  VulkanSurfaceWin32(const std::shared_ptr<VulkanInstance> & vulkan, HWND hwnd, HINSTANCE hinstance)
     : vulkan(vulkan)
   {
     VkWin32SurfaceCreateInfoKHR create_info;
@@ -22,62 +23,52 @@ public:
     create_info.hwnd = hwnd;
     create_info.hinstance = hinstance;
 
-    THROW_ERROR(vkCreateWin32SurfaceKHR(this->vulkan->instance->instance, &create_info, nullptr, &this->surface));
+    THROW_ERROR(vkCreateWin32SurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
   }
 
   ~VulkanSurfaceWin32()
   {
-    vkDestroySurfaceKHR(this->vulkan->instance->instance, this->surface, nullptr);
+    vkDestroySurfaceKHR(this->vulkan->instance, this->surface, nullptr);
   }
 
   std::vector<VkPresentModeKHR> getPresentModes(VkPhysicalDevice physical_device)
   {
     uint32_t mode_count;
-    THROW_ERROR(vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, this->surface, &mode_count, nullptr));
+    THROW_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, this->surface, &mode_count, nullptr));
     std::vector<VkPresentModeKHR> modes(mode_count);
-    THROW_ERROR(vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, this->surface, &mode_count, modes.data()));
+    THROW_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, this->surface, &mode_count, modes.data()));
     return modes;
   }
 
   VkSurfaceCapabilitiesKHR getSurfaceCapabilities(VkPhysicalDevice physical_device)
   {
     VkSurfaceCapabilitiesKHR capabilities;
-    THROW_ERROR(vulkan->vkGetPhysicalDeviceSurfaceCapabilities(physical_device, this->surface, &capabilities));
+    THROW_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(physical_device, this->surface, &capabilities));
     return capabilities;
   }
 
   std::vector<VkSurfaceFormatKHR> getSurfaceFormats(VkPhysicalDevice physical_device)
   {
     uint32_t format_count;
-    THROW_ERROR(vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device, this->surface, &format_count, nullptr));
+    THROW_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device, this->surface, &format_count, nullptr));
     std::vector<VkSurfaceFormatKHR> formats(format_count);
-    THROW_ERROR(vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device, this->surface, &format_count, formats.data()));
+    THROW_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device, this->surface, &format_count, formats.data()));
     return formats;
   }
 
-  static std::vector<VkQueueFamilyProperties> GetQueueFamilyProperties(VkPhysicalDevice physical_device)
+  uint32_t getQueueIndex(const std::shared_ptr<VulkanPhysicalDevice> & physical_device, VkQueueFlags queue_flags)
   {
-    uint32_t properties_count;
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &properties_count, nullptr);
-    std::vector<VkQueueFamilyProperties> properties(properties_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &properties_count, properties.data());
-    return properties;
-  }
-
-  uint32_t getQueueIndex(VkPhysicalDevice physical_device, VkQueueFlags queue_flags)
-  {
-    std::vector<VkQueueFamilyProperties> properties = GetQueueFamilyProperties(physical_device);
-    for (uint32_t i = 0; i < properties.size(); i++) {
+    for (uint32_t i = 0; i < physical_device->queue_family_properties.size(); i++) {
       VkBool32 supports_present;
-      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, this->surface, &supports_present);
-      if ((properties[i].queueFlags & queue_flags) && supports_present)
+      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device->device, i, this->surface, &supports_present);
+      if ((physical_device->queue_family_properties[i].queueFlags & queue_flags) && supports_present)
         return i;
     }
     throw std::runtime_error("Device constructor: couldn't find queue that supports graphics and compute");
   }
 
   VkSurfaceKHR surface;
-  std::shared_ptr<Vulkan> vulkan;
+  std::shared_ptr<VulkanInstance> vulkan;
 };
 
 class Window {
@@ -203,11 +194,11 @@ public:
     application_info.engineVersion = 1;
     application_info.apiVersion = VK_API_VERSION_1_0;
 
-    this->vulkan = std::make_unique<Vulkan>(application_info, instance_layers, instance_extensions);
+    this->vulkan = std::make_unique<VulkanInstance>(application_info, instance_layers, instance_extensions);
     this->debugcb = std::make_unique<VulkanDebugCallback>(this->vulkan, VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT, DebugCallback);
     this->surface = std::make_unique<VulkanSurfaceWin32>(this->vulkan, this->window, hinstance);
 
-    VkPhysicalDevice physical_device = this->vulkan->physical_devices[0];
+    std::shared_ptr<VulkanPhysicalDevice> physical_device = this->vulkan->physical_devices[0];
     uint32_t queue_index = this->surface->getQueueIndex(physical_device, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
 
     std::vector<std::string> device_layers = {
@@ -255,12 +246,17 @@ public:
 
   virtual void resize()
   {
-    VkPhysicalDevice physical_device = this->vulkan->physical_devices[0];
-    VkSurfaceFormatKHR surface_format = this->surface->getSurfaceFormats(physical_device)[0];
-    std::vector<VkPresentModeKHR> present_modes = this->surface->getPresentModes(physical_device);
-    VkSurfaceCapabilitiesKHR surface_capabilities = this->surface->getSurfaceCapabilities(physical_device);
+    std::shared_ptr<VulkanPhysicalDevice> physical_device = this->vulkan->physical_devices[0];
+    VkSurfaceFormatKHR surface_format = this->surface->getSurfaceFormats(physical_device->device)[0];
+    std::vector<VkPresentModeKHR> present_modes = this->surface->getPresentModes(physical_device->device);
+    VkSurfaceCapabilitiesKHR surface_capabilities = this->surface->getSurfaceCapabilities(physical_device->device);
 
-    this->device->waitIdle();
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+      throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
+    }
+
+    THROW_ERROR(vkDeviceWaitIdle(this->device->device->device));
     this->swapchain.reset();
     this->renderaction.reset();
 
@@ -273,6 +269,7 @@ public:
       this->renderaction->framebuffer_object->color_attachment,
       this->surface->surface,
       surface_capabilities,
+      present_mode,
       surface_format);
   }
 
@@ -318,7 +315,7 @@ public:
     }
   }
 
-  std::shared_ptr<class Vulkan> vulkan;
+  std::shared_ptr<class VulkanInstance> vulkan;
   std::unique_ptr<class VulkanDebugCallback> debugcb;
   std::unique_ptr<class VulkanSurfaceWin32> surface;
   std::shared_ptr<class Device> device;

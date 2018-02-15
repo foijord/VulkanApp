@@ -11,149 +11,14 @@
 #include <string>
 #include <memory>
 
-class VulkanMemory;
-
-namespace {
-  template<class PropertyType>
-  std::vector<std::string> extract_layer_names(std::vector<PropertyType> properties)
-  {
-    std::vector<std::string> layer_names;
-    std::transform(properties.begin(), properties.end(), std::back_inserter(layer_names), [](auto p) { return p.layerName; });
-    return layer_names;
-  }
-
-  template<class PropertyType>
-  std::vector<std::string> extract_extension_names(std::vector<PropertyType> properties)
-  {
-    std::vector<std::string> exension_names;
-    std::transform(properties.begin(), properties.end(), std::back_inserter(exension_names), [](auto p) { return p.extensionName; });
-    return exension_names;
-  }
-
-  std::vector<std::string> get_set_difference(std::vector<std::string> required, std::vector<std::string> supported)
-  {
-    std::sort(required.begin(), required.end());
-    std::sort(supported.begin(), supported.end());
-
-    std::vector<std::string> difference;
-    std::set_difference(required.begin(), required.end(), supported.begin(), supported.end(), std::back_inserter(difference));
-    return difference;
-  }
-
-  std::vector<const char*> get_instance_layer_names(const std::vector<std::string> & instance_layers)
-  {
-    std::vector<std::string> supported_instance_layer_names = extract_layer_names(EnumerateInstanceLayerProperties());
-    std::vector<std::string> unsupported_layers = get_set_difference(instance_layers, supported_instance_layer_names);
-    if (!unsupported_layers.empty()) {
-      throw std::runtime_error("unsupported instance layers");
-    }
-    std::vector<const char*> instance_layer_names;
-    for (const std::string & name : instance_layers) {
-      instance_layer_names.push_back(name.c_str());
-    }
-    return instance_layer_names;
-  }
-
-  std::vector<const char*> get_instance_extension_names(const std::vector<std::string> & instance_extensions)
-  {
-    std::vector<std::string> supported_instance_extension_names = extract_extension_names(EnumerateInstanceExtensionProperties());
-    std::vector<std::string> unsupported_extensions = get_set_difference(instance_extensions, supported_instance_extension_names);
-    if (!unsupported_extensions.empty()) {
-      throw std::runtime_error("unsupported instance extensions");
-    }
-    std::vector<const char*> instance_extension_names;
-    for (const std::string & name : instance_extensions) {
-      instance_extension_names.push_back(name.c_str());
-    }
-    return instance_extension_names;
-  }
-
-  std::vector<const char*> get_device_layer_names(const std::vector<std::string> & device_layers, VkPhysicalDevice physical_device)
-  {
-    std::vector<std::string> supported_device_layer_names = extract_layer_names(EnumerateDeviceLayerProperties(physical_device));
-    std::vector<std::string> unsupported_layers = get_set_difference(device_layers, supported_device_layer_names);
-    if (!unsupported_layers.empty()) {
-      throw std::runtime_error("unsupported device layers");
-    }
-    std::vector<const char*> device_layer_names;
-    for (const std::string & name : device_layers) {
-      device_layer_names.push_back(name.c_str());
-    }
-    return device_layer_names;
-  }
-
-  std::vector<const char*> get_device_extension_names(const std::vector<std::string> & device_extensions, VkPhysicalDevice physical_device)
-  {
-    std::vector<std::string> supported_device_extension_names = extract_extension_names(EnumerateDeviceExtensionProperties(physical_device));
-    std::vector<std::string> unsupported_extensions = get_set_difference(device_extensions, supported_device_extension_names);
-    if (!unsupported_extensions.empty()) {
-      throw std::runtime_error("unsupported device extensions");
-    }
-    std::vector<const char*> device_extension_names;
-    for (const std::string & name : device_extensions) {
-      device_extension_names.push_back(name.c_str());
-    }
-    return device_extension_names;
-  }
-}
-
-class Vulkan {
-public:
-  Vulkan(const VkApplicationInfo & application_info, const std::vector<std::string> & instance_layers, const std::vector<std::string> & instance_extensions)
-    : instance(std::make_unique<VulkanInstance>(application_info, get_instance_layer_names(instance_layers), get_instance_extension_names(instance_extensions))),
-      physical_devices(EnumeratePhysicalDevices(this->instance->instance)),
-      vkQueuePresent((PFN_vkQueuePresentKHR)vkGetInstanceProcAddr(this->instance->instance, "vkQueuePresentKHR")),
-      vkCreateSwapchain((PFN_vkCreateSwapchainKHR)vkGetInstanceProcAddr(this->instance->instance, "vkCreateSwapchainKHR")),
-      vkAcquireNextImage((PFN_vkAcquireNextImageKHR)vkGetInstanceProcAddr(this->instance->instance, "vkAcquireNextImageKHR")),
-      vkDestroySwapchain((PFN_vkDestroySwapchainKHR)vkGetInstanceProcAddr(this->instance->instance, "vkDestroySwapchainKHR")),
-      vkGetSwapchainImages((PFN_vkGetSwapchainImagesKHR)vkGetInstanceProcAddr(this->instance->instance, "vkGetSwapchainImagesKHR")),
-      vkCreateDebugReportCallback((PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(this->instance->instance, "vkCreateDebugReportCallbackEXT")),
-      vkDestroyDebugReportCallback((PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(this->instance->instance, "vkDestroyDebugReportCallbackEXT")),
-      vkGetPhysicalDeviceSurfaceSupport((PFN_vkGetPhysicalDeviceSurfaceSupportKHR)vkGetInstanceProcAddr(this->instance->instance, "vkGetPhysicalDeviceSurfaceSupportKHR")),
-      vkGetPhysicalDeviceSurfaceFormats((PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(this->instance->instance, "vkGetPhysicalDeviceSurfaceFormatsKHR")),
-      vkGetPhysicalDeviceSurfaceCapabilities((PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(this->instance->instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR")),
-      vkGetPhysicalDeviceSurfacePresentModes((PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(this->instance->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR"))
-  {
-    if (!(this->vkQueuePresent &&
-          this->vkCreateSwapchain &&
-          this->vkAcquireNextImage &&
-          this->vkDestroySwapchain &&
-          this->vkGetSwapchainImages &&
-          this->vkCreateDebugReportCallback &&
-          this->vkDestroyDebugReportCallback &&
-          this->vkGetPhysicalDeviceSurfaceSupport &&
-          this->vkGetPhysicalDeviceSurfaceFormats &&
-          this->vkGetPhysicalDeviceSurfaceCapabilities &&
-          this->vkGetPhysicalDeviceSurfacePresentModes))
-    {
-      throw std::runtime_error("Vulkan::Vulkan(): vkGetInstanceProcAddr failed.");
-    }
-  }
-
-  ~Vulkan() {}
-
-  std::unique_ptr<VulkanInstance> instance;
-  std::vector<VkPhysicalDevice> physical_devices;
-
-  PFN_vkQueuePresentKHR vkQueuePresent;
-  PFN_vkCreateSwapchainKHR vkCreateSwapchain;
-  PFN_vkAcquireNextImageKHR vkAcquireNextImage;
-  PFN_vkDestroySwapchainKHR vkDestroySwapchain;
-  PFN_vkGetSwapchainImagesKHR vkGetSwapchainImages;
-  PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallback;
-  PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallback;
-  PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupport;
-  PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormats;
-  PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilities;
-  PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModes;
-};
+class VulkanMemoryObject;
 
 //*******************************************************************************************************************************
 class Device {
 public:
   Device(const std::vector<std::string> & device_layers, 
          const std::vector<std::string> & device_extensions,
-         VkPhysicalDevice physical_device, 
+         const std::shared_ptr<VulkanPhysicalDevice> & physical_device,
          uint32_t queue_index)
     : physical_device(physical_device), queue_index(queue_index)
   {
@@ -176,122 +41,104 @@ public:
       physical_device,
       enabled_features,
       queue_create_infos,
-      get_device_layer_names(device_layers, physical_device),
-      get_device_extension_names(device_extensions, physical_device));
+      get_device_layer_names(device_layers, physical_device->device),
+      get_device_extension_names(device_extensions, physical_device->device));
 
     this->command_pool = std::make_unique<VulkanCommandPool>(this->device, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, this->queue_index);
 
     vkGetDeviceQueue(this->device->device, this->queue_index, 0, &this->queue);
-    vkGetPhysicalDeviceMemoryProperties(this->physical_device, &this->memory_properties);
   }
 
   ~Device() {}
 
-  void waitIdle()
-  {
-    this->device->waitIdle();
-  }
-
   VkQueue queue;
   uint32_t queue_index;
-  VkPhysicalDevice physical_device;
   std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanPhysicalDevice> physical_device;
   std::shared_ptr<VulkanCommandPool> command_pool;
-  VkPhysicalDeviceMemoryProperties memory_properties;
 };
 
-class VulkanSwapchain {
+class VulkanMemoryObject {
 public:
-  VulkanSwapchain(const std::shared_ptr<Vulkan> & vulkan,
-                  const std::shared_ptr<VulkanDevice> & device,
-                  VkSurfaceKHR surface,
-                  uint32_t minImageCount,
-                  VkFormat imageFormat,
-                  VkColorSpaceKHR imageColorSpace,
-                  VkExtent2D imageExtent,
-                  uint32_t imageArrayLayers,
-                  VkImageUsageFlags imageUsage,
-                  VkSharingMode imageSharingMode,
-                  std::vector<uint32_t> queueFamilyIndices,
-                  VkSurfaceTransformFlagBitsKHR preTransform,
-                  VkCompositeAlphaFlagBitsKHR compositeAlpha,
-                  VkPresentModeKHR presentMode,
-                  VkBool32 clipped,
-                  VkSwapchainKHR oldSwapchain)
-    : vulkan(vulkan), device(device)
+  VulkanMemoryObject(const std::shared_ptr<Device> & device, VkMemoryRequirements requirements, VkMemoryPropertyFlags flags)
+    : device(device->device)
   {
-    VkSwapchainCreateInfoKHR create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.surface = surface;
-    create_info.minImageCount = minImageCount;
-    create_info.imageFormat = imageFormat;
-    create_info.imageColorSpace = imageColorSpace;
-    create_info.imageExtent = imageExtent;
-    create_info.imageArrayLayers = imageArrayLayers;
-    create_info.imageUsage = imageUsage;
-    create_info.imageSharingMode = imageSharingMode;
-    create_info.queueFamilyIndexCount = static_cast<uint32_t>(queueFamilyIndices.size());
-    create_info.pQueueFamilyIndices = queueFamilyIndices.data();
-    create_info.preTransform = preTransform;
-    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    create_info.clipped = clipped;
-    create_info.oldSwapchain = oldSwapchain;
+    VkAllocationCallbacks allocation_callbacks;
+    allocation_callbacks.pUserData = nullptr;
+    allocation_callbacks.pfnAllocation = (PFN_vkAllocationFunction)&VulkanMemoryObject::allocate;
+    allocation_callbacks.pfnReallocation = (PFN_vkReallocationFunction)&VulkanMemoryObject::reallocate;
+    allocation_callbacks.pfnFree = (PFN_vkFreeFunction)&VulkanMemoryObject::free;
+    allocation_callbacks.pfnInternalAllocation = nullptr;
+    allocation_callbacks.pfnInternalFree = nullptr;
 
-    THROW_ERROR(this->vulkan->vkCreateSwapchain(this->device->device, &create_info, nullptr, &this->swapchain));
+    VkMemoryAllocateInfo allocate_info;
+    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext = nullptr;
+    allocate_info.allocationSize = requirements.size;
+    allocate_info.memoryTypeIndex = get_memory_type_index(device->physical_device->memory_properties, requirements, flags);
+
+    THROW_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
   }
 
-  ~VulkanSwapchain()
+  VulkanMemoryObject(const std::shared_ptr<Device> & device, VkImage image, VkMemoryPropertyFlags flags)
+    : VulkanMemoryObject(device, get_memory_requirements(device->device->device, image), flags)
   {
-    this->vulkan->vkDestroySwapchain(this->device->device, this->swapchain, nullptr);
+    THROW_ERROR(vkBindImageMemory(this->device->device, image, this->memory, 0));
   }
 
-  std::vector<VkImage> getSwapchainImages()
+  VulkanMemoryObject(const std::shared_ptr<Device> & device, VkBuffer buffer, VkMemoryPropertyFlags flags)
+    : VulkanMemoryObject(device, get_memory_requirements(device->device->device, buffer), flags)
   {
-    uint32_t imagecount;
-    THROW_ERROR(this->vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &imagecount, nullptr));
-    std::vector<VkImage> images(imagecount);
-    THROW_ERROR(this->vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &imagecount, images.data()));
-    return images;
+    THROW_ERROR(vkBindBufferMemory(this->device->device, buffer, this->memory, 0));
   }
 
-  uint32_t acquireNextImage(VkSemaphore semaphore)
+  ~VulkanMemoryObject()
   {
-    uint32_t image_index;
-    VkResult result = this->vulkan->vkAcquireNextImage(this->device->device, this->swapchain, UINT64_MAX, semaphore, 0, &image_index);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-      throw VkErrorOutOfDateException();
-    }
-    if (result != VK_SUCCESS) {
-      throw std::runtime_error("vkAcquireNextImage failed.");
-    }
-    return image_index;
+    vkFreeMemory(this->device->device, this->memory, nullptr);
   }
 
-  void present(VkQueue queue, uint32_t image_index)
+  static void * allocate(void * userdata, size_t size, size_t alignment, VkSystemAllocationScope scope)
   {
-    VkPresentInfoKHR present_info;
-    ::memset(&present_info, 0, sizeof(VkPresentInfoKHR));
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = &this->swapchain;
-    present_info.pImageIndices = &image_index;
-
-    THROW_ERROR(this->vulkan->vkQueuePresent(queue, &present_info));
-    THROW_ERROR(vkQueueWaitIdle(queue));
+    return _aligned_malloc(size, alignment);
   }
 
-  VkSwapchainKHR swapchain;
-  std::shared_ptr<Vulkan> vulkan;
+  static void free(void * userdata, void * block)
+  {
+    _aligned_free(block);
+  }
+
+  static void * reallocate(void * userdata, void * block, size_t size, size_t alignment, VkSystemAllocationScope scope)
+  {
+    return _aligned_realloc(block, size, alignment);
+  }
+
+  void * map(size_t size)
+  {
+    void * data;
+    THROW_ERROR(vkMapMemory(this->device->device, this->memory, 0, size, 0, &data));
+    return data;
+  }
+
+  void unmap()
+  {
+    vkUnmapMemory(this->device->device, this->memory);
+  }
+
+  void memcpy(const void * data, size_t size)
+  {
+    ::memcpy(this->map(size), data, size);
+    this->unmap();
+  }
+
+  VkDeviceMemory memory;
   std::shared_ptr<VulkanDevice> device;
 };
+
 
 //*******************************************************************************************************************************
 class VulkanDebugCallback {
 public:
-  VulkanDebugCallback(const std::shared_ptr<Vulkan> & vulkan, 
+  VulkanDebugCallback(const std::shared_ptr<VulkanInstance> & vulkan, 
                       VkDebugReportFlagsEXT flags,
                       PFN_vkDebugReportCallbackEXT callback,
                       void * pUserData = nullptr)
@@ -303,16 +150,16 @@ public:
     create_info.flags = flags;
     create_info.pfnCallback = callback;
 
-    THROW_ERROR(this->vulkan->vkCreateDebugReportCallback(this->vulkan->instance->instance, &create_info, nullptr, &this->callback));
+    THROW_ERROR(this->vulkan->vkCreateDebugReportCallback(this->vulkan->instance, &create_info, nullptr, &this->callback));
   }
 
   ~VulkanDebugCallback()
   {
-    this->vulkan->vkDestroyDebugReportCallback(this->vulkan->instance->instance, this->callback, nullptr);
+    this->vulkan->vkDestroyDebugReportCallback(this->vulkan->instance, this->callback, nullptr);
   }
 
   VkDebugReportCallbackEXT callback;
-  std::shared_ptr<Vulkan> vulkan;
+  std::shared_ptr<VulkanInstance> vulkan;
 };
 
 //*******************************************************************************************************************************
@@ -346,7 +193,7 @@ public:
 //*******************************************************************************************************************************
 class ImageObject {
 public:
-  ImageObject(const std::shared_ptr<VulkanDevice> & device,
+  ImageObject(const std::shared_ptr<Device> & device,
               VkFormat format,
               VkExtent3D extent,
               VkImageLayout layout,
@@ -359,7 +206,7 @@ public:
     : extent(extent), layout(layout), subresource_range(subresource_range)
   {
     this->image = std::make_unique<VulkanImage>(
-      device,
+      device->device,
       0,
       image_type,
       format,
@@ -373,13 +220,13 @@ public:
       std::vector<uint32_t>(),
       layout);
 
-    this->memory = std::make_unique<VulkanMemory>(
+    this->memory = std::make_unique<VulkanMemoryObject>(
       device,
       this->image->image,
       memory_property_flags);
 
     this->view = std::make_unique<VulkanImageView>(
-      device,
+      device->device,
       this->image->image,
       format,
       (VkImageViewType)image_type,
@@ -441,7 +288,7 @@ public:
   }
 
   std::unique_ptr<VulkanImage> image;
-  std::unique_ptr<VulkanMemory> memory;
+  std::unique_ptr<VulkanMemoryObject> memory;
   std::unique_ptr<VulkanImageView> view;
   VkExtent3D extent;
   VkImageLayout layout;
@@ -452,7 +299,7 @@ public:
 //*******************************************************************************************************************************
 class TextureObject {
 public:
-  TextureObject(const std::shared_ptr<VulkanDevice> & device, 
+  TextureObject(const std::shared_ptr<Device> & device, 
                 VkComponentMapping components,
                 VkImageSubresourceRange subresource_range,
                 VkImageType image_type,
@@ -461,7 +308,7 @@ public:
     : device(device)
   {
     this->sampler = std::make_unique<VulkanSampler>(
-      this->device,
+      this->device->device,
       VK_FILTER_LINEAR,
       VK_FILTER_LINEAR,
       VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -498,8 +345,8 @@ public:
     VkImageMemoryBarrier memory_barrier = this->image_object->setLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &memory_barrier);
 
-    this->staging_buffer = std::make_unique<VulkanBuffer>(this->device, 0, texture.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_SHARING_MODE_EXCLUSIVE, std::vector<uint32_t>());
-    this->staging_memory = std::make_unique<VulkanMemory>(this->device, this->staging_buffer->buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    this->staging_buffer = std::make_unique<VulkanBuffer>(this->device->device, 0, texture.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_SHARING_MODE_EXCLUSIVE, std::vector<uint32_t>());
+    this->staging_memory = std::make_unique<VulkanMemoryObject>(this->device, this->staging_buffer->buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
     this->staging_memory->memcpy(texture.data(), texture.size());
 
     VkDeviceSize buffer_offset = 0;
@@ -515,10 +362,10 @@ public:
     }
   }
 
-  std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<Device> device;
 
   std::unique_ptr<VulkanBuffer> staging_buffer;
-  std::unique_ptr<VulkanMemory> staging_memory;
+  std::unique_ptr<VulkanMemoryObject> staging_memory;
 
   std::unique_ptr<VulkanSampler> sampler;
   std::unique_ptr<ImageObject> image_object;
@@ -535,24 +382,24 @@ class VulkanDeviceLocalBufferObject;
 template <typename T>
 class VulkanBufferObject {
 public:
-  VulkanBufferObject(const std::shared_ptr<VulkanDevice> & device,
+  VulkanBufferObject(const std::shared_ptr<Device> & device,
                      size_t size,
                      VkBufferUsageFlagBits usage,
                      VkMemoryPropertyFlags property_flags)
-      : buffer(std::make_unique<VulkanBuffer>(device, 0, size, usage, VK_SHARING_MODE_EXCLUSIVE, std::vector<uint32_t>())),
-        memory(std::make_unique<VulkanMemory>(device, this->buffer->buffer, property_flags))
+      : buffer(std::make_unique<VulkanBuffer>(device->device, 0, size, usage, VK_SHARING_MODE_EXCLUSIVE, std::vector<uint32_t>())),
+        memory(std::make_unique<VulkanMemoryObject>(device, this->buffer->buffer, property_flags))
   {}
 
   ~VulkanBufferObject() {}
 
   std::unique_ptr<VulkanBuffer> buffer;
-  std::unique_ptr<VulkanMemory> memory;
+  std::unique_ptr<VulkanMemoryObject> memory;
 };
 
 template <typename T>
 class VulkanHostVisibleBufferObject : public VulkanBufferObject<T> {
 public:
-  VulkanHostVisibleBufferObject(const std::shared_ptr<VulkanDevice> & device, size_t size, VkBufferUsageFlagBits usage)
+  VulkanHostVisibleBufferObject(const std::shared_ptr<Device> & device, size_t size, VkBufferUsageFlagBits usage)
     : VulkanBufferObject(device, size, usage, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {}
   ~VulkanHostVisibleBufferObject() {}
 
@@ -565,7 +412,7 @@ public:
 template <typename T>
 class VulkanDeviceLocalBufferObject : public VulkanBufferObject<T> {
 public:
-  VulkanDeviceLocalBufferObject(const std::shared_ptr<VulkanDevice> & device, size_t size, VkBufferUsageFlagBits usage)
+  VulkanDeviceLocalBufferObject(const std::shared_ptr<Device> & device, size_t size, VkBufferUsageFlagBits usage)
     : VulkanBufferObject(device, size, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {}
   VulkanDeviceLocalBufferObject() {}
 
@@ -637,17 +484,18 @@ public:
 
 class SwapchainObject {
 public:
-  SwapchainObject(const std::shared_ptr<Vulkan> & vulkan, 
+  SwapchainObject(const std::shared_ptr<VulkanInstance> & vulkan,
                   const std::shared_ptr<Device> & device,
-                  VulkanCommandBuffers * staging_command, 
-                  const std::unique_ptr<ImageObject> & image, VkSurfaceKHR surface, 
-                  VkSurfaceCapabilitiesKHR surface_capabilities, 
+                  VulkanCommandBuffers * staging_command,
+                  const std::unique_ptr<ImageObject> & image, VkSurfaceKHR surface,
+                  VkSurfaceCapabilitiesKHR surface_capabilities,
+                  VkPresentModeKHR present_mode,
                   VkSurfaceFormatKHR surface_format)
-    : device(device), semaphore(std::make_unique<VulkanSemaphore>(device->device))
+    : vulkan(vulkan), device(device), semaphore(std::make_unique<VulkanSemaphore>(device->device))
   {
     this->swapchain = std::make_unique<VulkanSwapchain>(
-      vulkan,
       this->device->device,
+      vulkan,
       surface,
       3,
       surface_format.format,
@@ -659,11 +507,15 @@ public:
       std::vector<uint32_t>(),
       surface_capabilities.currentTransform,
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-      VK_PRESENT_MODE_MAILBOX_KHR,
+      present_mode,
       VK_FALSE,
       nullptr);
 
-    std::vector<VkImage> swapchain_images = this->swapchain->getSwapchainImages();
+    uint32_t image_count;
+    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device->device, this->swapchain->swapchain, &image_count, nullptr));
+    std::vector<VkImage> swapchain_images(image_count);
+    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device->device, this->swapchain->swapchain, &image_count, swapchain_images.data()));
+
     this->commands = std::make_unique<VulkanCommandBuffers>(this->device->device, device->command_pool, swapchain_images.size());
 
     VkImageMemoryBarrier default_memory_barrier;
@@ -740,13 +592,31 @@ public:
 
   void swapBuffers()
   {
-    uint32_t image_index = this->swapchain->acquireNextImage(this->semaphore->semaphore);
+    uint32_t image_index;
+    VkResult result = this->vulkan->vkAcquireNextImage(this->device->device->device, this->swapchain->swapchain, UINT64_MAX, this->semaphore->semaphore, 0, &image_index);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+      throw VkErrorOutOfDateException();
+    }
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("vkAcquireNextImage failed.");
+    }
+
     this->commands->submit(this->device->queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, image_index, { this->semaphore->semaphore });
     THROW_ERROR(vkQueueWaitIdle(this->device->queue));
-    this->swapchain->present(this->device->queue, image_index);
+
+    VkPresentInfoKHR present_info;
+    ::memset(&present_info, 0, sizeof(VkPresentInfoKHR));
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &this->swapchain->swapchain;
+    present_info.pImageIndices = &image_index;
+
+    THROW_ERROR(this->vulkan->vkQueuePresent(this->device->queue, &present_info));
+    THROW_ERROR(vkQueueWaitIdle(this->device->queue));
   }
 
   std::shared_ptr<Device> device;
+  std::shared_ptr<VulkanInstance> vulkan;
   std::unique_ptr<VulkanSemaphore> semaphore;
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::unique_ptr<VulkanCommandBuffers> commands;
@@ -756,7 +626,7 @@ public:
 //*******************************************************************************************************************************
 class FramebufferObject {
 public:
-  FramebufferObject(const std::shared_ptr<VulkanDevice> & device, VkCommandBuffer command, VkFormat color_format, VkExtent2D extent2d)
+  FramebufferObject(const std::shared_ptr<Device> & device, VkCommandBuffer command, VkFormat color_format, VkExtent2D extent2d)
     : extent(extent2d)
   {
     this->clear_values = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 1.0f, 0 } };
@@ -846,10 +716,10 @@ public:
     std::vector<VkSubpassDescription> subpass_descriptions;
     subpass_descriptions.push_back(subpass_description);
 
-    this->renderpass = std::make_unique<VulkanRenderPass>(device, attachments, subpass_descriptions);
+    this->renderpass = std::make_unique<VulkanRenderPass>(device->device, attachments, subpass_descriptions);
 
     std::vector<VkImageView> framebuffer_attachments = { this->color_attachment->view->view, this->depth_attachment->view->view };
-    this->framebuffer = std::make_unique<VulkanFramebuffer>(device, this->renderpass->render_pass, framebuffer_attachments, extent.width, extent.height, 1);
+    this->framebuffer = std::make_unique<VulkanFramebuffer>(device->device, this->renderpass->render_pass, framebuffer_attachments, extent.width, extent.height, 1);
   }
 
   ~FramebufferObject() {}

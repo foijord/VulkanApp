@@ -67,7 +67,7 @@ public:
     this->pipeline_cache = std::make_unique<VulkanPipelineCache>(this->device->device);
 
     this->staging_command->begin();
-    this->framebuffer_object = std::make_unique<FramebufferObject>(this->device->device, this->staging_command->buffer(), format, extent);
+    this->framebuffer_object = std::make_unique<FramebufferObject>(this->device, this->staging_command->buffer(), format, extent);
     this->staging_command->end();
     this->staging_command->submit(this->device->queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
     THROW_ERROR(vkQueueWaitIdle(this->device->queue));
