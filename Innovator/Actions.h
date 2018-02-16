@@ -59,18 +59,18 @@ public:
 
 class RenderAction : public Action {
 public:
-  RenderAction(const std::shared_ptr<Device> & device, VkFormat format, VkExtent2D extent)
+  RenderAction(const std::shared_ptr<VulkanDevice> & device, VkFormat format, VkExtent2D extent)
     : device(device), extent(extent)
   {
-    this->render_command = std::make_unique<VulkanCommandBuffers>(this->device->device, this->device->command_pool);
-    this->staging_command = std::make_unique<VulkanCommandBuffers>(this->device->device, this->device->command_pool);
-    this->pipeline_cache = std::make_unique<VulkanPipelineCache>(this->device->device);
+    this->render_command = std::make_unique<VulkanCommandBuffers>(this->device);
+    this->staging_command = std::make_unique<VulkanCommandBuffers>(this->device);
+    this->pipeline_cache = std::make_unique<VulkanPipelineCache>(this->device);
 
     this->staging_command->begin();
     this->framebuffer_object = std::make_unique<FramebufferObject>(this->device, this->staging_command->buffer(), format, extent);
     this->staging_command->end();
-    this->staging_command->submit(this->device->queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ERROR(vkQueueWaitIdle(this->device->queue));
+    this->staging_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
 
     this->viewport = { 0.0f, 0.0f, (float)this->extent.width, (float)this->extent.height, 0.0f, 1.0f };
     this->scissor = { { 0, 0 },  this->extent };
@@ -84,8 +84,8 @@ public:
     this->staging_command->begin();
     root->traverse(this);
     this->staging_command->end();
-    this->staging_command->submit(this->device->queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ERROR(vkQueueWaitIdle(this->device->queue));
+    this->staging_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
 
     this->render_command->begin();
 
@@ -99,8 +99,8 @@ public:
     }
     this->framebuffer_object->end(this->render_command->buffer());
     this->render_command->end();
-    this->render_command->submit(this->device->queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ERROR(vkQueueWaitIdle(this->device->queue));
+    this->render_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
     this->graphic_states.clear();
     this->compute_states.clear();
   }
@@ -112,7 +112,7 @@ public:
   std::vector<State> graphic_states;
   std::vector<State> compute_states;
 
-  std::shared_ptr<Device> device;
+  std::shared_ptr<VulkanDevice> device;
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::unique_ptr<VulkanCommandBuffers> staging_command;
   std::unique_ptr<VulkanPipelineCache> pipeline_cache;

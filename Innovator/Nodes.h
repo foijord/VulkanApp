@@ -321,7 +321,7 @@ public:
     if (!this->shader) {
       std::ifstream input(this->filename, std::ios::binary);
       std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
-      this->shader = std::make_unique<VulkanShaderModule>(action->device->device, code);
+      this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
     }
 
     VulkanShaderModuleDescription shader;
@@ -449,7 +449,7 @@ public:
   virtual void traverse(RenderAction * action)
   {
     if (!this->command) {
-      this->descriptor_set = std::make_unique<DescriptorSetObject>(action->device->device, action->state.textures, action->state.buffers);
+      this->descriptor_set = std::make_unique<DescriptorSetObject>(action->device, action->state.textures, action->state.buffers);
 
       VkPipelineShaderStageCreateInfo shader_stage_info;
       shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -461,13 +461,13 @@ public:
       shader_stage_info.pSpecializationInfo = nullptr;
 
       this->pipeline = std::make_unique<VulkanComputePipeline>(
-        action->device->device,
+        action->device,
         action->pipeline_cache->cache,
         0,
         shader_stage_info,
         this->descriptor_set->pipeline_layout->layout);
 
-      this->command = std::make_unique<VulkanCommandBuffers>(action->device->device, action->device->command_pool, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+      this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
       this->command->begin();
 
       this->pipeline->bind(this->command->buffer());
@@ -508,10 +508,10 @@ public:
     this->transform->buffer->setValues(this->transform->values);
 
     if (!this->command) {
-      this->descriptor_set = std::make_unique<DescriptorSetObject>(action->device->device, action->state.textures, action->state.buffers);
+      this->descriptor_set = std::make_unique<DescriptorSetObject>(action->device, action->state.textures, action->state.buffers);
 
       this->pipeline = std::make_unique<GraphicsPipelineObject>(
-        action->device->device,
+        action->device,
         action->state.attributes,
         action->state.shaders,
         action->state.rasterization_state,
@@ -520,7 +520,7 @@ public:
         action->pipeline_cache->cache,
         this->topology);
 
-      this->command = std::make_unique<VulkanCommandBuffers>(action->device->device, action->device->command_pool, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+      this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
       this->command->begin(0, action->framebuffer_object->renderpass->render_pass, 0, action->framebuffer_object->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
 
       this->descriptor_set->bind(this->command->buffer(), VK_PIPELINE_BIND_POINT_GRAPHICS);

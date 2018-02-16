@@ -14,7 +14,16 @@ include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/External/include)
 
-add_executable(${TARGET_NAME} WIN32 main.cpp)
+add_executable(${TARGET_NAME} WIN32
+  main.cpp
+  Viewer.h
+  Innovator/Node.h
+  Innovator/Nodes.h
+  Innovator/State.h
+  Innovator/Actions.h
+  Innovator/Core/VulkanObjects.h
+  Innovator/Core/Vulkan/Wrapper.h)
+
 target_link_libraries(${TARGET_NAME} ${Vulkan_LIBRARY})
 
 set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
