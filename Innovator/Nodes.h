@@ -439,7 +439,7 @@ public:
   std::unique_ptr<VulkanCommandBuffers> command;
 };
 
-class ComputeCommand : public Command {
+class ComputeCommand : public Node {
 public:
   ComputeCommand(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z)
     : group_count_x(group_count_x), group_count_y(group_count_y), group_count_z(group_count_z) {}
@@ -448,48 +448,18 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    if (!this->command) {
-      this->descriptor_set = std::make_unique<DescriptorSetObject>(action->device, action->state.textures, action->state.buffers);
-
-      VkPipelineShaderStageCreateInfo shader_stage_info;
-      shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-      shader_stage_info.pNext = nullptr;
-      shader_stage_info.flags = 0; // reserved for future use
-      shader_stage_info.stage = action->state.shaders[0].stage;
-      shader_stage_info.module = action->state.shaders[0].module;
-      shader_stage_info.pName = "main";
-      shader_stage_info.pSpecializationInfo = nullptr;
-
-      this->pipeline = std::make_unique<VulkanComputePipeline>(
-        action->device,
-        action->pipeline_cache->cache,
-        0,
-        shader_stage_info,
-        this->descriptor_set->pipeline_layout->layout);
-
-      this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-      this->command->begin();
-
-      this->pipeline->bind(this->command->buffer());
-      this->descriptor_set->bind(this->command->buffers[0], VK_PIPELINE_BIND_POINT_COMPUTE);
-      vkCmdDispatch(this->command->buffer(), this->group_count_x, this->group_count_y, this->group_count_z);
-
-      this->command->end();
-    }
-
-    action->state.command = this->command.get();
+    action->state.compute_description.group_count_x = this->group_count_x;
+    action->state.compute_description.group_count_y = this->group_count_y;
+    action->state.compute_description.group_count_z = this->group_count_z;
     action->compute_states.push_back(action->state);
   }
 
   uint32_t group_count_x;
   uint32_t group_count_y;
   uint32_t group_count_z;
-
-  std::unique_ptr<class DescriptorSetObject> descriptor_set;
-  std::unique_ptr<class VulkanComputePipeline> pipeline;
 };
 
-class DrawCommand : public Command {
+class DrawCommand : public Node {
 public:
   DrawCommand(VkPrimitiveTopology topology, uint32_t count = 0)
     : topology(topology),
@@ -507,45 +477,8 @@ public:
     this->transform->traverse(action);
     this->transform->buffer->setValues(this->transform->values);
 
-    if (!this->command) {
-      this->descriptor_set = std::make_unique<DescriptorSetObject>(action->device, action->state.textures, action->state.buffers);
-
-      this->pipeline = std::make_unique<GraphicsPipelineObject>(
-        action->device,
-        action->state.attributes,
-        action->state.shaders,
-        action->state.rasterization_state,
-        this->descriptor_set->pipeline_layout->layout,
-        action->framebuffer_object->renderpass->render_pass,
-        action->pipeline_cache->cache,
-        this->topology);
-
-      this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-      this->command->begin(0, action->framebuffer_object->renderpass->render_pass, 0, action->framebuffer_object->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
-
-      this->descriptor_set->bind(this->command->buffer(), VK_PIPELINE_BIND_POINT_GRAPHICS);
-      this->pipeline->bind(this->command->buffer());
-
-      for (const VulkanVertexAttributeDescription & attribute : action->state.attributes) {
-        VkDeviceSize offsets[1] = { 0 };
-        vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
-      }
-      vkCmdSetViewport(this->command->buffer(), 0, 1, &action->viewport);
-      vkCmdSetScissor(this->command->buffer(), 0, 1, &action->scissor);
-
-      if (action->state.indices.size()) {
-        for (const VulkanIndexBufferDescription & indexbuffer : action->state.indices) {
-          vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
-          vkCmdDrawIndexed(this->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
-        }
-      }
-      else {
-        vkCmdDraw(this->command->buffer(), this->count, 1, 0, 0);
-      }
-      this->command->end();
-    }
-
-    action->state.command = this->command.get();
+    action->state.draw_description.count = this->count;
+    action->state.draw_description.topology = this->topology;
     action->graphic_states.push_back(action->state);
   }
 
@@ -562,6 +495,7 @@ public:
   std::shared_ptr<LayoutBinding> transform_layout;
   std::unique_ptr<class DescriptorSetObject> descriptor_set;
   std::unique_ptr<class GraphicsPipelineObject> pipeline;
+  std::unique_ptr<VulkanCommandBuffers> command;
 };
 
 class Box : public DrawCommand {

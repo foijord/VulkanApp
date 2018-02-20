@@ -9,8 +9,7 @@
 class State {
 public:
   State() 
-    : command(nullptr), 
-      ViewMatrix(glm::mat4(1)),
+    : ViewMatrix(glm::mat4(1)),
       ProjMatrix(glm::mat4(1)),
       ModelMatrix(glm::mat4(1)),
       rasterization_state(defaultRasterizationState())
@@ -32,8 +31,9 @@ public:
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;
 
-  class VulkanCommandBuffers * command;
   VulkanLayoutBinding layout_binding;
+  VulkanDrawDescription draw_description;
+  VulkanComputeDescription compute_description;
   VulkanVertexAttributeDescription attribute_description;
   VkPipelineRasterizationStateCreateInfo rasterization_state;
 

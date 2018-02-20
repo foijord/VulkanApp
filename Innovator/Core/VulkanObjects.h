@@ -352,21 +352,38 @@ public:
   VkSampler sampler;
 };
 
+//*******************************************************************************************************************************
 class VulkanShaderModuleDescription {
 public:
   VkShaderStageFlagBits stage;
   VkShaderModule module;
 };
 
+//*******************************************************************************************************************************
+class VulkanDrawDescription {
+public:
+  uint32_t count;
+  VkPrimitiveTopology topology;
+};
+
+//*******************************************************************************************************************************
+class VulkanComputeDescription {
+public:
+  uint32_t group_count_x;
+  uint32_t group_count_y;
+  uint32_t group_count_z;
+};
+
 class SwapchainObject {
 public:
   SwapchainObject(const std::shared_ptr<VulkanInstance> & vulkan,
                   const std::shared_ptr<VulkanDevice> & device,
-                  VulkanCommandBuffers * staging_command,
-                  const std::unique_ptr<ImageObject> & image, VkSurfaceKHR surface,
+                  const std::unique_ptr<ImageObject> & image, 
+                  VkSurfaceKHR surface,
                   VkSurfaceCapabilitiesKHR surface_capabilities,
                   VkPresentModeKHR present_mode,
-                  VkSurfaceFormatKHR surface_format)
+                  VkSurfaceFormatKHR surface_format,
+                  VkSwapchainKHR old_swapchain)
     : vulkan(vulkan), device(device), semaphore(std::make_unique<VulkanSemaphore>(device))
   {
     this->swapchain = std::make_unique<VulkanSwapchain>(
@@ -385,7 +402,7 @@ public:
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       present_mode,
       VK_FALSE,
-      nullptr);
+      old_swapchain);
 
     uint32_t image_count;
     THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain->swapchain, &image_count, nullptr));
@@ -402,19 +419,20 @@ public:
     default_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     default_memory_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+    this->staging_command = std::make_unique<VulkanCommandBuffers>(this->device);
     for (uint32_t i = 0; i < swapchain_images.size(); i++) {
-      staging_command->begin();
+      this->staging_command->begin();
 
       default_memory_barrier.image = swapchain_images[i];
 
-      vkCmdPipelineBarrier(staging_command->buffer(),
+      vkCmdPipelineBarrier(this->staging_command->buffer(),
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0, 0, nullptr, 0, nullptr,
         1, &default_memory_barrier);
 
-      staging_command->end();
-      staging_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+      this->staging_command->end();
+      this->staging_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
       THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
     }
 
@@ -496,14 +514,16 @@ public:
   std::unique_ptr<VulkanSemaphore> semaphore;
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::unique_ptr<VulkanCommandBuffers> commands;
+  std::unique_ptr<VulkanCommandBuffers> staging_command;
 };
 
 
 //*******************************************************************************************************************************
 class FramebufferObject {
 public:
-  FramebufferObject(const std::shared_ptr<VulkanDevice> & device, VkCommandBuffer command, VkFormat color_format, VkExtent2D extent2d)
-    : extent(extent2d)
+  FramebufferObject(const std::shared_ptr<VulkanDevice> & device, VkFormat color_format, VkExtent2D extent2d)
+    : extent(extent2d),
+      staging_command(std::make_unique<VulkanCommandBuffers>(device))
   {
     this->clear_values = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 1.0f, 0 } };
     VkExtent3D extent = { extent2d.width, extent2d.height, 1 };
@@ -548,13 +568,18 @@ public:
       this->depth_attachment->setLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
     };
 
+    this->staging_command->begin();
     vkCmdPipelineBarrier(
-      command,
+      this->staging_command->buffer(),
       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       0, 0, nullptr, 0, nullptr,
       static_cast<uint32_t>(memory_barriers.size()),
       memory_barriers.data());
+
+    this->staging_command->end();
+    this->staging_command->submit(device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    THROW_ERROR(vkQueueWaitIdle(device->default_queue));
 
     VkAttachmentDescription attachment_description;
     ::memset(&attachment_description, 0, sizeof(VkAttachmentDescription));
@@ -617,6 +642,7 @@ public:
   std::unique_ptr<ImageObject> depth_attachment;
   std::unique_ptr<VulkanRenderPass> renderpass;
   std::unique_ptr<VulkanFramebuffer> framebuffer;
+  std::unique_ptr<VulkanCommandBuffers> staging_command;
 
   VkExtent2D extent;
   std::vector<VkClearValue> clear_values;
@@ -919,4 +945,3 @@ public:
   std::shared_ptr<VulkanDevice> device;
   std::unique_ptr<VulkanGraphicsPipeline> pipeline;
 };
-

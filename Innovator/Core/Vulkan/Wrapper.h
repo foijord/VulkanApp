@@ -425,7 +425,7 @@ public:
     create_info.pQueueFamilyIndices = queueFamilyIndices.data();
     create_info.preTransform = preTransform;
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    create_info.presentMode = presentMode;
     create_info.clipped = clipped;
     create_info.oldSwapchain = oldSwapchain;
 

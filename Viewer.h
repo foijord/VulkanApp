@@ -232,15 +232,25 @@ public:
     };
 
     this->device = std::make_shared<VulkanDevice>(physical_device, required_device_features, device_layers, device_extensions, queue_create_info);
-    this->resize();
+
+    this->surface_format = this->surface->getSurfaceFormats(this->device->physical_device)[0];
+
+    this->present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    std::vector<VkPresentModeKHR> present_modes = this->surface->getPresentModes(this->device->physical_device);
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+      throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
+    }
 
     this->handleeventaction = std::make_unique<HandleEventAction>();
+    this->resize();
   }
 
   virtual ~VulkanViewer() {}
 
   void setSceneGraph(std::shared_ptr<class Node> scene)
   {
+    this->renderaction = std::make_unique<RenderAction>(this->device, this->framebuffer_object, this->surface_capabilities.currentExtent);
+
     this->root = std::make_shared<Separator>();
     this->camera = SearchAction<Camera>(scene);
 
@@ -267,31 +277,19 @@ public:
 
   virtual void resize()
   {
-    VulkanPhysicalDevice physical_device = this->vulkan->physical_devices[0];
-    VkSurfaceFormatKHR surface_format = this->surface->getSurfaceFormats(physical_device)[0];
-    std::vector<VkPresentModeKHR> present_modes = this->surface->getPresentModes(physical_device);
-    VkSurfaceCapabilitiesKHR surface_capabilities = this->surface->getSurfaceCapabilities(physical_device);
-
-    VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
-      throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
-    }
-
-    THROW_ERROR(vkDeviceWaitIdle(this->device->device));
-    this->swapchain.reset();
-    this->renderaction.reset();
-
-    this->renderaction = std::make_unique<RenderAction>(this->device, surface_format.format, surface_capabilities.currentExtent);
+    this->surface_capabilities = this->surface->getSurfaceCapabilities(this->device->physical_device);
+    this->framebuffer_object = std::make_shared<FramebufferObject>(this->device, this->surface_format.format, this->surface_capabilities.currentExtent);
+    this->renderaction = std::make_unique<RenderAction>(this->device, this->framebuffer_object, this->surface_capabilities.currentExtent);
 
     this->swapchain = std::make_unique<SwapchainObject>(
       this->vulkan,
       this->device,
-      this->renderaction->staging_command.get(),
-      this->renderaction->framebuffer_object->color_attachment,
+      this->framebuffer_object->color_attachment,
       this->surface->surface,
-      surface_capabilities,
-      present_mode,
-      surface_format);
+      this->surface_capabilities,
+      this->present_mode,
+      this->surface_format,
+      this->swapchain ? this->swapchain->swapchain->swapchain : nullptr);
   }
 
   virtual void keyDown(uint32_t key)
@@ -340,11 +338,16 @@ public:
   std::unique_ptr<class VulkanDebugCallback> debugcb;
   std::unique_ptr<class VulkanSurfaceWin32> surface;
   std::shared_ptr<class VulkanDevice> device;
+  std::shared_ptr<class FramebufferObject > framebuffer_object;
   std::unique_ptr<class RenderAction> renderaction;
   std::unique_ptr<class HandleEventAction> handleeventaction;
   std::unique_ptr<class SwapchainObject> swapchain;
   std::shared_ptr<class Separator> root;
   std::shared_ptr<class Camera> camera;
+
+  VkPresentModeKHR present_mode;
+  VkSurfaceFormatKHR surface_format;
+  VkSurfaceCapabilitiesKHR surface_capabilities;
 
   int button;
   bool mouse_pressed;
