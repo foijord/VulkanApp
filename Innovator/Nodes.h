@@ -175,6 +175,7 @@ public:
 
   glm::vec3 translation;
   glm::vec3 scaleFactor;
+
 private:
   void doAction(Action * action)
   {
@@ -293,9 +294,8 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    size_t size = sizeof(T) * this->values.size();
-
     if (!this->attribute) {
+      size_t size = sizeof(T) * this->values.size();
       this->attribute = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
       this->attribute->setValues(this->values);
     }

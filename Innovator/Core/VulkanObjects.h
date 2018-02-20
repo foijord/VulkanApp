@@ -620,7 +620,7 @@ public:
     this->renderpass = std::make_unique<VulkanRenderPass>(device, attachments, subpass_descriptions);
 
     std::vector<VkImageView> framebuffer_attachments = { this->color_attachment->view->view, this->depth_attachment->view->view };
-    this->framebuffer = std::make_unique<VulkanFramebuffer>(device, this->renderpass->render_pass, framebuffer_attachments, extent.width, extent.height, 1);
+    this->framebuffer = std::make_unique<VulkanFramebuffer>(device, this->renderpass->render_pass, framebuffer_attachments, extent2d, 1);
   }
 
   ~FramebufferObject() {}
@@ -647,129 +647,6 @@ public:
   VkExtent2D extent;
   std::vector<VkClearValue> clear_values;
 };
-
-class FramebufferScope {
-public:
-  FramebufferScope(FramebufferObject * fbo, VkCommandBuffer command)
-    : fbo(fbo), command(command)
-  {
-    this->fbo->begin(this->command);
-  }
-  ~FramebufferScope()
-  {
-    this->fbo->end(this->command);
-  }
-  VkCommandBuffer command;
-  FramebufferObject * fbo;
-};
-
-//*******************************************************************************************************************************
-class VulkanGraphicsPipeline {
-public:
-  VulkanGraphicsPipeline(const std::shared_ptr<VulkanDevice> & device, 
-                         VkRenderPass render_pass,
-                         VkPipelineCache pipeline_cache,
-                         VkPipelineLayout pipeline_layout,
-                         VkPrimitiveTopology primitive_topology,
-                         VkPipelineRasterizationStateCreateInfo rasterization_state,
-                         std::vector<VkDynamicState> dynamic_states,
-                         std::vector<VkPipelineShaderStageCreateInfo> shaderstages,
-                         std::vector<VkVertexInputBindingDescription> binding_descriptions,
-                         std::vector<VkVertexInputAttributeDescription> attribute_descriptions)
-    : device(device)
-  {
-    VkPipelineVertexInputStateCreateInfo vertex_input_state;
-    ::memset(&vertex_input_state, 0, sizeof(VkPipelineVertexInputStateCreateInfo));
-    vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_state.vertexBindingDescriptionCount = (uint32_t)binding_descriptions.size();
-    vertex_input_state.pVertexBindingDescriptions = binding_descriptions.data();
-    vertex_input_state.vertexAttributeDescriptionCount = (uint32_t)attribute_descriptions.size();
-    vertex_input_state.pVertexAttributeDescriptions = attribute_descriptions.data();
-
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_state;
-    ::memset(&input_assembly_state, 0, sizeof(VkPipelineInputAssemblyStateCreateInfo));
-    input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly_state.topology = primitive_topology;
-
-    VkPipelineColorBlendAttachmentState blend_attachment_state;
-    ::memset(&blend_attachment_state, 0, sizeof(VkPipelineColorBlendAttachmentState));
-    blend_attachment_state.blendEnable = VK_TRUE;
-    blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
-    blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-    blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    blend_attachment_state.alphaBlendOp = VK_BLEND_OP_ADD;
-    blend_attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
-    blend_attachment_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-    VkPipelineColorBlendStateCreateInfo color_blend_state;
-    ::memset(&color_blend_state, 0, sizeof(VkPipelineColorBlendStateCreateInfo));
-    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    color_blend_state.attachmentCount = 1;
-    color_blend_state.pAttachments = &blend_attachment_state;
-
-    VkPipelineDynamicStateCreateInfo dynamic_state;
-    ::memset(&dynamic_state, 0, sizeof(VkPipelineDynamicStateCreateInfo));
-    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.pDynamicStates = dynamic_states.data();
-    dynamic_state.dynamicStateCount = (uint32_t)dynamic_states.size();
-
-    VkPipelineViewportStateCreateInfo viewport_state;
-    ::memset(&viewport_state, 0, sizeof(VkPipelineViewportStateCreateInfo));
-    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_state.viewportCount = 1;
-    viewport_state.scissorCount = 1;
-
-    VkPipelineDepthStencilStateCreateInfo depth_stencil_state;
-    ::memset(&depth_stencil_state, 0, sizeof(VkPipelineDepthStencilStateCreateInfo));
-    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil_state.depthTestEnable = VK_TRUE;
-    depth_stencil_state.depthWriteEnable = VK_TRUE;
-    depth_stencil_state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-    depth_stencil_state.back.failOp = VK_STENCIL_OP_KEEP;
-    depth_stencil_state.back.passOp = VK_STENCIL_OP_KEEP;
-    depth_stencil_state.back.compareOp = VK_COMPARE_OP_ALWAYS;
-    depth_stencil_state.front = depth_stencil_state.back;
-
-    VkPipelineMultisampleStateCreateInfo multi_sample_state;
-    ::memset(&multi_sample_state, 0, sizeof(VkPipelineMultisampleStateCreateInfo));
-    multi_sample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multi_sample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-    VkGraphicsPipelineCreateInfo create_info;
-    ::memset(&create_info, 0, sizeof(VkGraphicsPipelineCreateInfo));
-    create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    create_info.layout = pipeline_layout;
-    create_info.pVertexInputState = &vertex_input_state;
-    create_info.pInputAssemblyState = &input_assembly_state;
-    create_info.pRasterizationState = &rasterization_state;
-    create_info.pColorBlendState = &color_blend_state;
-    create_info.pMultisampleState = &multi_sample_state;
-    create_info.pViewportState = &viewport_state;
-    create_info.pDepthStencilState = &depth_stencil_state;
-    create_info.stageCount = (uint32_t)shaderstages.size();
-    create_info.pStages = shaderstages.data();
-    create_info.renderPass = render_pass;
-    create_info.pDynamicState = &dynamic_state;
-
-    THROW_ERROR(vkCreateGraphicsPipelines(this->device->device, pipeline_cache, 1, &create_info, nullptr, &this->pipeline));
-  }
-
-
-  ~VulkanGraphicsPipeline()
-  {
-    vkDestroyPipeline(this->device->device, this->pipeline, nullptr);
-  }
-
-  void bind(VkCommandBuffer buffer)
-  {
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
-  }
-
-  VkPipeline pipeline;
-  std::shared_ptr<VulkanDevice> device;
-};
-
 
 //*******************************************************************************************************************************
 
