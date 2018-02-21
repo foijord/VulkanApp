@@ -331,7 +331,7 @@ public:
       }
 
       this->swap_buffers_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, image_index, { this->semaphore->semaphore });
-      THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
+      //THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
 
       VkPresentInfoKHR present_info = {
         VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
@@ -497,7 +497,7 @@ public:
 
     this->command->end();
     this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
+    //THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
 
     VkImageSubresourceRange subresource_range = {
       VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1

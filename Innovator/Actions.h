@@ -213,7 +213,7 @@ public:
     this->command->end();
 
     this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
+
     this->graphic_states.clear();
     this->compute_states.clear();
   }
