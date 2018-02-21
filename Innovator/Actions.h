@@ -151,8 +151,8 @@ public:
   };
 
   RenderAction(const std::shared_ptr<VulkanDevice> & device, 
-               const std::shared_ptr<VulkanFramebuffer> & framebuffer, 
                const std::shared_ptr<VulkanRenderpass> & renderpass, 
+               const std::shared_ptr<VulkanFramebuffer> & framebuffer, 
                VkExtent2D extent)
     : device(device), 
       framebuffer(framebuffer),

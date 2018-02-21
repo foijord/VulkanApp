@@ -203,23 +203,20 @@ public:
 
     VulkanPhysicalDevice physical_device = this->vulkan->selectPhysicalDevice(required_device_features);
 
-    std::vector<VkDeviceQueueCreateInfo> queue_create_info;
     float queue_priorities[1] = { 1.0f };
+    uint32_t queue_index = physical_device.getQueueIndex(
+      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
+      this->surface->getPresentationFilter(physical_device));
 
-    auto add_queue_info = [&](uint32_t queue_index) {
-      VkDeviceQueueCreateInfo create_info;
-      ::memset(&create_info, 0, sizeof(VkDeviceQueueCreateInfo));
-      create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-      create_info.queueCount = 1;
-      create_info.pQueuePriorities = queue_priorities;
-      create_info.queueFamilyIndex = queue_index;
-      queue_create_info.push_back(create_info);
-    };
-
-    // TRODO: specialized queues if available instead of one generic queue for graphics, compute, transfer and presentation
-    add_queue_info(physical_device.getQueueIndex(
-      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, 
-      this->surface->getPresentationFilter(physical_device)));
+    std::vector<VkDeviceQueueCreateInfo> queue_create_info;
+    queue_create_info.push_back(VkDeviceQueueCreateInfo{
+      VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,   // sType
+      nullptr,                                      // pNext
+      0,                                            // flags
+      queue_index,                                  // queueFamilyIndex
+      1,                                            // queueCount   
+      queue_priorities                              // pQueuePriorities
+    });
 
     std::vector<std::string> device_layers = {
 #ifdef _DEBUG
@@ -241,6 +238,58 @@ public:
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
     }
     this->handleeventaction = std::make_unique<HandleEventAction>();
+
+    this->depth_format = VK_FORMAT_D32_SFLOAT;
+    this->color_format = this->surface_format.format;
+
+    std::vector<VkAttachmentDescription> attachment_descriptions = { {
+        0,                                                    // flags
+        this->color_format,                                         // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,             // initialLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
+      },{
+        0,                                                    // flags
+        this->depth_format,                                         // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,     // initialLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
+      } };
+
+
+    VkAttachmentReference depth_stencil_attachment = {
+      1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
+    std::vector<VkAttachmentReference> color_attachments = {
+      { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }
+    };
+
+    std::vector<VkSubpassDescription> subpass_descriptions = { {
+        0,                                                      // flags
+        VK_PIPELINE_BIND_POINT_GRAPHICS,                        // pipelineBindPoint
+        0,                                                      // inputAttachmentCount
+        nullptr,                                                // pInputAttachments
+        static_cast<uint32_t>(color_attachments.size()),        // colorAttachmentCount
+        color_attachments.data(),                               // pColorAttachments
+        nullptr,                                                // pResolveAttachments
+        &depth_stencil_attachment,                              // pDepthStencilAttachment
+        0,                                                      // preserveAttachmentCount
+        nullptr                                                 // pPreserveAttachments
+      } };
+
+    this->renderpass = std::make_unique<VulkanRenderpass>(
+      this->device,
+      attachment_descriptions,
+      subpass_descriptions);
+
     this->resize();
   }
 
@@ -266,7 +315,14 @@ public:
     this->renderaction->apply(this->root);
     try {
       uint32_t image_index;
-      VkResult result = this->vulkan->vkAcquireNextImage(this->device->device, this->swapchain->swapchain, UINT64_MAX, this->semaphore->semaphore, 0, &image_index);
+      VkResult result = this->vulkan->vkAcquireNextImage(
+        this->device->device, 
+        this->swapchain->swapchain, 
+        UINT64_MAX, 
+        this->semaphore->semaphore, 
+        0, 
+        &image_index);
+
       if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         throw VkErrorOutOfDateException();
       }
@@ -277,12 +333,16 @@ public:
       this->swap_buffers_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, image_index, { this->semaphore->semaphore });
       THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
 
-      VkPresentInfoKHR present_info;
-      ::memset(&present_info, 0, sizeof(VkPresentInfoKHR));
-      present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-      present_info.swapchainCount = 1;
-      present_info.pSwapchains = &this->swapchain->swapchain;
-      present_info.pImageIndices = &image_index;
+      VkPresentInfoKHR present_info = {
+        VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
+        nullptr,                            // pNext
+        0,                                  // waitSemaphoreCount
+        nullptr,                            // pWaitSemaphores
+        1,                                  // swapchainCount
+        &this->swapchain->swapchain,        // pSwapchains
+        &image_index,                       // pImageIndices
+        nullptr                             // pResults
+      };
 
       THROW_ERROR(this->vulkan->vkQueuePresent(this->device->default_queue, &present_info));
       THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
@@ -296,17 +356,24 @@ public:
   {
     this->surface_capabilities = this->surface->getSurfaceCapabilities(this->device->physical_device);
     
-    VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
-    VkFormat color_format = this->surface_format.format;
     VkExtent2D extent2d = this->surface_capabilities.currentExtent;
     VkExtent3D extent3d = { extent2d.width, extent2d.height, 1 };
+
+    std::vector<VkImageMemoryBarrier> memory_barriers;
     {
-      VkImageSubresourceRange subresource_range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-      VkComponentMapping component_mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+      VkImageSubresourceRange subresource_range = { 
+        VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 
+      };
+      VkComponentMapping component_mapping = { 
+        VK_COMPONENT_SWIZZLE_R, 
+        VK_COMPONENT_SWIZZLE_G, 
+        VK_COMPONENT_SWIZZLE_B, 
+        VK_COMPONENT_SWIZZLE_A 
+      };
 
       this->color_buffer = std::make_unique<ImageObject>(
-        device,
-        this->surface_format.format,
+        this->device,
+        color_format,
         extent3d,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_TILING_OPTIMAL,
@@ -315,13 +382,33 @@ public:
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         subresource_range,
         component_mapping);
+
+      memory_barriers.push_back({
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        0,                                                             // srcAccessMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
+        this->device->default_queue_index,                             // srcQueueFamilyIndex
+        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        this->color_buffer->image->image,                              // image
+        subresource_range                                              // subresourceRange
+      });
     }
     {
-      VkImageSubresourceRange subresource_range = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
-      VkComponentMapping component_mapping = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+      VkImageSubresourceRange subresource_range = { 
+        VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 
+      };
+      VkComponentMapping component_mapping = {
+        VK_COMPONENT_SWIZZLE_IDENTITY, 
+        VK_COMPONENT_SWIZZLE_IDENTITY, 
+        VK_COMPONENT_SWIZZLE_IDENTITY, 
+        VK_COMPONENT_SWIZZLE_IDENTITY 
+      };
 
       this->depth_buffer = std::make_unique<ImageObject>(
-        device,
+        this->device,
         depth_format,
         extent3d,
         VK_IMAGE_LAYOUT_UNDEFINED,
@@ -331,71 +418,38 @@ public:
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         subresource_range,
         component_mapping);
+
+      memory_barriers.push_back({
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        0,                                                             // srcAccessMask
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,                  // dstAccessMask
+        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,              // newLayout
+        this->device->default_queue_index,                             // srcQueueFamilyIndex
+        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        this->depth_buffer->image->image,                              // image
+        subresource_range                                              // subresourceRange
+      });
     }
 
-    std::vector<VkImageMemoryBarrier> memory_barriers = {
-      this->color_buffer->setLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
-      this->depth_buffer->setLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    std::vector<VkImageView> framebuffer_attachments = {
+      this->color_buffer->view->view,
+      this->depth_buffer->view->view
     };
 
-    this->command->begin();
-    vkCmdPipelineBarrier(
-      this->command->buffer(),
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      0, 0, nullptr, 0, nullptr,
-      static_cast<uint32_t>(memory_barriers.size()),
-      memory_barriers.data());
+    this->framebuffer = std::make_unique<VulkanFramebuffer>(
+      this->device, 
+      this->renderpass, 
+      framebuffer_attachments,
+      extent2d, 
+      1);
 
-    this->command->end();
-    this->command->submit(device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
-
-    std::vector<VkAttachmentDescription> attachments = { {
-        0,                                                    // flags
-        color_format,                                         // format
-        VK_SAMPLE_COUNT_1_BIT,                                // samples
-        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
-        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
-        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,             // initialLayout
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
-      },{
-        0,                                                    // flags
-        depth_format,                                         // format
-        VK_SAMPLE_COUNT_1_BIT,                                // samples
-        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
-        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
-        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,     // initialLayout
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
-      } };
-
-    VkAttachmentReference depth_stencil_attachment = { 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
-    std::vector<VkAttachmentReference> color_attachments = { { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL } };
-
-    VkSubpassDescription subpass_description = {
-      0,                                                      // flags
-      VK_PIPELINE_BIND_POINT_GRAPHICS,                        // pipelineBindPoint
-      0,                                                      // inputAttachmentCount
-      nullptr,                                                // pInputAttachments
-      static_cast<uint32_t>(color_attachments.size()),        // colorAttachmentCount
-      color_attachments.data(),                               // pColorAttachments
-      0,                                                      // pResolveAttachments
-      &depth_stencil_attachment,                              // pDepthStencilAttachment
-      0,                                                      // preserveAttachmentCount
-      nullptr                                                 // pPreserveAttachments
-    };
-
-    std::vector<VkSubpassDescription> subpass_descriptions = { subpass_description };
-    this->renderpass = std::make_unique<VulkanRenderpass>(device, attachments, subpass_descriptions);
-
-    std::vector<VkImageView> framebuffer_attachments = { this->color_buffer->view->view, this->depth_buffer->view->view };
-    this->framebuffer = std::make_unique<VulkanFramebuffer>(this->device, this->renderpass, framebuffer_attachments, extent2d, 1);
-
-    this->renderaction = std::make_unique<RenderAction>(this->device, this->framebuffer, this->renderpass, extent2d);
+    this->renderaction = std::make_unique<RenderAction>(
+      this->device, 
+      this->renderpass, 
+      this->framebuffer, 
+      extent2d);
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
       this->device,
@@ -408,56 +462,70 @@ public:
       1,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
-      std::vector<uint32_t>(),
+      std::vector<uint32_t>(this->device->default_queue_index),
       this->surface_capabilities.currentTransform,
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       this->present_mode,
       VK_FALSE,
       this->swapchain ? this->swapchain->swapchain : nullptr);
 
-    uint32_t image_count;
-    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain->swapchain, &image_count, nullptr));
-    std::vector<VkImage> swapchain_images(image_count);
-    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain->swapchain, &image_count, swapchain_images.data()));
+    std::vector<VkImage> swapchain_images = this->swapchain->getSwapchainImages();
 
-    VkImageMemoryBarrier default_memory_barrier;
-    ::memset(&default_memory_barrier, 0, sizeof(VkImageMemoryBarrier));
-    default_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    default_memory_barrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    default_memory_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    default_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    default_memory_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    for (uint32_t i = 0; i < swapchain_images.size(); i++) {
-      this->command->begin();
-
-      default_memory_barrier.image = swapchain_images[i];
-
-      vkCmdPipelineBarrier(this->command->buffer(),
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        1, &default_memory_barrier);
-
-      this->command->end();
-      this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-      THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
+    for (VkImage & swapchain_image : swapchain_images) {
+      memory_barriers.push_back({
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        0,                                                             // srcAccessMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
+        this->device->default_queue_index,                             // srcQueueFamilyIndex
+        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        swapchain_image,                                               // image
+        { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }                      // subresourceRange
+      });
     }
 
-    std::vector<VkImageMemoryBarrier> src_image_barriers = {
-      default_memory_barrier,
-      default_memory_barrier,
+    this->command->begin();
+    vkCmdPipelineBarrier(
+      this->command->buffer(),
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      0, 0, nullptr, 0, nullptr,
+      static_cast<uint32_t>(memory_barriers.size()),
+      memory_barriers.data());
+
+    this->command->end();
+    this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
+
+    VkImageSubresourceRange subresource_range = {
+      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
     };
 
-    src_image_barriers[0].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    src_image_barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    src_image_barriers[0].oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    src_image_barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-    src_image_barriers[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    src_image_barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    src_image_barriers[1].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    src_image_barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    std::vector<VkImageMemoryBarrier> src_image_barriers = { {
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+      nullptr,                                                       // pNext
+      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+      VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
+      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // oldLayout
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
+      this->device->default_queue_index,                             // srcQueueFamilyIndex
+      this->device->default_queue_index,                             // dstQueueFamilyIndex
+      nullptr,                                                       // image
+      subresource_range,                                             // subresourceRange
+    }, {
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+      nullptr,                                                       // pNext
+      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+      VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
+      this->device->default_queue_index,                             // srcQueueFamilyIndex
+      this->device->default_queue_index,                             // dstQueueFamilyIndex
+      nullptr,                                                       // image
+      subresource_range,                                             // subresourceRange
+    } };
 
     std::vector<VkImageMemoryBarrier> dst_image_barriers = src_image_barriers;
     std::swap(dst_image_barriers[0].oldLayout, dst_image_barriers[0].newLayout);
@@ -468,7 +536,6 @@ public:
     this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(this->device, swapchain_images.size());
 
     for (uint32_t i = 0; i < swapchain_images.size(); i++) {
-
       src_image_barriers[1].image = color_buffer->image->image;
       dst_image_barriers[1].image = color_buffer->image->image;
       src_image_barriers[0].image = swapchain_images[i];
@@ -482,7 +549,24 @@ public:
         static_cast<uint32_t>(src_image_barriers.size()),
         src_image_barriers.data());
 
-      color_buffer->copyImageToImage(buffer_scope.command(), swapchain_images[i]);
+      VkImageSubresourceLayers subresource_layers = {
+        subresource_range.aspectMask,     // aspectMask
+        subresource_range.baseMipLevel,   // mipLevel
+        subresource_range.baseArrayLayer, // baseArrayLayer
+        subresource_range.layerCount      // layerCount;
+      };
+      VkOffset3D offset = {
+        0, 0, 0
+      };
+      VkImageCopy image_copy = {
+        subresource_layers,             // srcSubresource
+        offset,                         // srcOffset
+        subresource_layers,             // dstSubresource
+        offset,                         // dstOffset
+        extent3d                        // extent
+      };
+
+      vkCmdCopyImage(buffer_scope.command(), this->color_buffer->image->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain_images[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
 
       vkCmdPipelineBarrier(buffer_scope.command(),
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -550,6 +634,9 @@ public:
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::shared_ptr<Separator> root;
   std::shared_ptr<Camera> camera;
+
+  VkFormat depth_format;
+  VkFormat color_format;
 
   VkPresentModeKHR present_mode;
   VkSurfaceFormatKHR surface_format;

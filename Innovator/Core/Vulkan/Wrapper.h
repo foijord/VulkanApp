@@ -326,10 +326,10 @@ public:
 class VulkanDevice {
 public:
   VulkanDevice(const VulkanPhysicalDevice & physical_device,
-    const VkPhysicalDeviceFeatures & enabled_features,
-    const std::vector<std::string> & required_layers,
-    const std::vector<std::string> & required_extensions,
-    const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
+               const VkPhysicalDeviceFeatures & enabled_features,
+               const std::vector<std::string> & required_layers,
+               const std::vector<std::string> & required_extensions,
+               const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
     : physical_device(physical_device)
   {
     if (!set_difference(required_layers, extract_layer_names(physical_device.layer_properties)).empty()) {
@@ -355,7 +355,8 @@ public:
 
     THROW_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
 
-    vkGetDeviceQueue(this->device, queue_create_infos[0].queueFamilyIndex, 0, &this->default_queue);
+    this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
+    vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
 
     VkCommandPoolCreateInfo pool_create_info;
     pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -373,6 +374,7 @@ public:
   }
 
   VkDevice device;
+  uint32_t default_queue_index;
   VkQueue default_queue;
   VkQueue compute_queue;
   VkQueue transfer_queue;
@@ -428,6 +430,15 @@ public:
   ~VulkanSwapchain()
   {
     this->vulkan->vkDestroySwapchain(this->device->device, this->swapchain, nullptr);
+  }
+
+  std::vector<VkImage> getSwapchainImages()
+  {
+    uint32_t count;
+    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, nullptr));
+    std::vector<VkImage> images(count);
+    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, images.data()));
+    return images;
   }
 
   VkSwapchainKHR swapchain;
