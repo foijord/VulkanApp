@@ -326,51 +326,44 @@ public:
 class VulkanDevice {
 public:
   VulkanDevice(const VulkanPhysicalDevice & physical_device,
-               const VkPhysicalDeviceFeatures & enabled_features,
-               const std::vector<std::string> & required_layers,
-               const std::vector<std::string> & required_extensions,
-               const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
+    const VkPhysicalDeviceFeatures & enabled_features,
+    const std::vector<std::string> & required_layers,
+    const std::vector<std::string> & required_extensions,
+    const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
     : physical_device(physical_device)
   {
-    {
-      if (!set_difference(required_layers, extract_layer_names(physical_device.layer_properties)).empty()) {
-        throw std::runtime_error("unsupported device layers");
-      }
-      if (!set_difference(required_extensions, extract_extension_names(physical_device.extension_properties)).empty()) {
-        throw std::runtime_error("unsupported device extensions");
-      }
-
-      std::vector<const char*> layer_names = string2char(required_layers);
-      std::vector<const char*> extension_names = string2char(required_extensions);
-
-      VkDeviceCreateInfo create_info;
-      create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-      create_info.pNext = nullptr;
-      create_info.flags = 0;
-      create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
-      create_info.pQueueCreateInfos = queue_create_infos.data();
-      create_info.enabledLayerCount = static_cast<uint32_t>(layer_names.size());
-      create_info.ppEnabledLayerNames = layer_names.data();
-      create_info.enabledExtensionCount = static_cast<uint32_t>(extension_names.size());
-      create_info.ppEnabledExtensionNames = extension_names.data();
-      create_info.pEnabledFeatures = &enabled_features;
-
-      THROW_ERROR(vkCreateDevice(this->physical_device.device, &create_info, nullptr, &this->device));
+    if (!set_difference(required_layers, extract_layer_names(physical_device.layer_properties)).empty()) {
+      throw std::runtime_error("unsupported device layers");
     }
+    if (!set_difference(required_extensions, extract_extension_names(physical_device.extension_properties)).empty()) {
+      throw std::runtime_error("unsupported device extensions");
+    }
+    std::vector<const char*> layer_names = string2char(required_layers);
+    std::vector<const char*> extension_names = string2char(required_extensions);
+
+    VkDeviceCreateInfo device_create_info;
+    device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.pNext = nullptr;
+    device_create_info.flags = 0;
+    device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
+    device_create_info.pQueueCreateInfos = queue_create_infos.data();
+    device_create_info.enabledLayerCount = static_cast<uint32_t>(layer_names.size());
+    device_create_info.ppEnabledLayerNames = layer_names.data();
+    device_create_info.enabledExtensionCount = static_cast<uint32_t>(extension_names.size());
+    device_create_info.ppEnabledExtensionNames = extension_names.data();
+    device_create_info.pEnabledFeatures = &enabled_features;
+
+    THROW_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
 
     vkGetDeviceQueue(this->device, queue_create_infos[0].queueFamilyIndex, 0, &this->default_queue);
-    //vkGetDeviceQueue(this->device, queue_create_infos[1].queueFamilyIndex, 0, &this->compute_queue);
-    vkGetDeviceQueue(this->device, queue_create_infos[1].queueFamilyIndex, 0, &this->transfer_queue);
-    
-    {
-      VkCommandPoolCreateInfo create_info;
-      create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-      create_info.pNext = nullptr;
-      create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-      create_info.queueFamilyIndex = queue_create_infos[0].queueFamilyIndex;
 
-      THROW_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->default_pool));
-    }
+    VkCommandPoolCreateInfo pool_create_info;
+    pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_create_info.pNext = nullptr;
+    pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    pool_create_info.queueFamilyIndex = queue_create_infos[0].queueFamilyIndex;
+
+    THROW_ERROR(vkCreateCommandPool(this->device, &pool_create_info, nullptr, &this->default_pool));
   }
 
   ~VulkanDevice()
@@ -959,9 +952,9 @@ public:
 };
 
 
-class VulkanRenderPass {
+class VulkanRenderpass {
 public:
-  VulkanRenderPass(const std::shared_ptr<VulkanDevice> & device,
+  VulkanRenderpass(const std::shared_ptr<VulkanDevice> & device,
                    const std::vector<VkAttachmentDescription> & attachments,
                    const std::vector<VkSubpassDescription> & subpasses,
                    const std::vector<VkSubpassDependency> & dependencies = std::vector<VkSubpassDependency>())
@@ -978,38 +971,15 @@ public:
     create_info.dependencyCount = static_cast<uint32_t>(dependencies.size());
     create_info.pDependencies = dependencies.data();
 
-    THROW_ERROR(vkCreateRenderPass(this->device->device, &create_info, nullptr, &this->render_pass));
+    THROW_ERROR(vkCreateRenderPass(this->device->device, &create_info, nullptr, &this->renderpass));
   }
 
-  ~VulkanRenderPass()
+  ~VulkanRenderpass()
   {
-    vkDestroyRenderPass(this->device->device, this->render_pass, nullptr);
+    vkDestroyRenderPass(this->device->device, this->renderpass, nullptr);
   }
 
-  void begin(VkCommandBuffer commandbuffer, 
-             VkFramebuffer framebuffer, 
-             VkRect2D renderArea, 
-             std::vector<VkClearValue> clearvalues, 
-             VkSubpassContents contents)
-  {
-    VkRenderPassBeginInfo begin_info;
-    begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    begin_info.pNext = nullptr;
-    begin_info.renderPass = this->render_pass;
-    begin_info.framebuffer = framebuffer;
-    begin_info.renderArea = renderArea;
-    begin_info.clearValueCount = static_cast<uint32_t>(clearvalues.size());
-    begin_info.pClearValues = clearvalues.data();
-
-    vkCmdBeginRenderPass(commandbuffer, &begin_info, contents);
-  }
-
-  void end(VkCommandBuffer commandbuffer)
-  {
-    vkCmdEndRenderPass(commandbuffer);
-  }
-
-  VkRenderPass render_pass;
+  VkRenderPass renderpass;
   std::shared_ptr<VulkanDevice> device;
 };
 
@@ -1017,7 +987,7 @@ public:
 class VulkanFramebuffer {
 public:
   VulkanFramebuffer(const std::shared_ptr<VulkanDevice> & device,
-                    VkRenderPass renderPass,
+                    const std::shared_ptr<VulkanRenderpass> & renderpass,
                     std::vector<VkImageView> attachments, 
                     VkExtent2D extent,
                     uint32_t layers)
@@ -1027,7 +997,7 @@ public:
     create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     create_info.pNext = nullptr;
     create_info.flags = 0;
-    create_info.renderPass = renderPass;
+    create_info.renderPass = renderpass->renderpass;
     create_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     create_info.pAttachments = attachments.data();
     create_info.width = extent.width;

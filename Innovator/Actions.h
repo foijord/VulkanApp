@@ -72,12 +72,12 @@ public:
         state.shaders,
         state.rasterization_state,
         this->descriptor_set->pipeline_layout->layout,
-        action->framebuffer_object->renderpass->render_pass,
+        action->renderpass->renderpass,
         action->pipeline_cache->cache,
         state.draw_description.topology);
 
       this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-      this->command->begin(0, action->framebuffer_object->renderpass->render_pass, 0, action->framebuffer_object->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
+      this->command->begin(0, action->renderpass->renderpass, 0, action->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
 
       this->descriptor_set->bind(this->command->buffer(), VK_PIPELINE_BIND_POINT_GRAPHICS);
       this->pipeline->bind(this->command->buffer());
@@ -141,7 +141,6 @@ public:
         state.compute_description.group_count_z);
 
       this->command->end();
-
     }
 
     ~ComputeCommandObject() {}
@@ -151,15 +150,21 @@ public:
     std::unique_ptr<VulkanCommandBuffers> command;
   };
 
-  RenderAction(const std::shared_ptr<VulkanDevice> & device, const std::shared_ptr<FramebufferObject> framebuffer_object, VkExtent2D extent)
-    : device(device), extent(extent), framebuffer_object(framebuffer_object)
+  RenderAction(const std::shared_ptr<VulkanDevice> & device, 
+               const std::shared_ptr<VulkanFramebuffer> & framebuffer, 
+               const std::shared_ptr<VulkanRenderpass> & renderpass, 
+               VkExtent2D extent)
+    : device(device), 
+      framebuffer(framebuffer),
+      renderpass(renderpass),
+      extent(extent),
+      command(std::make_unique<VulkanCommandBuffers>(device)),
+      pipeline_cache(std::make_unique<VulkanPipelineCache>(device))
   {
-    this->render_command = std::make_unique<VulkanCommandBuffers>(this->device);
-    this->staging_command = std::make_unique<VulkanCommandBuffers>(this->device);
-    this->pipeline_cache = std::make_unique<VulkanPipelineCache>(this->device);
-
-    this->viewport = { 0.0f, 0.0f, (float)this->extent.width, (float)this->extent.height, 0.0f, 1.0f };
     this->scissor = { { 0, 0 },  this->extent };
+    this->renderarea = { { 0, 0 }, this->extent };
+    this->clearvalues = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 1.0f, 0 } };
+    this->viewport = { 0.0f, 0.0f, (float)this->extent.width, (float)this->extent.height, 0.0f, 1.0f };
   }
 
   ~RenderAction() 
@@ -173,33 +178,41 @@ public:
 
   void apply(const std::shared_ptr<Node> & root)
   {
-    this->staging_command->begin();
+    this->command->begin();
     root->traverse(this);
-    this->staging_command->end();
-    this->staging_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
-
-    this->render_command->begin();
 
     for (State & state : this->compute_states) {
       if (this->compute_commands.find(&state.compute_description) == this->compute_commands.end()) {
         this->compute_commands[&state.compute_description] = std::make_unique<ComputeCommandObject>(this, state);
       }
       VulkanCommandBuffers * command = this->compute_commands[&state.compute_description]->command.get();
-      vkCmdExecuteCommands(this->render_command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
+      vkCmdExecuteCommands(this->command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
     }
-    this->framebuffer_object->begin(this->render_command->buffer());
+
+    VkRenderPassBeginInfo begin_info = {
+      VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
+      nullptr,                                         // pNext
+      this->renderpass->renderpass,                    // renderPass
+      this->framebuffer->framebuffer,                  // framebuffer
+      this->renderarea,                                // renderArea
+      static_cast<uint32_t>(this->clearvalues.size()), // clearValueCount
+      this->clearvalues.data()                         // pClearValues
+    };
+
+    vkCmdBeginRenderPass(this->command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
     for (State & state : this->graphic_states) {
       if (this->draw_commands.find(&state.draw_description) == this->draw_commands.end()) {
         this->draw_commands[&state.draw_description] = std::make_unique<DrawCommandObject>(this, state);
       }
       VulkanCommandBuffers * command = this->draw_commands[&state.draw_description]->command.get();
-      vkCmdExecuteCommands(this->render_command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
+      vkCmdExecuteCommands(this->command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
     }
-    this->framebuffer_object->end(this->render_command->buffer());
-    this->render_command->end();
-    this->render_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+
+    vkCmdEndRenderPass(this->command->buffer());
+    this->command->end();
+
+    this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
     THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
     this->graphic_states.clear();
     this->compute_states.clear();
@@ -208,6 +221,8 @@ public:
   VkExtent2D extent;
   VkRect2D scissor;
   VkViewport viewport;
+  VkRect2D renderarea;
+  std::vector<VkClearValue> clearvalues;
 
   std::vector<State> graphic_states;
   std::vector<State> compute_states;
@@ -216,10 +231,11 @@ public:
   std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
 
   std::shared_ptr<VulkanDevice> device;
-  std::unique_ptr<VulkanCommandBuffers> render_command;
-  std::unique_ptr<VulkanCommandBuffers> staging_command;
+  std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<VulkanPipelineCache> pipeline_cache;
-  std::shared_ptr<FramebufferObject> framebuffer_object;
+
+  std::shared_ptr<VulkanFramebuffer> framebuffer;
+  std::shared_ptr<VulkanRenderpass> renderpass;
 };
 
 class StateScope {

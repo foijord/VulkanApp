@@ -199,7 +199,7 @@ public:
       this->gpu_buffer = std::make_unique<VulkanDeviceLocalBufferObject<uint32_t>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
       this->cpu_buffer->setValues(this->values);
-      this->gpu_buffer->setValues(action->staging_command->buffer(), this->cpu_buffer, size);
+      this->gpu_buffer->setValues(action->command->buffer(), this->cpu_buffer, size);
     }
     VulkanIndexBufferDescription indices;
     indices.type = VK_INDEX_TYPE_UINT32;
@@ -385,7 +385,7 @@ public:
         vulkan_format[this->texture.format()],
         extent);
 
-      this->vulkantexture->setData(action->staging_command->buffer(), this->texture);
+      this->vulkantexture->setData(action->command->buffer(), this->texture);
     }
 
     VulkanTextureDescription description;

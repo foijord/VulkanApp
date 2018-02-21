@@ -159,7 +159,6 @@ public:
 
     message += std::string(layer) + " " + std::string(msg);
     MessageBox(nullptr, message.c_str(), "Alert", MB_OK);
-
     return false;
   }
 
@@ -217,10 +216,10 @@ public:
       queue_create_info.push_back(create_info);
     };
 
-    // one generic queue for everything
-    add_queue_info(physical_device.getQueueIndex(VK_QUEUE_GRAPHICS_BIT, this->surface->getPresentationFilter(physical_device)));
-    //add_queue_info(physical_device.getQueueIndex(VK_QUEUE_COMPUTE_BIT));
-    add_queue_info(physical_device.getQueueIndex(VK_QUEUE_TRANSFER_BIT));
+    // TRODO: specialized queues if available instead of one generic queue for graphics, compute, transfer and presentation
+    add_queue_info(physical_device.getQueueIndex(
+      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, 
+      this->surface->getPresentationFilter(physical_device)));
 
     std::vector<std::string> device_layers = {
 #ifdef _DEBUG
@@ -232,7 +231,7 @@ public:
     };
 
     this->device = std::make_shared<VulkanDevice>(physical_device, required_device_features, device_layers, device_extensions, queue_create_info);
-
+    this->command = std::make_unique<VulkanCommandBuffers>(this->device);
     this->surface_format = this->surface->getSurfaceFormats(this->device->physical_device)[0];
 
     this->present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
@@ -240,7 +239,6 @@ public:
     if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
     }
-
     this->handleeventaction = std::make_unique<HandleEventAction>();
     this->resize();
   }
@@ -249,8 +247,6 @@ public:
 
   void setSceneGraph(std::shared_ptr<class Node> scene)
   {
-    this->renderaction = std::make_unique<RenderAction>(this->device, this->framebuffer_object, this->surface_capabilities.currentExtent);
-
     this->root = std::make_shared<Separator>();
     this->camera = SearchAction<Camera>(scene);
 
@@ -278,18 +274,116 @@ public:
   virtual void resize()
   {
     this->surface_capabilities = this->surface->getSurfaceCapabilities(this->device->physical_device);
-    this->framebuffer_object = std::make_shared<FramebufferObject>(this->device, this->surface_format.format, this->surface_capabilities.currentExtent);
-    this->renderaction = std::make_unique<RenderAction>(this->device, this->framebuffer_object, this->surface_capabilities.currentExtent);
+    
+    VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
+    VkFormat color_format = this->surface_format.format;
+    VkExtent2D extent2d = this->surface_capabilities.currentExtent;
+    VkExtent3D extent3d = { extent2d.width, extent2d.height, 1 };
+    {
+      VkImageSubresourceRange subresource_range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+      VkComponentMapping component_mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+
+      this->color_buffer = std::make_unique<ImageObject>(
+        device,
+        this->surface_format.format,
+        extent3d,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        subresource_range,
+        component_mapping);
+    }
+    {
+      VkImageSubresourceRange subresource_range = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
+      VkComponentMapping component_mapping = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+
+      this->depth_buffer = std::make_unique<ImageObject>(
+        device,
+        depth_format,
+        extent3d,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        subresource_range,
+        component_mapping);
+    }
+
+    std::vector<VkImageMemoryBarrier> memory_barriers = {
+      this->color_buffer->setLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
+      this->depth_buffer->setLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    };
+
+    this->command->begin();
+    vkCmdPipelineBarrier(
+      this->command->buffer(),
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      0, 0, nullptr, 0, nullptr,
+      static_cast<uint32_t>(memory_barriers.size()),
+      memory_barriers.data());
+
+    this->command->end();
+    this->command->submit(device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+
+    std::vector<VkAttachmentDescription> attachments = { {
+        0,                                                    // flags
+        color_format,                                         // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,             // initialLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
+      },{
+        0,                                                    // flags
+        depth_format,                                         // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,     // initialLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
+      } };
+
+    VkAttachmentReference depth_stencil_attachment = { 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+    std::vector<VkAttachmentReference> color_attachments = { { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL } };
+
+    VkSubpassDescription subpass_description = {
+      0,                                                      // flags
+      VK_PIPELINE_BIND_POINT_GRAPHICS,                        // pipelineBindPoint
+      0,                                                      // inputAttachmentCount
+      nullptr,                                                // pInputAttachments
+      static_cast<uint32_t>(color_attachments.size()),        // colorAttachmentCount
+      color_attachments.data(),                               // pColorAttachments
+      0,                                                      // pResolveAttachments
+      &depth_stencil_attachment,                              // pDepthStencilAttachment
+      0,                                                      // preserveAttachmentCount
+      nullptr                                                 // pPreserveAttachments
+    };
+
+    std::vector<VkSubpassDescription> subpass_descriptions = { subpass_description };
+    this->renderpass = std::make_unique<VulkanRenderpass>(device, attachments, subpass_descriptions);
+
+    std::vector<VkImageView> framebuffer_attachments = { this->color_buffer->view->view, this->depth_buffer->view->view };
+    this->framebuffer = std::make_unique<VulkanFramebuffer>(this->device, this->renderpass, framebuffer_attachments, extent2d, 1);
+
+    this->renderaction = std::make_unique<RenderAction>(this->device, this->framebuffer, this->renderpass, extent2d);
 
     this->swapchain = std::make_unique<SwapchainObject>(
       this->vulkan,
       this->device,
-      this->framebuffer_object->color_attachment,
+      this->color_buffer,
       this->surface->surface,
       this->surface_capabilities,
       this->present_mode,
       this->surface_format,
-      this->swapchain ? this->swapchain->swapchain->swapchain : nullptr);
+      this->swapchain.get() ? this->swapchain->swapchain->swapchain : nullptr);
   }
 
   virtual void keyDown(uint32_t key)
@@ -334,16 +428,20 @@ public:
     }
   }
 
-  std::shared_ptr<class VulkanInstance> vulkan;
-  std::unique_ptr<class VulkanDebugCallback> debugcb;
-  std::unique_ptr<class VulkanSurfaceWin32> surface;
-  std::shared_ptr<class VulkanDevice> device;
-  std::shared_ptr<class FramebufferObject > framebuffer_object;
-  std::unique_ptr<class RenderAction> renderaction;
-  std::unique_ptr<class HandleEventAction> handleeventaction;
-  std::unique_ptr<class SwapchainObject> swapchain;
-  std::shared_ptr<class Separator> root;
-  std::shared_ptr<class Camera> camera;
+  std::shared_ptr<VulkanInstance> vulkan;
+  std::unique_ptr<VulkanDebugCallback> debugcb;
+  std::unique_ptr<VulkanSurfaceWin32> surface;
+  std::shared_ptr<VulkanDevice> device;
+  std::unique_ptr<VulkanCommandBuffers> command;
+  std::shared_ptr<VulkanRenderpass> renderpass;
+  std::shared_ptr<VulkanFramebuffer> framebuffer;
+  std::unique_ptr<ImageObject> color_buffer;
+  std::unique_ptr<ImageObject> depth_buffer;
+  std::unique_ptr<RenderAction> renderaction;
+  std::unique_ptr<HandleEventAction> handleeventaction;
+  std::unique_ptr<SwapchainObject> swapchain;
+  std::shared_ptr<Separator> root;
+  std::shared_ptr<Camera> camera;
 
   VkPresentModeKHR present_mode;
   VkSurfaceFormatKHR surface_format;
