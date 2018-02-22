@@ -72,51 +72,15 @@ public:
   VulkanBufferObject(const std::shared_ptr<VulkanDevice> & device,
                      size_t size,
                      VkBufferUsageFlagBits usage,
-                     VkMemoryPropertyFlags property_flags)
+                     VkMemoryPropertyFlags flags)
     : buffer(std::make_unique<VulkanBuffer>(device, 0, size, usage, VK_SHARING_MODE_EXCLUSIVE)),
-      memory(std::make_unique<VulkanMemory>(device, this->buffer, property_flags))
+      memory(std::make_unique<VulkanMemory>(device, this->buffer, flags))
   {}
 
   ~VulkanBufferObject() {}
 
-  void setValues(const void * data, size_t size) 
-  {
-    this->memory->memcpy(data, size);
-  }
-
   std::unique_ptr<VulkanBuffer> buffer;
   std::unique_ptr<VulkanMemory> memory;
-};
-
-template <typename T>
-class VulkanHostVisibleBufferObject : public VulkanBufferObject {
-public:
-  VulkanHostVisibleBufferObject(const std::shared_ptr<VulkanDevice> & device, size_t size, VkBufferUsageFlagBits usage)
-    : VulkanBufferObject(device, size, usage, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {}
-  ~VulkanHostVisibleBufferObject() {}
-
-  void setValues(const std::vector<T> & values)
-  {
-    VulkanBufferObject::setValues(values.data(), sizeof(T) * values.size());
-  }
-};
-
-template <typename T>
-class VulkanDeviceLocalBufferObject : public VulkanBufferObject {
-public:
-  VulkanDeviceLocalBufferObject(const std::shared_ptr<VulkanDevice> & device, size_t size, VkBufferUsageFlagBits usage)
-    : VulkanBufferObject(device, size, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {}
-  VulkanDeviceLocalBufferObject() {}
-
-  void copy(VkCommandBuffer command, const std::unique_ptr<VulkanBuffer> & src_buffer, VkDeviceSize size)
-  {
-    VkBufferCopy region = {
-      0,    // srcOffset
-      0,    // dstOffset 
-      size, // size 
-    };
-    vkCmdCopyBuffer(command, src_buffer->buffer, this->buffer->buffer, 1, &region);
-  }
 };
 
 //*******************************************************************************************************************************
@@ -188,7 +152,7 @@ public:
     vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &memory_barrier);
 
     this->cpu_buffer = std::make_unique<VulkanBufferObject>(this->device, texture.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-    this->cpu_buffer->setValues(texture.data(), texture.size());
+    this->cpu_buffer->memory->memcpy(texture.data(), texture.size());
 
     VkDeviceSize buffer_offset = 0;
     for (uint32_t mip_level = 0; mip_level < texture.levels(); mip_level++) {

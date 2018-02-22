@@ -254,6 +254,29 @@ public:
     return this->shadercache[node]->module;
   }
 
+  const std::unique_ptr<VulkanBufferObject> &
+  getBuffer(Node * node)
+  {
+    if (this->buffercache.find(node) == this->buffercache.end()) {
+      throw std::runtime_error("buffer not found");
+    }
+    return this->buffercache[node];
+  }
+
+  const std::unique_ptr<VulkanBufferObject> & 
+  getBuffer(Node * node,
+            VkBufferUsageFlagBits usage, 
+            VkMemoryPropertyFlags flags,
+            const void * data,
+            size_t size)
+  {
+    if (this->buffercache.find(node) == this->buffercache.end()) {
+      this->buffercache[node] = std::make_unique<VulkanBufferObject>(this->device, size, usage, flags);
+      this->buffercache[node]->memory->memcpy(data, size);
+    }
+    return this->buffercache[node];
+  }
+
   VkExtent2D extent;
   VkRect2D scissor;
   VkViewport viewport;
@@ -276,6 +299,7 @@ public:
 
   std::map<Node *, std::unique_ptr<VulkanSampler>> samplercache;
   std::map<Node *, std::unique_ptr<VulkanShaderModule>> shadercache;
+  std::map<Node *, std::unique_ptr<VulkanBufferObject>> buffercache;
 };
 
 class StateScope {

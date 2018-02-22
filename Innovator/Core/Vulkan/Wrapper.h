@@ -67,12 +67,12 @@ public:
   VulkanCommandPool(VkDevice device, VkCommandPoolCreateFlags flags, uint32_t queue_family_index)
     : device(device)
   {
-    VkCommandPoolCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = flags;
-    create_info.queueFamilyIndex = queue_family_index;
-
+    VkCommandPoolCreateInfo create_info = {
+      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, // sType
+      nullptr,                                    // pNext 
+      flags,                                      // flags
+      queue_family_index                          // queueFamilyIndex 
+    };
     THROW_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->pool));
   }
 
@@ -188,16 +188,16 @@ public:
     std::vector<const char*> layer_names = string2char(required_layers);
     std::vector<const char*> extension_names = string2char(required_extensions);
 
-    VkInstanceCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0;
-    create_info.pApplicationInfo = &application_info;
-    create_info.enabledLayerCount = static_cast<uint32_t>(layer_names.size());
-    create_info.ppEnabledLayerNames = layer_names.data();
-    create_info.enabledExtensionCount = static_cast<uint32_t>(extension_names.size());
-    create_info.ppEnabledExtensionNames = extension_names.data();
-
+    VkInstanceCreateInfo create_info = {
+      VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,        // sType 
+      nullptr,                                       // pNext 
+      0,                                             // flags
+      &application_info,                             // pApplicationInfo
+      static_cast<uint32_t>(layer_names.size()),     // enabledLayerCount
+      layer_names.data(),                            // ppEnabledLayerNames
+      static_cast<uint32_t>(extension_names.size()), // enabledExtensionCount
+      extension_names.data()                         // ppEnabledExtensionNames
+    };
     THROW_ERROR(vkCreateInstance(&create_info, nullptr, &this->instance));
 
     uint32_t physical_device_count;
@@ -343,29 +343,29 @@ public:
     std::vector<const char*> layer_names = string2char(required_layers);
     std::vector<const char*> extension_names = string2char(required_extensions);
 
-    VkDeviceCreateInfo device_create_info;
-    device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_create_info.pNext = nullptr;
-    device_create_info.flags = 0;
-    device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
-    device_create_info.pQueueCreateInfos = queue_create_infos.data();
-    device_create_info.enabledLayerCount = static_cast<uint32_t>(layer_names.size());
-    device_create_info.ppEnabledLayerNames = layer_names.data();
-    device_create_info.enabledExtensionCount = static_cast<uint32_t>(extension_names.size());
-    device_create_info.ppEnabledExtensionNames = extension_names.data();
-    device_create_info.pEnabledFeatures = &enabled_features;
-
+    VkDeviceCreateInfo device_create_info{
+      VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,             // sType
+      nullptr,                                          // pNext
+      0,                                                // flags
+      static_cast<uint32_t>(queue_create_infos.size()), // queueCreateInfoCount
+      queue_create_infos.data(),                        // pQueueCreateInfos
+      static_cast<uint32_t>(layer_names.size()),        // enabledLayerCount
+      layer_names.data(),                               // ppEnabledLayerNames
+      static_cast<uint32_t>(extension_names.size()),    // enabledExtensionCount
+      extension_names.data(),                           // ppEnabledExtensionNames
+      &enabled_features,                                // pEnabledFeatures
+    };
     THROW_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
 
     this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
     vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
 
-    VkCommandPoolCreateInfo pool_create_info;
-    pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_create_info.pNext = nullptr;
-    pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    pool_create_info.queueFamilyIndex = queue_create_infos[0].queueFamilyIndex;
-
+    VkCommandPoolCreateInfo pool_create_info = {
+      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,      // sType 
+      nullptr,                                         // pNext
+      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, // flags
+      queue_create_infos[0].queueFamilyIndex,          // queueFamilyIndex
+    };
     THROW_ERROR(vkCreateCommandPool(this->device, &pool_create_info, nullptr, &this->default_pool));
   }
 
@@ -391,12 +391,11 @@ public:
   VulkanSemaphore(const std::shared_ptr<VulkanDevice> & device)
     : device(device)
   {
-    VkSemaphoreCreateInfo create_info;
-    ::memset(&create_info, 0, sizeof(VkSemaphoreCreateInfo));
-    create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-
+    VkSemaphoreCreateInfo create_info = {
+      VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, // sType
+      nullptr,                                 // pNext
+      0                                        // flags (reserved for future use)
+    };
     THROW_ERROR(vkCreateSemaphore(this->device->device, &create_info, nullptr, &this->semaphore));
   }
 
@@ -429,25 +428,26 @@ public:
                   VkSwapchainKHR oldSwapchain)
     : vulkan(vulkan), device(device)
   {
-    VkSwapchainCreateInfoKHR create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.surface = surface;
-    create_info.minImageCount = minImageCount;
-    create_info.imageFormat = imageFormat;
-    create_info.imageColorSpace = imageColorSpace;
-    create_info.imageExtent = imageExtent;
-    create_info.imageArrayLayers = imageArrayLayers;
-    create_info.imageUsage = imageUsage;
-    create_info.imageSharingMode = imageSharingMode;
-    create_info.queueFamilyIndexCount = static_cast<uint32_t>(queueFamilyIndices.size());
-    create_info.pQueueFamilyIndices = queueFamilyIndices.data();
-    create_info.preTransform = preTransform;
-    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode = presentMode;
-    create_info.clipped = clipped;
-    create_info.oldSwapchain = oldSwapchain;
+    VkSwapchainCreateInfoKHR create_info = {
+      VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, // sType
+      nullptr,                                     // pNext
+      0,                                           // flags (reserved for future use)
+      surface,
+      minImageCount,
+      imageFormat,
+      imageColorSpace,
+      imageExtent,
+      imageArrayLayers,
+      imageUsage,
+      imageSharingMode,
+      static_cast<uint32_t>(queueFamilyIndices.size()),
+      queueFamilyIndices.data(),
+      preTransform,
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,           // compositeAlpha 
+      presentMode,
+      clipped,
+      oldSwapchain
+    };
 
     THROW_ERROR(this->vulkan->vkCreateSwapchain(this->device->device, &create_info, nullptr, &this->swapchain));
   }
@@ -484,14 +484,14 @@ public:
   VulkanDescriptorPool(const std::shared_ptr<VulkanDevice> & device, std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
     : device(device)
   {
-    VkDescriptorPoolCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    create_info.maxSets = 1;
-    create_info.poolSizeCount = static_cast<uint32_t>(descriptor_pool_sizes.size());
-    create_info.pPoolSizes = descriptor_pool_sizes.data();
-
+    VkDescriptorPoolCreateInfo create_info = {
+    VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,         // sType 
+      nullptr,                                             // pNext
+      VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,   // flags
+      1,                                                   // maxSets
+      static_cast<uint32_t>(descriptor_pool_sizes.size()), // poolSizeCount
+      descriptor_pool_sizes.data()                         // pPoolSizes
+    };
     THROW_ERROR(vkCreateDescriptorPool(this->device->device, &create_info, nullptr, &this->pool));
   }
 
@@ -509,13 +509,13 @@ public:
   VulkanDescriptorSetLayout(const std::shared_ptr<VulkanDevice> & device, std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings)
     : device(device)
   {
-    VkDescriptorSetLayoutCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0;
-    create_info.bindingCount = static_cast<uint32_t>(descriptor_set_layout_bindings.size());
-    create_info.pBindings = descriptor_set_layout_bindings.data();
-
+    VkDescriptorSetLayoutCreateInfo create_info = {
+      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,          // sType
+      nullptr,                                                      // pNext
+      0,                                                            // flags
+      static_cast<uint32_t>(descriptor_set_layout_bindings.size()), // bindingCount
+      descriptor_set_layout_bindings.data()                         // pBindings
+    };
     THROW_ERROR(vkCreateDescriptorSetLayout(this->device->device, &create_info, nullptr, &this->layout));
   }
 
@@ -536,13 +536,13 @@ public:
                        VkDescriptorSetLayout descriptor_set_layout)
     : device(device), pool(pool)
   {
-    VkDescriptorSetAllocateInfo allocate_info;
-    allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocate_info.pNext = nullptr;
-    allocate_info.descriptorPool = this->pool->pool;
-    allocate_info.descriptorSetCount = count;
-    allocate_info.pSetLayouts = &descriptor_set_layout;
-
+    VkDescriptorSetAllocateInfo allocate_info = {
+      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, // sType
+      nullptr,                                        // pNext
+      this->pool->pool,                               // descriptorPool
+      count,                                          // descriptorSetCount
+      &descriptor_set_layout                          // pSetLayouts
+    };
     this->descriptor_sets.resize(count);
     THROW_ERROR(vkAllocateDescriptorSets(this->device->device, &allocate_info, this->descriptor_sets.data()));
   }

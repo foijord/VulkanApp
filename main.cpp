@@ -50,17 +50,14 @@ public:
   ComputeTest()
     : t(0)
   {
-    std::vector<vec4> initial_values0(128 * 128);
-    std::vector<vec4> initial_values1(128 * 128);
-
-    std::fill(initial_values0.begin(), initial_values0.end(), vec4(0));
-    std::fill(initial_values1.begin(), initial_values1.end(), vec4(0));
-
     auto data0 = std::make_shared<Buffer<vec4>>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     auto data1 = std::make_shared<Buffer<vec4>>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
-    data0->values = initial_values0;
-    data1->values = initial_values1;
+    data0->values.resize(128 * 128);
+    data1->values.resize(128 * 128);
+
+    std::fill(data0->values.begin(), data0->values.end(), vec4(0));
+    std::fill(data1->values.begin(), data1->values.end(), vec4(0));
 
     auto layout0 = std::make_shared<LayoutBinding>(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL);
     auto layout1 = std::make_shared<LayoutBinding>(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL);

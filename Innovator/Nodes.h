@@ -193,11 +193,29 @@ public:
   {
     if (!this->gpu_buffer) {
       size_t size = sizeof(uint32_t) * this->values.size();
-      this->cpu_buffer = std::make_unique<VulkanHostVisibleBufferObject<uint32_t>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-      this->gpu_buffer = std::make_unique<VulkanDeviceLocalBufferObject<uint32_t>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+      this->cpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
+                                                              size, 
+                                                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+                                                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-      this->cpu_buffer->setValues(this->values);
-      this->gpu_buffer->copy(action->command->buffer(), this->cpu_buffer->buffer, size);
+      this->gpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
+                                                              size, 
+                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      this->cpu_buffer->memory->memcpy(this->values.data(), size);
+
+      std::vector<VkBufferCopy> regions = {{
+        0,    // srcOffset
+        0,    // dstOffset 
+        size, // size 
+      }};
+
+      vkCmdCopyBuffer(action->command->buffer(), 
+                      this->cpu_buffer->buffer->buffer, 
+                      this->gpu_buffer->buffer->buffer, 
+                      static_cast<uint32_t>(regions.size()),
+                      regions.data());
     }
     VulkanIndexBufferDescription indices;
     indices.type = VK_INDEX_TYPE_UINT32;
@@ -207,8 +225,8 @@ public:
   }
   
   std::vector<uint32_t> values;
-  std::unique_ptr<VulkanHostVisibleBufferObject<uint32_t>> cpu_buffer;
-  std::unique_ptr<VulkanDeviceLocalBufferObject<uint32_t>> gpu_buffer;
+  std::unique_ptr<VulkanBufferObject> cpu_buffer;
+  std::unique_ptr<VulkanBufferObject> gpu_buffer;
 };
 
 class LayoutBinding : public Node {
@@ -233,38 +251,41 @@ public:
 template <typename T>
 class Buffer : public Node {
 public:
-  Buffer(VkBufferUsageFlagBits usage) : usage(usage) {}
+  Buffer(VkBufferUsageFlagBits usage, VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+    : usage(usage), flags(flags)
+  {}
   virtual ~Buffer() {}
 
   virtual void traverse(RenderAction * action)
   {
     size_t size = sizeof(T) * this->values.size();
-    if (!this->buffer) {
-      this->buffer = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device, size, this->usage);
-      this->buffer->setValues(this->values);
-    }
-    VulkanBufferDescription description;
+    const std::unique_ptr<VulkanBufferObject> & buffer = 
+      action->getBuffer(this, 
+                        this->usage,
+                        this->flags, 
+                        this->values.data(),
+                        sizeof(T) * this->values.size());
 
-    description.type = action->state.layout_binding.type;
-    description.stage = action->state.layout_binding.stage;
-    description.binding = action->state.layout_binding.binding;
-
-    description.offset = 0;
-    description.size = size;
-    description.buffer = this->buffer->buffer->buffer;
-    action->state.buffers.push_back(description);
+    action->state.buffers.push_back({
+      action->state.layout_binding.binding,             // binding 
+      action->state.layout_binding.type,                // type
+      action->state.layout_binding.stage,               // stage 
+      buffer->buffer->buffer,                           // buffer 
+      size,                                             // size 
+      0                                                 // offset 
+    });
   }
 
-  VkBufferUsageFlagBits usage;
-
   std::vector<T> values;
-  std::unique_ptr<VulkanHostVisibleBufferObject<T>> buffer;
+  VkBufferUsageFlagBits usage;
+  VkMemoryPropertyFlags flags;
 };
 
 class VertexAttributeDescription : public Node {
 public:
   VertexAttributeDescription(uint32_t location, uint32_t binding, VkFormat format, uint32_t offset)
-    : location(location), binding(binding), format(format), offset(offset), input_rate(VK_VERTEX_INPUT_RATE_VERTEX) {}
+    : location(location), binding(binding), format(format), offset(offset), input_rate(VK_VERTEX_INPUT_RATE_VERTEX) 
+  {}
 
   virtual ~VertexAttributeDescription() {}
 
@@ -292,18 +313,40 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    if (!this->attribute) {
+    if (!this->gpu_buffer) {
       size_t size = sizeof(T) * this->values.size();
-      this->attribute = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-      this->attribute->setValues(this->values);
+      this->cpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
+                                                              size, 
+                                                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+                                                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+      this->gpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
+                                                              size, 
+                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      this->cpu_buffer->memory->memcpy(this->values.data(), size);
+
+      std::vector<VkBufferCopy> regions = {{
+        0,    // srcOffset
+        0,    // dstOffset 
+        size, // size 
+      }};
+
+      vkCmdCopyBuffer(action->command->buffer(), 
+                      this->cpu_buffer->buffer->buffer, 
+                      this->gpu_buffer->buffer->buffer, 
+                      static_cast<uint32_t>(regions.size()),
+                      regions.data());
     }
-    action->state.attribute_description.buffer = this->attribute->buffer->buffer;
+    action->state.attribute_description.buffer = this->gpu_buffer->buffer->buffer;
     action->state.attribute_description.stride = sizeof(T);
     action->state.attributes.push_back(action->state.attribute_description);
   }
 
   std::vector<T> values;
-  std::unique_ptr<VulkanHostVisibleBufferObject<T>> attribute;
+  std::unique_ptr<VulkanBufferObject> cpu_buffer;
+  std::unique_ptr<VulkanBufferObject> gpu_buffer;
 };
 
 class Shader : public Node {
@@ -483,10 +526,15 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    this->transform->values = { action->state.ViewMatrix * action->state.ModelMatrix, action->state.ProjMatrix };
+    this->transform->values = {
+      action->state.ViewMatrix * action->state.ModelMatrix, 
+      action->state.ProjMatrix 
+    };
     this->transform_layout->traverse(action);
     this->transform->traverse(action);
-    this->transform->buffer->setValues(this->transform->values);
+
+    const std::unique_ptr<VulkanBufferObject> & buffer = action->getBuffer(this->transform.get());
+    buffer->memory->memcpy(this->transform->values.data(), sizeof(glm::mat4) * this->transform->values.size());
 
     action->state.drawdescription.count = this->count;
     action->state.drawdescription.topology = this->topology;
