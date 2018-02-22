@@ -158,6 +158,7 @@ public:
       framebuffer(framebuffer),
       renderpass(renderpass),
       extent(extent),
+      fence(std::make_unique<VulkanFence>(device)),
       command(std::make_unique<VulkanCommandBuffers>(device)),
       pipeline_cache(std::make_unique<VulkanPipelineCache>(device))
   {
@@ -178,6 +179,8 @@ public:
 
   void apply(const std::shared_ptr<Node> & root)
   {
+    THROW_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+
     this->command->begin();
     root->traverse(this);
 
@@ -212,7 +215,8 @@ public:
     vkCmdEndRenderPass(this->command->buffer());
     this->command->end();
 
-    this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    THROW_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+    this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, {}, this->fence->fence);
 
     this->graphic_states.clear();
     this->compute_states.clear();
@@ -231,6 +235,7 @@ public:
   std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
 
   std::shared_ptr<VulkanDevice> device;
+  std::unique_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<VulkanPipelineCache> pipeline_cache;
 

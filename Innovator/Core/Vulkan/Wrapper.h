@@ -21,8 +21,10 @@ class VkErrorOutOfDateException : public std::exception {};
 	VkResult result = (function);                                   \
 	if (result != VK_SUCCESS) {                                     \
     throw VkException("Vulkan API call failed", result);          \
-	}                                                               \
-}
+	} else if (result == VK_ERROR_OUT_OF_DATE_KHR) {                \
+    throw VkErrorOutOfDateException();                            \
+  }                                                               \
+}                                                                 \
 
 namespace {
 
@@ -384,6 +386,29 @@ public:
   VulkanPhysicalDevice physical_device;
 };
 
+class VulkanSemaphore {
+public:
+  VulkanSemaphore(const std::shared_ptr<VulkanDevice> & device)
+    : device(device)
+  {
+    VkSemaphoreCreateInfo create_info;
+    ::memset(&create_info, 0, sizeof(VkSemaphoreCreateInfo));
+    create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    create_info.pNext = nullptr;
+    create_info.flags = 0; // reserved for future use
+
+    THROW_ERROR(vkCreateSemaphore(this->device->device, &create_info, nullptr, &this->semaphore));
+  }
+
+  ~VulkanSemaphore()
+  {
+    vkDestroySemaphore(this->device->device, this->semaphore, nullptr);
+  }
+
+  VkSemaphore semaphore;
+  std::shared_ptr<VulkanDevice> device;
+};
+
 class VulkanSwapchain {
 public:
   VulkanSwapchain(const std::shared_ptr<VulkanDevice> & device, 
@@ -440,6 +465,14 @@ public:
     THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, images.data()));
     return images;
   }
+
+  uint32_t getNextImageIndex(const std::shared_ptr<VulkanSemaphore> & semaphore)
+  {
+    uint32_t index;
+    THROW_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, this->swapchain, UINT64_MAX, semaphore->semaphore, nullptr, &index));
+    return index;
+  };
+
 
   VkSwapchainKHR swapchain;
   std::shared_ptr<VulkanDevice> device;
@@ -540,6 +573,28 @@ public:
   std::shared_ptr<VulkanDescriptorPool> pool;
 };
 
+class VulkanFence {
+public:
+  VulkanFence(const std::shared_ptr<VulkanDevice> & device)
+    : device(device)
+  {
+    VkFenceCreateInfo create_info = {
+      VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, // sType
+      nullptr,                             // pNext
+      VK_FENCE_CREATE_SIGNALED_BIT         // flags
+    };
+
+    THROW_ERROR(vkCreateFence(this->device->device, &create_info, nullptr, &this->fence));
+  }
+  
+  ~VulkanFence() 
+  {
+    vkDestroyFence(this->device->device, this->fence, nullptr);
+  }
+
+  VkFence fence;
+  std::shared_ptr<VulkanDevice> device;
+};
 
 class VulkanCommandBuffers {
 public:
@@ -886,29 +941,6 @@ public:
   }
 
   VkSampler sampler;
-  std::shared_ptr<VulkanDevice> device;
-};
-
-class VulkanSemaphore {
-public:
-  VulkanSemaphore(const std::shared_ptr<VulkanDevice> & device)
-    : device(device)
-  {
-    VkSemaphoreCreateInfo create_info;
-    ::memset(&create_info, 0, sizeof(VkSemaphoreCreateInfo));
-    create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-
-    THROW_ERROR(vkCreateSemaphore(this->device->device, &create_info, nullptr, &this->semaphore));
-  }
-
-  ~VulkanSemaphore()
-  {
-    vkDestroySemaphore(this->device->device, this->semaphore, nullptr);
-  }
-
-  VkSemaphore semaphore;
   std::shared_ptr<VulkanDevice> device;
 };
 

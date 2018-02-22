@@ -10,6 +10,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <iostream>
 #include <algorithm>
 
 class VulkanSurfaceWin32 {
@@ -117,8 +118,8 @@ public:
       Window * self = reinterpret_cast<Window*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
       if (self != nullptr) {
         switch (uMsg) {
-        case WM_PAINT: self->render(); break;
         case WM_SIZE: self->resize(); break;
+        case WM_PAINT: self->render(); break;
         case WM_KEYDOWN: self->keyDown(LOWORD(wParam)); break;
         case WM_MOUSEMOVE: self->mouseMoved(LOWORD(lParam), HIWORD(lParam)); break;
         case WM_LBUTTONUP: self->mouseReleased(LOWORD(lParam), HIWORD(lParam), 0); break;
@@ -216,7 +217,7 @@ public:
       queue_index,                                  // queueFamilyIndex
       1,                                            // queueCount   
       queue_priorities                              // pQueuePriorities
-    });
+      });
 
     std::vector<std::string> device_layers = {
 #ifdef _DEBUG
@@ -244,7 +245,7 @@ public:
 
     std::vector<VkAttachmentDescription> attachment_descriptions = { {
         0,                                                    // flags
-        this->color_format,                                         // format
+        this->color_format,                                   // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
         VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
         VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
@@ -254,7 +255,7 @@ public:
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
       },{
         0,                                                    // flags
-        this->depth_format,                                         // format
+        this->depth_format,                                   // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
         VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
         VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
@@ -293,7 +294,16 @@ public:
     this->resize();
   }
 
-  virtual ~VulkanViewer() {}
+  virtual ~VulkanViewer()
+  {
+    try {
+      // make sure all work submitted to GPU is done before we start deleting stuff...
+      THROW_ERROR(vkDeviceWaitIdle(this->device->device));
+    }
+    catch (std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
+  }
 
   void setSceneGraph(std::shared_ptr<class Node> scene)
   {
@@ -314,24 +324,12 @@ public:
   {
     this->renderaction->apply(this->root);
     try {
-      uint32_t image_index;
-      VkResult result = this->vulkan->vkAcquireNextImage(
-        this->device->device, 
-        this->swapchain->swapchain, 
-        UINT64_MAX, 
-        this->semaphore->semaphore, 
-        0, 
-        &image_index);
+      uint32_t image_index = this->swapchain->getNextImageIndex(this->semaphore);
 
-      if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        throw VkErrorOutOfDateException();
-      }
-      if (result != VK_SUCCESS) {
-        throw std::runtime_error("vkAcquireNextImage failed.");
-      }
-
-      this->swap_buffers_command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, image_index, { this->semaphore->semaphore });
-      //THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
+      this->swap_buffers_command->submit(this->device->default_queue, 
+                                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+                                         image_index, 
+                                         { this->semaphore->semaphore });
 
       VkPresentInfoKHR present_info = {
         VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
@@ -343,9 +341,7 @@ public:
         &image_index,                       // pImageIndices
         nullptr                             // pResults
       };
-
       THROW_ERROR(this->vulkan->vkQueuePresent(this->device->default_queue, &present_info));
-      THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
     }
     catch (VkErrorOutOfDateException &) {
       this->resize();
@@ -354,6 +350,9 @@ public:
 
   virtual void resize()
   {
+    // make sure all work submitted is done before we start recreating stuff
+    THROW_ERROR(vkDeviceWaitIdle(this->device->device));
+
     this->surface_capabilities = this->surface->getSurfaceCapabilities(this->device->physical_device);
     
     VkExtent2D extent2d = this->surface_capabilities.currentExtent;
@@ -497,7 +496,6 @@ public:
 
     this->command->end();
     this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    //THROW_ERROR(vkQueueWaitIdle(this->device->default_queue));
 
     VkImageSubresourceRange subresource_range = {
       VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
@@ -623,7 +621,7 @@ public:
   std::unique_ptr<VulkanSurfaceWin32> surface;
   std::shared_ptr<VulkanDevice> device;
   std::unique_ptr<VulkanCommandBuffers> command;
-  std::unique_ptr<VulkanSemaphore> semaphore;
+  std::shared_ptr<VulkanSemaphore> semaphore;
   std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
   std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFramebuffer> framebuffer;
