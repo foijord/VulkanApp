@@ -13,7 +13,6 @@
 #include <map>
 #include <vector>
 #include <memory>
-#include <fstream>
 #include <iostream>
 
 class Group : public Node {
@@ -78,7 +77,6 @@ public:
     Group::traverse(action);
   }
 };
-
 
 class Camera : public Node {
 public:
@@ -199,7 +197,7 @@ public:
       this->gpu_buffer = std::make_unique<VulkanDeviceLocalBufferObject<uint32_t>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
       this->cpu_buffer->setValues(this->values);
-      this->gpu_buffer->setValues(action->command->buffer(), this->cpu_buffer, size);
+      this->gpu_buffer->copy(action->command->buffer(), this->cpu_buffer->buffer, size);
     }
     VulkanIndexBufferDescription indices;
     indices.type = VK_INDEX_TYPE_UINT32;
@@ -299,7 +297,6 @@ public:
       this->attribute = std::make_unique<VulkanHostVisibleBufferObject<T>>(action->device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
       this->attribute->setValues(this->values);
     }
-
     action->state.attribute_description.buffer = this->attribute->buffer->buffer;
     action->state.attribute_description.stride = sizeof(T);
     action->state.attributes.push_back(action->state.attribute_description);
@@ -318,21 +315,27 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    if (!this->shader) {
-      std::ifstream input(this->filename, std::ios::binary);
-      std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
-      this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
-    }
-
     VulkanShaderModuleDescription shader;
-    shader.module = this->shader->module;
+    shader.module = action->getShader(this, this->filename, this->stage);
     shader.stage = this->stage;
     action->state.shaders.push_back(shader);
   }
 
   std::string filename;
   VkShaderStageFlagBits stage;
-  std::unique_ptr<VulkanShaderModule> shader;
+};
+
+class Sampler : public Node {
+public:
+  Sampler() {}
+  virtual ~Sampler() {}
+
+  virtual void traverse(RenderAction * action)
+  {
+    action->state.texture_description.sampler = action->getSampler(this);
+  }
+
+  std::unique_ptr<VulkanSampler> sampler;
 };
 
 class Texture : public Node {
@@ -347,19 +350,21 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    if (!this->vulkantexture) {
-      VkComponentMapping component_mapping;
-      component_mapping.r = VK_COMPONENT_SWIZZLE_R;
-      component_mapping.g = VK_COMPONENT_SWIZZLE_G;
-      component_mapping.b = VK_COMPONENT_SWIZZLE_B;
-      component_mapping.a = VK_COMPONENT_SWIZZLE_A;
+    if (!this->image) {
+      VkComponentMapping component_mapping = {
+        VK_COMPONENT_SWIZZLE_R, // r
+        VK_COMPONENT_SWIZZLE_G, // g
+        VK_COMPONENT_SWIZZLE_B, // b
+        VK_COMPONENT_SWIZZLE_A  // a
+      };
 
-      VkImageSubresourceRange subresource_range;
-      subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      subresource_range.baseArrayLayer = static_cast<uint32_t>(texture.base_layer());
-      subresource_range.layerCount = static_cast<uint32_t>(texture.layers());
-      subresource_range.baseMipLevel = static_cast<uint32_t>(texture.base_level());
-      subresource_range.levelCount = static_cast<uint32_t>(texture.levels());
+      VkImageSubresourceRange subresource_range = {
+        VK_IMAGE_ASPECT_COLOR_BIT,                   // aspectMask 
+        static_cast<uint32_t>(texture.base_level()), // baseMipLevel 
+        static_cast<uint32_t>(texture.levels()),     // levelCount 
+        static_cast<uint32_t>(texture.base_layer()), // baseArrayLayer 
+        static_cast<uint32_t>(texture.layers())      // layerCount 
+      };
 
       VkExtent3D extent = {
         static_cast<uint32_t>(this->texture.extent().x),
@@ -367,9 +372,14 @@ public:
         static_cast<uint32_t>(this->texture.extent().z)
       };
 
-      std::map<gli::target, VkImageType> vulkan_target{
+      std::map<gli::target, VkImageType> vulkan_image_type {
         { gli::target::TARGET_2D, VkImageType::VK_IMAGE_TYPE_2D },
         { gli::target::TARGET_3D, VkImageType::VK_IMAGE_TYPE_3D },
+      };
+
+      std::map<gli::target, VkImageViewType> vulkan_image_view_type {
+        { gli::target::TARGET_2D, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D },
+        { gli::target::TARGET_3D, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D },
       };
 
       std::map<gli::format, VkFormat> vulkan_format{
@@ -377,31 +387,32 @@ public:
         { gli::format::FORMAT_RGBA_DXT5_UNORM_BLOCK16, VkFormat::VK_FORMAT_BC3_UNORM_BLOCK },
       };
 
-      this->vulkantexture = std::make_unique<TextureObject>(
+      this->image = std::make_unique<ImageObject>(
         action->device,
-        component_mapping,
-        subresource_range,
-        vulkan_target[this->texture.target()],
         vulkan_format[this->texture.format()],
-        extent);
+        extent,
+        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
+        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+        vulkan_image_type[this->texture.target()],
+        vulkan_image_view_type[this->texture.target()],
+        VK_SAMPLE_COUNT_1_BIT,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        subresource_range,
+        component_mapping);
 
-      this->vulkantexture->setData(action->command->buffer(), this->texture);
+      this->image->setData(action->command->buffer(), this->texture);
     }
+    action->state.texture_description.type = action->state.layout_binding.type;
+    action->state.texture_description.stage = action->state.layout_binding.stage;
+    action->state.texture_description.binding = action->state.layout_binding.binding;
+    action->state.texture_description.view = this->image->view->view;
 
-    VulkanTextureDescription description;
-
-    description.type = action->state.layout_binding.type;
-    description.stage = action->state.layout_binding.stage;
-    description.binding = action->state.layout_binding.binding;
-
-    description.sampler = this->vulkantexture->sampler->sampler;
-    description.view = this->vulkantexture->image_object->view->view;
-
-    action->state.textures.push_back(description);
+    action->state.textures.push_back(action->state.texture_description);
   }
   
   gli::texture texture;
-  std::unique_ptr<TextureObject> vulkantexture;
+  std::unique_ptr<ImageObject> image;
 };
 
 class CullMode : public Node {
@@ -413,7 +424,7 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    action->state.rasterization_state.cullMode = this->cullmode;
+    action->state.rasterizationstate.cullMode = this->cullmode;
   }
 
   VkCullModeFlags cullmode;
@@ -428,7 +439,7 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    action->state.rasterization_state = this->state;
+    action->state.rasterizationstate = this->state;
   }
 
   VkPipelineRasterizationStateCreateInfo state;
@@ -477,8 +488,8 @@ public:
     this->transform->traverse(action);
     this->transform->buffer->setValues(this->transform->values);
 
-    action->state.draw_description.count = this->count;
-    action->state.draw_description.topology = this->topology;
+    action->state.drawdescription.count = this->count;
+    action->state.drawdescription.topology = this->topology;
     action->graphic_states.push_back(action->state);
   }
 

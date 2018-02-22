@@ -756,7 +756,7 @@ public:
                VkDeviceSize size, 
                VkBufferUsageFlags usage,
                VkSharingMode sharingMode,
-               const std::vector<uint32_t> & queueFamilyIndices)
+               const std::vector<uint32_t> & queueFamilyIndices = std::vector<uint32_t>())
     : device(device)
   {
     VkBufferCreateInfo create_info;

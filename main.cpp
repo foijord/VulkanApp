@@ -18,6 +18,7 @@ public:
   {
     this->children = {
       std::make_shared<LayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+      std::make_shared<Sampler>(),
       std::make_shared<Texture>("Textures/crate.dds"),
       std::make_shared<Shader>("Shaders/vertex.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<Shader>("Shaders/fragment.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),

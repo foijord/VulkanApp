@@ -12,7 +12,7 @@ public:
     : ViewMatrix(glm::mat4(1)),
       ProjMatrix(glm::mat4(1)),
       ModelMatrix(glm::mat4(1)),
-      rasterization_state(defaultRasterizationState())
+      rasterizationstate(defaultRasterizationState())
   {}
 
   static VkPipelineRasterizationStateCreateInfo defaultRasterizationState()
@@ -32,10 +32,11 @@ public:
   glm::mat4 ModelMatrix;
 
   VulkanLayoutBinding layout_binding;
-  VulkanDrawDescription draw_description;
+  VulkanDrawDescription drawdescription;
+  VulkanTextureDescription texture_description;
   VulkanComputeDescription compute_description;
   VulkanVertexAttributeDescription attribute_description;
-  VkPipelineRasterizationStateCreateInfo rasterization_state;
+  VkPipelineRasterizationStateCreateInfo rasterizationstate;
 
   std::vector<VulkanBufferDescription> buffers;
   std::vector<VulkanTextureDescription> textures;
