@@ -50,8 +50,8 @@ public:
   ComputeTest()
     : t(0)
   {
-    auto data0 = std::make_shared<Buffer<vec4>>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-    auto data1 = std::make_shared<Buffer<vec4>>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+    auto data0 = std::make_shared<Buffer<vec4>>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    auto data1 = std::make_shared<Buffer<vec4>>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     data0->values.resize(128 * 128);
     data1->values.resize(128 * 128);
@@ -107,7 +107,6 @@ public:
   {
     switch (key) {
     case 'S': {
-      this->root.reset();
       this->setSceneGraph(std::make_shared<ComputeTest>());
       this->redraw();
       break;

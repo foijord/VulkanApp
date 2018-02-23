@@ -27,7 +27,6 @@ class VkErrorOutOfDateException : public std::exception {};
 }                                                                 \
 
 namespace {
-
   std::vector<const char*> string2char(const std::vector<std::string> & v) 
   {
     std::vector<const char*> result(v.size());
@@ -64,10 +63,12 @@ namespace {
 
 class VulkanCommandPool {
 public:
-  VulkanCommandPool(VkDevice device, VkCommandPoolCreateFlags flags, uint32_t queue_family_index)
+  VulkanCommandPool(VkDevice device, 
+                    VkCommandPoolCreateFlags flags, 
+                    uint32_t queue_family_index)
     : device(device)
   {
-    VkCommandPoolCreateInfo create_info = {
+    VkCommandPoolCreateInfo create_info {
       VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, // sType
       nullptr,                                    // pNext 
       flags,                                      // flags
@@ -81,8 +82,8 @@ public:
     vkDestroyCommandPool(this->device, this->pool, nullptr);
   }
 
-  VkCommandPool pool;
   VkDevice device;
+  VkCommandPool pool;
 };
 
 class VulkanPhysicalDevice {
@@ -188,7 +189,7 @@ public:
     std::vector<const char*> layer_names = string2char(required_layers);
     std::vector<const char*> extension_names = string2char(required_extensions);
 
-    VkInstanceCreateInfo create_info = {
+    VkInstanceCreateInfo create_info {
       VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,        // sType 
       nullptr,                                       // pNext 
       0,                                             // flags
@@ -325,6 +326,34 @@ public:
   std::vector<VulkanPhysicalDevice> physical_devices;
 };
 
+class VulkanDebugCallback {
+public:
+  VulkanDebugCallback(const std::shared_ptr<VulkanInstance> & vulkan,
+                      VkDebugReportFlagsEXT flags,
+                      PFN_vkDebugReportCallbackEXT callback,
+                      void * pUserData = nullptr)
+    : vulkan(vulkan)
+  {
+    VkDebugReportCallbackCreateInfoEXT create_info {
+      VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT, // sType
+      nullptr,                                        // pNext  
+      flags,                                          // flags  
+      callback,                                       // pfnCallback  
+      nullptr,                                        // pUserData 
+    };
+
+    THROW_ERROR(this->vulkan->vkCreateDebugReportCallback(this->vulkan->instance, &create_info, nullptr, &this->callback));
+  }
+
+  ~VulkanDebugCallback()
+  {
+    this->vulkan->vkDestroyDebugReportCallback(this->vulkan->instance, this->callback, nullptr);
+  }
+
+  VkDebugReportCallbackEXT callback;
+  std::shared_ptr<VulkanInstance> vulkan;
+};
+
 class VulkanDevice {
 public:
   VulkanDevice(const VulkanPhysicalDevice & physical_device,
@@ -343,7 +372,7 @@ public:
     std::vector<const char*> layer_names = string2char(required_layers);
     std::vector<const char*> extension_names = string2char(required_extensions);
 
-    VkDeviceCreateInfo device_create_info{
+    VkDeviceCreateInfo device_create_info {
       VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,             // sType
       nullptr,                                          // pNext
       0,                                                // flags
@@ -391,7 +420,7 @@ public:
   VulkanSemaphore(const std::shared_ptr<VulkanDevice> & device)
     : device(device)
   {
-    VkSemaphoreCreateInfo create_info = {
+    VkSemaphoreCreateInfo create_info {
       VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, // sType
       nullptr,                                 // pNext
       0                                        // flags (reserved for future use)
@@ -428,7 +457,7 @@ public:
                   VkSwapchainKHR oldSwapchain)
     : vulkan(vulkan), device(device)
   {
-    VkSwapchainCreateInfoKHR create_info = {
+    VkSwapchainCreateInfoKHR create_info {
       VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, // sType
       nullptr,                                     // pNext
       0,                                           // flags (reserved for future use)
@@ -481,10 +510,11 @@ public:
 
 class VulkanDescriptorPool {
 public:
-  VulkanDescriptorPool(const std::shared_ptr<VulkanDevice> & device, std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
+  VulkanDescriptorPool(const std::shared_ptr<VulkanDevice> & device, 
+                       std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
     : device(device)
   {
-    VkDescriptorPoolCreateInfo create_info = {
+    VkDescriptorPoolCreateInfo create_info {
     VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,         // sType 
       nullptr,                                             // pNext
       VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,   // flags
@@ -492,6 +522,7 @@ public:
       static_cast<uint32_t>(descriptor_pool_sizes.size()), // poolSizeCount
       descriptor_pool_sizes.data()                         // pPoolSizes
     };
+
     THROW_ERROR(vkCreateDescriptorPool(this->device->device, &create_info, nullptr, &this->pool));
   }
 
@@ -506,16 +537,18 @@ public:
 
 class VulkanDescriptorSetLayout {
 public:
-  VulkanDescriptorSetLayout(const std::shared_ptr<VulkanDevice> & device, std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings)
+  VulkanDescriptorSetLayout(const std::shared_ptr<VulkanDevice> & device, 
+                            std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings)
     : device(device)
   {
-    VkDescriptorSetLayoutCreateInfo create_info = {
+    VkDescriptorSetLayoutCreateInfo create_info {
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,          // sType
       nullptr,                                                      // pNext
       0,                                                            // flags
       static_cast<uint32_t>(descriptor_set_layout_bindings.size()), // bindingCount
       descriptor_set_layout_bindings.data()                         // pBindings
     };
+
     THROW_ERROR(vkCreateDescriptorSetLayout(this->device->device, &create_info, nullptr, &this->layout));
   }
 
@@ -536,13 +569,14 @@ public:
                        VkDescriptorSetLayout descriptor_set_layout)
     : device(device), pool(pool)
   {
-    VkDescriptorSetAllocateInfo allocate_info = {
+    VkDescriptorSetAllocateInfo allocate_info {
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, // sType
       nullptr,                                        // pNext
       this->pool->pool,                               // descriptorPool
       count,                                          // descriptorSetCount
       &descriptor_set_layout                          // pSetLayouts
     };
+
     this->descriptor_sets.resize(count);
     THROW_ERROR(vkAllocateDescriptorSets(this->device->device, &allocate_info, this->descriptor_sets.data()));
   }
@@ -568,9 +602,9 @@ public:
     vkCmdBindDescriptorSets(buffer, bind_point, layout, 0, static_cast<uint32_t>(this->descriptor_sets.size()), this->descriptor_sets.data(), 0, nullptr);
   }
 
-  std::vector<VkDescriptorSet> descriptor_sets;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanDescriptorPool> pool;
+  std::vector<VkDescriptorSet> descriptor_sets;
 };
 
 class VulkanFence {
@@ -578,7 +612,7 @@ public:
   VulkanFence(const std::shared_ptr<VulkanDevice> & device)
     : device(device)
   {
-    VkFenceCreateInfo create_info = {
+    VkFenceCreateInfo create_info {
       VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, // sType
       nullptr,                             // pNext
       VK_FENCE_CREATE_SIGNALED_BIT         // flags
@@ -603,12 +637,13 @@ public:
                        VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY)
     : device(device)
   {
-    VkCommandBufferAllocateInfo allocate_info;
-    allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocate_info.pNext = nullptr;
-    allocate_info.commandPool = device->default_pool;
-    allocate_info.level = level;
-    allocate_info.commandBufferCount = static_cast<uint32_t>(count);
+    VkCommandBufferAllocateInfo allocate_info {
+      VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, // sType 
+      nullptr,                                        // pNext 
+      device->default_pool,                           // commandPool 
+      level,                                          // level 
+      static_cast<uint32_t>(count),                   // commandBufferCount 
+    };
 
     this->buffers.resize(count);
     THROW_ERROR(vkAllocateCommandBuffers(this->device->device, &allocate_info, this->buffers.data()));
@@ -625,21 +660,23 @@ public:
              VkFramebuffer framebuffer = nullptr, 
              VkCommandBufferUsageFlags flags = 0)
   {
-    VkCommandBufferInheritanceInfo inheritance_info;
-    inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-    inheritance_info.pNext = nullptr;
-    inheritance_info.renderPass = renderpass;
-    inheritance_info.subpass = subpass;
-    inheritance_info.framebuffer = framebuffer;
-    inheritance_info.occlusionQueryEnable = VK_FALSE;
-    inheritance_info.queryFlags = 0;
-    inheritance_info.pipelineStatistics = 0;
+    VkCommandBufferInheritanceInfo inheritance_info {
+      VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO, // sType
+      nullptr,                                           // pNext
+      renderpass,                                        // renderPass 
+      subpass,                                           // subpass 
+      framebuffer,                                       // framebuffer
+      VK_FALSE,                                          // occlusionQueryEnable
+      0,                                                 // queryFlags 
+      0,                                                 // pipelineStatistics 
+    };
 
-    VkCommandBufferBeginInfo begin_info;
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.pNext = nullptr;
-    begin_info.flags = flags;
-    begin_info.pInheritanceInfo = &inheritance_info;
+    VkCommandBufferBeginInfo begin_info {
+      VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, // sType 
+      nullptr,                                     // pNext 
+      flags,                                       // flags 
+      &inheritance_info,                           // pInheritanceInfo 
+    };
 
     THROW_ERROR(vkBeginCommandBuffer(this->buffers[buffer_index], &begin_info));
   }
@@ -668,24 +705,24 @@ public:
     VulkanCommandBuffers::submit(queue, flags, this->buffers, wait_semaphores, signal_semaphores, fence);
   }
 
-  static void submit(VkQueue queue, 
+  static void submit(VkQueue queue,
                      VkPipelineStageFlags flags,
-                     const std::vector<VkCommandBuffer> & buffers, 
+                     const std::vector<VkCommandBuffer> & buffers,
                      const std::vector<VkSemaphore> & wait_semaphores,
                      const std::vector<VkSemaphore> & signal_semaphores,
                      VkFence fence)
   {
-    VkSubmitInfo submit_info;
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.pNext = nullptr;
-    submit_info.waitSemaphoreCount = static_cast<uint32_t>(wait_semaphores.size());
-    submit_info.pWaitSemaphores = wait_semaphores.data();
-    submit_info.pWaitDstStageMask = &flags;
-    submit_info.commandBufferCount = static_cast<uint32_t>(buffers.size());
-    submit_info.pCommandBuffers = buffers.data();
-    submit_info.signalSemaphoreCount = static_cast<uint32_t>(signal_semaphores.size());
-    submit_info.pSignalSemaphores = signal_semaphores.data();
-
+    VkSubmitInfo submit_info {
+      VK_STRUCTURE_TYPE_SUBMIT_INFO,                   // sType 
+      nullptr,                                         // pNext  
+      static_cast<uint32_t>(wait_semaphores.size()),   // waitSemaphoreCount  
+      wait_semaphores.data(),                          // pWaitSemaphores  
+      &flags,                                          // pWaitDstStageMask  
+      static_cast<uint32_t>(buffers.size()),           // commandBufferCount  
+      buffers.data(),                                  // pCommandBuffers 
+      static_cast<uint32_t>(signal_semaphores.size()), // signalSemaphoreCount
+      signal_semaphores.data(),                        // pSignalSemaphores
+    };
     THROW_ERROR(vkQueueSubmit(queue, 1, &submit_info, fence));
   }
 
@@ -694,9 +731,8 @@ public:
     return this->buffers[buffer_index];
   }
 
-  std::vector<VkCommandBuffer> buffers;
-
   std::shared_ptr<VulkanDevice> device;
+  std::vector<VkCommandBuffer> buffers;
   std::shared_ptr<VulkanCommandPool> pool;
 };
 
@@ -717,25 +753,25 @@ public:
               VkImageLayout initial_layout)
     : device(device)
   {
-    VkImageCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = flags;
-    create_info.imageType = image_type;
-    create_info.format = format;
-    create_info.extent = extent;
-    create_info.mipLevels = mip_levels;
-    create_info.arrayLayers = array_layers;
-    create_info.samples = samples;
-    create_info.tiling = tiling;
-    create_info.usage = usage;
-    create_info.sharingMode = sharing_mode;
-    create_info.queueFamilyIndexCount = static_cast<uint32_t>(queue_family_indices.size());
-    create_info.pQueueFamilyIndices = queue_family_indices.data();
-    create_info.initialLayout = initial_layout;
+    VkImageCreateInfo create_info {
+      VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,                // sType  
+      nullptr,                                            // pNext  
+      flags,                                              // flags  
+      image_type,                                         // imageType  
+      format,                                             // format  
+      extent,                                             // extent  
+      mip_levels,                                         // mipLevels  
+      array_layers,                                       // arrayLayers  
+      samples,                                            // samples  
+      tiling,                                             // tiling  
+      usage,                                              // usage  
+      sharing_mode,                                       // sharingMode  
+      static_cast<uint32_t>(queue_family_indices.size()), // queueFamilyIndexCount
+      queue_family_indices.data(),                        // pQueueFamilyIndices
+      initial_layout,                                     // initialLayout
+    };
 
     THROW_ERROR(vkCreateImage(this->device->device, &create_info, nullptr, &this->image));
-
     vkGetImageMemoryRequirements(this->device->device, this->image, &this->memory_requirements);
   }
 
@@ -759,15 +795,16 @@ public:
                const std::vector<uint32_t> & queueFamilyIndices = std::vector<uint32_t>())
     : device(device)
   {
-    VkBufferCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = flags;
-    create_info.size = size;
-    create_info.usage = usage;
-    create_info.sharingMode = sharingMode;
-    create_info.queueFamilyIndexCount = static_cast<uint32_t>(queueFamilyIndices.size());
-    create_info.pQueueFamilyIndices = queueFamilyIndices.data();
+    VkBufferCreateInfo create_info {
+      VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,             // sType  
+      nullptr,                                          // pNext  
+      flags,                                            // flags  
+      size,                                             // size  
+      usage,                                            // usage  
+      sharingMode,                                      // sharingMode  
+      static_cast<uint32_t>(queueFamilyIndices.size()), // queueFamilyIndexCount  
+      queueFamilyIndices.data(),                        // pQueueFamilyIndices  
+    };
 
     THROW_ERROR(vkCreateBuffer(this->device->device, &create_info, nullptr, &this->buffer));
     vkGetBufferMemoryRequirements(this->device->device, this->buffer, &this->memory_requirements);
@@ -788,19 +825,21 @@ public:
   VulkanMemory(const std::shared_ptr<VulkanDevice> & device, VkMemoryRequirements requirements, VkMemoryPropertyFlags flags)
     : device(device)
   {
-    VkAllocationCallbacks allocation_callbacks;
-    allocation_callbacks.pUserData = nullptr;
-    allocation_callbacks.pfnAllocation = (PFN_vkAllocationFunction)&VulkanMemory::allocate;
-    allocation_callbacks.pfnReallocation = (PFN_vkReallocationFunction)&VulkanMemory::reallocate;
-    allocation_callbacks.pfnFree = (PFN_vkFreeFunction)&VulkanMemory::free;
-    allocation_callbacks.pfnInternalAllocation = nullptr;
-    allocation_callbacks.pfnInternalFree = nullptr;
+    VkAllocationCallbacks allocation_callbacks {
+      nullptr,                     // pUserData  
+      &VulkanMemory::allocate,     // pfnAllocation
+      &VulkanMemory::reallocate,   // pfnReallocation
+      &VulkanMemory::free,         // pfnFree
+      nullptr,                     // pfnInternalAllocation
+      nullptr,                     // pfnInternalFree
+    };
 
-    VkMemoryAllocateInfo allocate_info;
-    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocate_info.pNext = nullptr;
-    allocate_info.allocationSize = requirements.size;
-    allocate_info.memoryTypeIndex = device->physical_device.getMemoryTypeIndex(requirements, flags);
+    VkMemoryAllocateInfo allocate_info = {
+      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,                          // sType 
+      nullptr,                                                         // pNext 
+      requirements.size,                                               // allocationSize 
+      device->physical_device.getMemoryTypeIndex(requirements, flags), // memoryTypeIndex 
+    };
 
     THROW_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
   }
@@ -869,19 +908,19 @@ public:
                   VkImageSubresourceRange subresource_range)
     : device(device)
   {
-    VkImageViewCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.image = image;
-    create_info.viewType = view_type;
-    create_info.format = format;
-    create_info.components = components;
-    create_info.subresourceRange = subresource_range;
+    VkImageViewCreateInfo create_info {
+      VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, // sType 
+      nullptr,                                  // pNext 
+      0,                                        // flags (reserved for future use)
+      image,                                    // image 
+      view_type,                                // viewType 
+      format,                                   // format 
+      components,                               // components 
+      subresource_range,                        // subresourceRange 
+    };
 
     THROW_ERROR(vkCreateImageView(this->device->device, &create_info, nullptr, &this->view));
   }
-
 
   ~VulkanImageView()
   {
@@ -912,25 +951,26 @@ public:
                 VkBool32 unnormalizedCoordinates)
     : device(device)
   {
-    VkSamplerCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.magFilter = magFilter;
-    create_info.minFilter = minFilter;
-    create_info.mipmapMode = mipmapMode;
-    create_info.addressModeU = addressModeU;
-    create_info.addressModeV = addressModeV;
-    create_info.addressModeW = addressModeW;
-    create_info.mipLodBias = mipLodBias;
-    create_info.anisotropyEnable = anisotropyEnable;
-    create_info.maxAnisotropy = maxAnisotropy;
-    create_info.compareEnable = compareEnable;
-    create_info.compareOp = compareOp;
-    create_info.minLod = minLod;
-    create_info.maxLod = maxLod;
-    create_info.borderColor = borderColor;
-    create_info.unnormalizedCoordinates = unnormalizedCoordinates;
+    VkSamplerCreateInfo create_info {
+      VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, // sType
+      nullptr,                               // pNext
+      0,                                     // flags (reserved for future use)
+      magFilter,                             // magFilter
+      minFilter,                             // minFilter
+      mipmapMode,                            // mipmapMode
+      addressModeU,                          // addressModeU
+      addressModeV,                          // addressModeV
+      addressModeW,                          // addressModeW
+      mipLodBias,                            // mipLodBias
+      anisotropyEnable,                      // anisotropyEnable
+      maxAnisotropy,                         // maxAnisotropy
+      compareEnable,                         // compareEnable
+      compareOp,                             // compareOp
+      minLod,                                // minLod
+      maxLod,                                // maxLod
+      borderColor,                           // borderColor
+      unnormalizedCoordinates,               // unnormalizedCoordinates
+    };
 
     THROW_ERROR(vkCreateSampler(this->device->device, &create_info, nullptr, &this->sampler));
   }
@@ -946,16 +986,17 @@ public:
 
 class VulkanShaderModule {
 public:
-  VulkanShaderModule(const std::shared_ptr<VulkanDevice> & device, 
+  VulkanShaderModule(const std::shared_ptr<VulkanDevice> & device,
                      const std::vector<char> & code)
     : device(device)
   {
-    VkShaderModuleCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.codeSize = code.size();
-    create_info.pCode = reinterpret_cast<const uint32_t*>(code.data());
+    VkShaderModuleCreateInfo create_info {
+    VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,      // sType
+      nullptr,                                        // pNext
+      0,                                              // flags (reserved for future use)
+      code.size(),                                    // codeSize
+      reinterpret_cast<const uint32_t*>(code.data()), // pCode
+    };
 
     THROW_ERROR(vkCreateShaderModule(this->device->device, &create_info, nullptr, &this->module));
   }
@@ -975,12 +1016,13 @@ public:
   VulkanPipelineCache(const std::shared_ptr<VulkanDevice> & device)
     : device(device)
   {
-    VkPipelineCacheCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.initialDataSize = 0;
-    create_info.pInitialData = nullptr;
+    VkPipelineCacheCreateInfo create_info {
+      VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO, // sType
+      nullptr,                                      // pNext
+      0,                                            // flags (reserved for future use)
+      0,                                            // initialDataSize
+      nullptr,                                      // pInitialData
+    };
 
     THROW_ERROR(vkCreatePipelineCache(this->device->device, &create_info, nullptr, &this->cache));
   }
@@ -994,7 +1036,6 @@ public:
   std::shared_ptr<VulkanDevice> device;
 };
 
-
 class VulkanRenderpass {
 public:
   VulkanRenderpass(const std::shared_ptr<VulkanDevice> & device,
@@ -1003,16 +1044,17 @@ public:
                    const std::vector<VkSubpassDependency> & dependencies = std::vector<VkSubpassDependency>())
     : device(device)
   {
-    VkRenderPassCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-    create_info.pAttachments = attachments.data();
-    create_info.subpassCount = static_cast<uint32_t>(subpasses.size());
-    create_info.pSubpasses = subpasses.data();
-    create_info.dependencyCount = static_cast<uint32_t>(dependencies.size());
-    create_info.pDependencies = dependencies.data();
+    VkRenderPassCreateInfo create_info {
+    VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,    // sType
+      nullptr,                                    // pNext
+      0,                                          // flags (reserved for future use)
+      static_cast<uint32_t>(attachments.size()),  // attachmentCount
+      attachments.data(),                         // pAttachments
+      static_cast<uint32_t>(subpasses.size()),    // subpassCount
+      subpasses.data(),                           // pSubpasses
+      static_cast<uint32_t>(dependencies.size()), // dependencyCount
+      dependencies.data(),                        // pDependencies
+    };
 
     THROW_ERROR(vkCreateRenderPass(this->device->device, &create_info, nullptr, &this->renderpass));
   }
@@ -1036,16 +1078,17 @@ public:
                     uint32_t layers)
     : device(device)
   {
-    VkFramebufferCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0;
-    create_info.renderPass = renderpass->renderpass;
-    create_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-    create_info.pAttachments = attachments.data();
-    create_info.width = extent.width;
-    create_info.height = extent.height;
-    create_info.layers = layers;
+    VkFramebufferCreateInfo create_info {
+      VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO, // sType
+      nullptr,                                   // pNext
+      0,                                         // flags (reserved for future use)
+      renderpass->renderpass,                    // renderPass
+      static_cast<uint32_t>(attachments.size()), // attachmentCount
+      attachments.data(),                        // pAttachments
+      extent.width,                              // width
+      extent.height,                             // height
+      layers,                                    // layers
+    };
 
     THROW_ERROR(vkCreateFramebuffer(this->device->device, &create_info, nullptr, &this->framebuffer));
   }
@@ -1059,7 +1102,6 @@ public:
   std::shared_ptr<VulkanDevice> device;
 };
 
-
 class VulkanPipelineLayout {
 public:
   VulkanPipelineLayout(const std::shared_ptr<VulkanDevice> & device, 
@@ -1067,15 +1109,15 @@ public:
                        const std::vector<VkPushConstantRange> & pushconstantranges = std::vector<VkPushConstantRange>())
     : device(device)
   {
-    VkPipelineLayoutCreateInfo create_info;
-    ::memset(&create_info, 0, sizeof(VkPipelineLayoutCreateInfo));
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0; // reserved for future use
-    create_info.setLayoutCount = static_cast<uint32_t>(setlayouts.size());
-    create_info.pSetLayouts = setlayouts.data();
-    create_info.pushConstantRangeCount = static_cast<uint32_t>(pushconstantranges.size());
-    create_info.pPushConstantRanges = pushconstantranges.data();
+    VkPipelineLayoutCreateInfo create_info {
+      VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,    // sType
+      nullptr,                                          // pNext
+      0,                                                // flags (reserved for future use)
+      static_cast<uint32_t>(setlayouts.size()),         // setLayoutCount
+      setlayouts.data(),                                // pSetLayouts
+      static_cast<uint32_t>(pushconstantranges.size()), // pushConstantRangeCount
+      pushconstantranges.data(),                        // pPushConstantRanges
+    };
 
     THROW_ERROR(vkCreatePipelineLayout(this->device->device, &create_info, nullptr, &this->layout));
   }
@@ -1089,7 +1131,6 @@ public:
   std::shared_ptr<VulkanDevice> device;
 };
 
-
 class VulkanComputePipeline {
 public:
   VulkanComputePipeline(const std::shared_ptr<VulkanDevice> & device,
@@ -1101,14 +1142,15 @@ public:
                         int32_t basePipelineIndex = 0)
     : device(device)
   {
-    VkComputePipelineCreateInfo create_info;
-    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = flags;
-    create_info.stage = stage;
-    create_info.layout = layout;
-    create_info.basePipelineHandle = basePipelineHandle;
-    create_info.basePipelineIndex = basePipelineIndex;
+    VkComputePipelineCreateInfo create_info {
+      VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, // sType
+      nullptr,                                        // pNext
+      flags,                                          // flags
+      stage,                                          // stage
+      layout,                                         // layout
+      basePipelineHandle,                             // basePipelineHandle
+      basePipelineIndex,                              // basePipelineIndex
+    };
 
     THROW_ERROR(vkCreateComputePipelines(this->device->device, pipelineCache, 1, &create_info, nullptr, &this->pipeline));
   }
@@ -1141,83 +1183,125 @@ public:
                          std::vector<VkVertexInputAttributeDescription> attribute_descriptions)
     : device(device)
   {
-    VkPipelineVertexInputStateCreateInfo vertex_input_state;
-    ::memset(&vertex_input_state, 0, sizeof(VkPipelineVertexInputStateCreateInfo));
-    vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_state.vertexBindingDescriptionCount = (uint32_t)binding_descriptions.size();
-    vertex_input_state.pVertexBindingDescriptions = binding_descriptions.data();
-    vertex_input_state.vertexAttributeDescriptionCount = (uint32_t)attribute_descriptions.size();
-    vertex_input_state.pVertexAttributeDescriptions = attribute_descriptions.data();
+    VkPipelineVertexInputStateCreateInfo vertex_input_state {
+      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, // sType
+      nullptr,                                                   // pNext
+      0,                                                         // flags (reserved for future use)
+      (uint32_t)binding_descriptions.size(),                     // vertexBindingDescriptionCount
+      binding_descriptions.data(),                               // pVertexBindingDescriptions
+      (uint32_t)attribute_descriptions.size(),                   // vertexAttributeDescriptionCount
+      attribute_descriptions.data(),                             // pVertexAttributeDescriptions
+    };
 
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_state;
-    ::memset(&input_assembly_state, 0, sizeof(VkPipelineInputAssemblyStateCreateInfo));
-    input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly_state.topology = primitive_topology;
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_state {
+      VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, // sType
+      nullptr,                                                     // pNext
+      0,                                                           // flags (reserved for future use)
+      primitive_topology,                                          // topology
+      VK_FALSE,                                                    // primitiveRestartEnable
+    };
 
-    VkPipelineColorBlendAttachmentState blend_attachment_state;
-    ::memset(&blend_attachment_state, 0, sizeof(VkPipelineColorBlendAttachmentState));
-    blend_attachment_state.blendEnable = VK_TRUE;
-    blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
-    blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-    blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    blend_attachment_state.alphaBlendOp = VK_BLEND_OP_ADD;
-    blend_attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
-    blend_attachment_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    VkPipelineColorBlendAttachmentState blend_attachment_state {
+      VK_TRUE,                                                                                                   // blendEnable
+      VK_BLEND_FACTOR_SRC_COLOR,                                                                                 // srcColorBlendFactor
+      VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,                                                                       // dstColorBlendFactor
+      VK_BLEND_OP_ADD,                                                                                           // colorBlendOp
+      VK_BLEND_FACTOR_SRC_ALPHA,                                                                                 // srcAlphaBlendFactor
+      VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,                                                                       // dstAlphaBlendFactor
+      VK_BLEND_OP_ADD,                                                                                           // alphaBlendOp
+      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, // colorWriteMask
+    };
 
-    VkPipelineColorBlendStateCreateInfo color_blend_state;
-    ::memset(&color_blend_state, 0, sizeof(VkPipelineColorBlendStateCreateInfo));
-    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    color_blend_state.attachmentCount = 1;
-    color_blend_state.pAttachments = &blend_attachment_state;
+    VkPipelineColorBlendStateCreateInfo color_blend_state {
+      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, // sType 
+      nullptr,                                                  // pNext
+      0,                                                        // flags (reserved for future use)
+      VK_FALSE,                                                 // logicOpEnable
+      VK_LOGIC_OP_MAX_ENUM,                                     // logicOp
+      1,                                                        // attachmentCount
+      &blend_attachment_state,                                  // pAttachments  
+      0,                                                        // blendConstants[4]
+    };
 
-    VkPipelineDynamicStateCreateInfo dynamic_state;
-    ::memset(&dynamic_state, 0, sizeof(VkPipelineDynamicStateCreateInfo));
-    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.pDynamicStates = dynamic_states.data();
-    dynamic_state.dynamicStateCount = (uint32_t)dynamic_states.size();
+    VkPipelineDynamicStateCreateInfo dynamic_state {
+      VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, // sType
+      nullptr,                                              // pNext
+      0,                                                    // flags (reserved for future use)
+      (uint32_t)dynamic_states.size(),                      // dynamicStateCount
+      dynamic_states.data(),                                // pDynamicStates
+    };
 
-    VkPipelineViewportStateCreateInfo viewport_state;
-    ::memset(&viewport_state, 0, sizeof(VkPipelineViewportStateCreateInfo));
-    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_state.viewportCount = 1;
-    viewport_state.scissorCount = 1;
+    VkPipelineViewportStateCreateInfo viewport_state {
+      VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, // sType
+      nullptr,                                               // pNext
+      0,                                                     // flags (reserved for future use)
+      1,                                                     // viewportCount
+      nullptr,                                               // pViewports
+      1,                                                     // scissorCount
+      nullptr,                                               // pScissors
+    };
 
-    VkPipelineDepthStencilStateCreateInfo depth_stencil_state;
-    ::memset(&depth_stencil_state, 0, sizeof(VkPipelineDepthStencilStateCreateInfo));
-    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil_state.depthTestEnable = VK_TRUE;
-    depth_stencil_state.depthWriteEnable = VK_TRUE;
-    depth_stencil_state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-    depth_stencil_state.back.failOp = VK_STENCIL_OP_KEEP;
-    depth_stencil_state.back.passOp = VK_STENCIL_OP_KEEP;
-    depth_stencil_state.back.compareOp = VK_COMPARE_OP_ALWAYS;
-    depth_stencil_state.front = depth_stencil_state.back;
+    VkStencilOpState stencil_op_state{
+      VK_STENCIL_OP_KEEP,   // failOp
+      VK_STENCIL_OP_KEEP,   // passOp
+      VK_STENCIL_OP_KEEP,   // depthFailOp
+      VK_COMPARE_OP_ALWAYS, // compareOp
+      0,                    // compareMask
+      0,                    // writeMask
+      0,                    // reference
+    };
 
-    VkPipelineMultisampleStateCreateInfo multi_sample_state;
-    ::memset(&multi_sample_state, 0, sizeof(VkPipelineMultisampleStateCreateInfo));
-    multi_sample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multi_sample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state {
+      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, // sType
+      nullptr,                                                    // pNext
+      0,                                                          // flags (reserved for future use)
+      VK_TRUE,                                                    // depthTestEnable
+      VK_TRUE,                                                    // depthWriteEnable
+      VK_COMPARE_OP_LESS_OR_EQUAL,                                // depthCompareOp
+      VK_FALSE,                                                   // depthBoundsTestEnable
+      VK_FALSE,                                                   // stencilTestEnable
+      stencil_op_state,                                           // front  
+      stencil_op_state,                                           // back
+      0,                                                          // minDepthBounds
+      0,                                                          // maxDepthBounds
+    };
 
-    VkGraphicsPipelineCreateInfo create_info;
-    ::memset(&create_info, 0, sizeof(VkGraphicsPipelineCreateInfo));
-    create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    create_info.layout = pipeline_layout;
-    create_info.pVertexInputState = &vertex_input_state;
-    create_info.pInputAssemblyState = &input_assembly_state;
-    create_info.pRasterizationState = &rasterization_state;
-    create_info.pColorBlendState = &color_blend_state;
-    create_info.pMultisampleState = &multi_sample_state;
-    create_info.pViewportState = &viewport_state;
-    create_info.pDepthStencilState = &depth_stencil_state;
-    create_info.stageCount = (uint32_t)shaderstages.size();
-    create_info.pStages = shaderstages.data();
-    create_info.renderPass = render_pass;
-    create_info.pDynamicState = &dynamic_state;
+    VkPipelineMultisampleStateCreateInfo multi_sample_state {
+      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, // sType 
+      nullptr,                                                  // pNext
+      0,                                                        // flags (reserved for future use)
+      VK_SAMPLE_COUNT_1_BIT,                                    // rasterizationSamples
+      VK_FALSE,                                                 // sampleShadingEnable
+      0,                                                        // minSampleShading
+      nullptr,                                                  // pSampleMask
+      VK_FALSE,                                                 // alphaToCoverageEnable
+      VK_FALSE,                                                 // alphaToOneEnable
+    };
+
+    VkGraphicsPipelineCreateInfo create_info {
+      VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, // sType
+      nullptr,                                         // pNext
+      0,                                               // flags is a bitmask of VkPipelineCreateFlagBits specifying how the pipeline will be generated.
+      (uint32_t)shaderstages.size(),                   // stageCount
+      shaderstages.data(),                             // pStages
+      &vertex_input_state,                             // pVertexInputState
+      &input_assembly_state,                           // pInputAssemblyState
+      nullptr,                                         // pTessellationState
+      &viewport_state,                                 // pViewportState
+      &rasterization_state,                            // pRasterizationState
+      &multi_sample_state,                             // pMultisampleState
+      &depth_stencil_state,                            // pDepthStencilState
+      &color_blend_state,                              // pColorBlendState
+      &dynamic_state,                                  // pDynamicState
+      pipeline_layout,                                 // layout
+      render_pass,                                     // renderPass
+      0,                                               // subpass
+      nullptr,                                         // basePipelineHandle
+      0,                                               // basePipelineIndex
+    };
 
     THROW_ERROR(vkCreateGraphicsPipelines(this->device->device, pipeline_cache, 1, &create_info, nullptr, &this->pipeline));
   }
-
 
   ~VulkanGraphicsPipeline()
   {

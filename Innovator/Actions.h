@@ -1,9 +1,9 @@
 #pragma once
 
-#include <Innovator/State.h>
 #include <Innovator/Node.h>
-#include <Innovator/core/Math/Box.h>
+#include <Innovator/core/State.h>
 #include <Innovator/core/VulkanObjects.h>
+#include <Innovator/core/Math/Box.h>
 
 #include <glm/glm.hpp>
 
@@ -101,7 +101,7 @@ public:
     }
     ~DrawCommandObject() {}
 
-    std::unique_ptr<class GraphicsPipelineObject> pipeline;
+    std::unique_ptr<GraphicsPipelineObject> pipeline;
     std::unique_ptr<VulkanCommandBuffers> command;
   };
 
@@ -109,29 +109,17 @@ public:
   public:
     ComputeCommandObject(RenderAction * action, State & state)
     {
-      this->descriptor_set = std::make_unique<DescriptorSetObject>(action->device, state.textures, state.buffers);
-
-      VkPipelineShaderStageCreateInfo shader_stage_info = {
-        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, // sType 
-        nullptr, 0,                                          // pNext, flags (reserved for future use, must be 0)
-        state.shaders[0].stage,                              // stage 
-        state.shaders[0].module,                             // module 
-        "main",                                              // pName 
-        nullptr                                              // pSpecializationInfo
-      };
-
-      this->pipeline = std::make_unique<VulkanComputePipeline>(
+      this->pipeline = std::make_unique<ComputePipelineObject>(
         action->device,
-        action->pipelinecache->cache,
-        0,
-        shader_stage_info,
-        this->descriptor_set->pipeline_layout->layout);
+        state.shaders[0],
+        state.buffers,
+        state.textures,
+        action->pipelinecache);
 
       this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
       this->command->begin();
 
       this->pipeline->bind(this->command->buffer());
-      this->descriptor_set->bind(this->command->buffers[0], VK_PIPELINE_BIND_POINT_COMPUTE);
 
       vkCmdDispatch(this->command->buffer(), 
         state.compute_description.group_count_x, 
@@ -143,8 +131,7 @@ public:
 
     ~ComputeCommandObject() {}
 
-    std::unique_ptr<DescriptorSetObject> descriptor_set;
-    std::unique_ptr<VulkanComputePipeline> pipeline;
+    std::unique_ptr<ComputePipelineObject> pipeline;
     std::unique_ptr<VulkanCommandBuffers> command;
   };
 
@@ -190,7 +177,7 @@ public:
       vkCmdExecuteCommands(this->command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
     }
 
-    VkRenderPassBeginInfo begin_info = {
+    VkRenderPassBeginInfo begin_info {
       VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
       nullptr,                                         // pNext
       this->renderpass->renderpass,                    // renderPass
@@ -220,61 +207,11 @@ public:
     this->compute_states.clear();
   }
 
-  VkSampler getSampler(Node * node)
+  void clearCache()
   {
-    if (this->samplercache.find(node) == this->samplercache.end()) {
-      this->samplercache[node] = std::make_unique<VulkanSampler>(
-        this->device,
-        VkFilter::VK_FILTER_LINEAR,
-        VkFilter::VK_FILTER_LINEAR,
-        VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        0.f,
-        VK_FALSE,
-        1.f,
-        VK_FALSE,
-        VkCompareOp::VK_COMPARE_OP_NEVER,
-        0.f,
-        0.f,
-        VkBorderColor::VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
-        VK_FALSE);
-    }
-    return this->samplercache[node]->sampler;
-  }
-
-  VkShaderModule getShader(Node * node, const std::string & filename, VkShaderStageFlagBits stage)
-  {
-    if (this->shadercache.find(node) == this->shadercache.end()) {
-      std::ifstream input(filename, std::ios::binary);
-      std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
-      this->shadercache[node] = std::make_unique<VulkanShaderModule>(this->device, code);
-    }
-    return this->shadercache[node]->module;
-  }
-
-  const std::unique_ptr<VulkanBufferObject> &
-  getBuffer(Node * node)
-  {
-    if (this->buffercache.find(node) == this->buffercache.end()) {
-      throw std::runtime_error("buffer not found");
-    }
-    return this->buffercache[node];
-  }
-
-  const std::unique_ptr<VulkanBufferObject> & 
-  getBuffer(Node * node,
-            VkBufferUsageFlagBits usage, 
-            VkMemoryPropertyFlags flags,
-            const void * data,
-            size_t size)
-  {
-    if (this->buffercache.find(node) == this->buffercache.end()) {
-      this->buffercache[node] = std::make_unique<VulkanBufferObject>(this->device, size, usage, flags);
-      this->buffercache[node]->memory->memcpy(data, size);
-    }
-    return this->buffercache[node];
+    THROW_ERROR(vkDeviceWaitIdle(this->device->device));
+    this->draw_commands.clear();
+    this->compute_commands.clear();
   }
 
   VkExtent2D extent;
@@ -296,10 +233,6 @@ public:
 
   std::shared_ptr<VulkanFramebuffer> framebuffer;
   std::shared_ptr<VulkanRenderpass> renderpass;
-
-  std::map<Node *, std::unique_ptr<VulkanSampler>> samplercache;
-  std::map<Node *, std::unique_ptr<VulkanShaderModule>> shadercache;
-  std::map<Node *, std::unique_ptr<VulkanBufferObject>> buffercache;
 };
 
 class StateScope {

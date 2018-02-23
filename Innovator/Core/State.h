@@ -6,6 +6,61 @@
 #include <vector>
 #include <memory>
 
+struct VulkanLayoutBinding {
+  uint32_t binding;
+  VkDescriptorType type;
+  VkShaderStageFlags stage;
+};
+
+struct VulkanVertexAttributeDescription {
+  uint32_t location;
+  uint32_t binding;
+  VkFormat format;
+  uint32_t offset;
+  uint32_t stride;
+  VkVertexInputRate input_rate;
+  VkBuffer buffer;
+};
+
+struct VulkanIndexBufferDescription {
+  uint32_t count;
+  VkBuffer buffer;
+  VkIndexType type;
+};
+
+struct VulkanBufferDescription {
+  uint32_t binding;
+  VkDescriptorType type;
+  VkShaderStageFlags stage;
+  VkBuffer buffer;
+  VkDeviceSize size;
+  VkDeviceSize offset;
+};
+
+struct VulkanTextureDescription {
+  uint32_t binding;
+  VkDescriptorType type;
+  VkShaderStageFlags stage;
+  VkImageView view;
+  VkSampler sampler;
+};
+
+struct VulkanShaderModuleDescription {
+  VkShaderStageFlagBits stage;
+  VkShaderModule module;
+};
+
+struct VulkanDrawDescription {
+  uint32_t count;
+  VkPrimitiveTopology topology;
+};
+
+struct VulkanComputeDescription {
+  uint32_t group_count_x;
+  uint32_t group_count_y;
+  uint32_t group_count_z;
+};
+
 class State {
 public:
   State() 

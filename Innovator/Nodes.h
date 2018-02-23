@@ -251,34 +251,35 @@ public:
 template <typename T>
 class Buffer : public Node {
 public:
-  Buffer(VkBufferUsageFlagBits usage, VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-    : usage(usage), flags(flags)
+  Buffer(VkBufferUsageFlagBits usage, VkMemoryPropertyFlags flags)
+    : usage(usage), flags(flags), transfer(false)
   {}
   virtual ~Buffer() {}
 
   virtual void traverse(RenderAction * action)
   {
     size_t size = sizeof(T) * this->values.size();
-    const std::unique_ptr<VulkanBufferObject> & buffer = 
-      action->getBuffer(this, 
-                        this->usage,
-                        this->flags, 
-                        this->values.data(),
-                        sizeof(T) * this->values.size());
-
+    if (!this->buffer) {
+      this->buffer = std::make_unique<VulkanBufferObject>(action->device, size, this->usage, this->flags);
+      this->buffer->memory->memcpy(this->values.data(), size);
+    } else if (this->transfer) {
+      this->buffer->memory->memcpy(this->values.data(), size);
+    }
     action->state.buffers.push_back({
       action->state.layout_binding.binding,             // binding 
       action->state.layout_binding.type,                // type
       action->state.layout_binding.stage,               // stage 
-      buffer->buffer->buffer,                           // buffer 
+      this->buffer->buffer->buffer,                     // buffer 
       size,                                             // size 
       0                                                 // offset 
     });
   }
 
+  bool transfer;
   std::vector<T> values;
   VkBufferUsageFlagBits usage;
   VkMemoryPropertyFlags flags;
+  std::unique_ptr<VulkanBufferObject> buffer;
 };
 
 class VertexAttributeDescription : public Node {
@@ -358,14 +359,21 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
+    if (!this->shader) {
+      std::ifstream input(filename, std::ios::binary);
+      std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
+      this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
+    }
+
     VulkanShaderModuleDescription shader;
-    shader.module = action->getShader(this, this->filename, this->stage);
+    shader.module = this->shader->module;
     shader.stage = this->stage;
     action->state.shaders.push_back(shader);
   }
 
   std::string filename;
   VkShaderStageFlagBits stage;
+  std::unique_ptr<VulkanShaderModule> shader;
 };
 
 class Sampler : public Node {
@@ -375,9 +383,28 @@ public:
 
   virtual void traverse(RenderAction * action)
   {
-    action->state.texture_description.sampler = action->getSampler(this);
-  }
+    if (!this->sampler) {
+      this->sampler = std::make_unique<VulkanSampler>(
+        action->device,
+        VkFilter::VK_FILTER_LINEAR,
+        VkFilter::VK_FILTER_LINEAR,
+        VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        0.f,
+        VK_FALSE,
+        1.f,
+        VK_FALSE,
+        VkCompareOp::VK_COMPARE_OP_NEVER,
+        0.f,
+        0.f,
+        VkBorderColor::VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+        VK_FALSE);
+    }
 
+    action->state.texture_description.sampler = this->sampler->sampler;
+  }
   std::unique_ptr<VulkanSampler> sampler;
 };
 
@@ -518,9 +545,11 @@ public:
   DrawCommand(VkPrimitiveTopology topology, uint32_t count = 0)
     : topology(topology),
       count(count),
-      transform(std::make_shared<Buffer<mat4>>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)),
+      transform(std::make_shared<Buffer<mat4>>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)),
       transform_layout(std::make_shared<LayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS))
-  {}
+  {
+    this->transform->transfer = true;
+  }
 
   virtual ~DrawCommand() {}
 
@@ -532,9 +561,6 @@ public:
     };
     this->transform_layout->traverse(action);
     this->transform->traverse(action);
-
-    const std::unique_ptr<VulkanBufferObject> & buffer = action->getBuffer(this->transform.get());
-    buffer->memory->memcpy(this->transform->values.data(), sizeof(glm::mat4) * this->transform->values.size());
 
     action->state.drawdescription.count = this->count;
     action->state.drawdescription.topology = this->topology;

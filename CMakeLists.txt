@@ -19,8 +19,8 @@ add_executable(${TARGET_NAME} WIN32
   Viewer.h
   Innovator/Node.h
   Innovator/Nodes.h
-  Innovator/State.h
   Innovator/Actions.h
+  Innovator/Core/State.h
   Innovator/Core/VulkanObjects.h
   Innovator/Core/Vulkan/Wrapper.h)
 

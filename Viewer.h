@@ -18,12 +18,13 @@ public:
   VulkanSurfaceWin32(const std::shared_ptr<VulkanInstance> & vulkan, HWND hwnd, HINSTANCE hinstance)
     : vulkan(vulkan)
   {
-    VkWin32SurfaceCreateInfoKHR create_info;
-    ::memset(&create_info, 0, sizeof(VkWin32SurfaceCreateInfoKHR));
-    create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    create_info.hwnd = hwnd;
-    create_info.hinstance = hinstance;
-
+    VkWin32SurfaceCreateInfoKHR create_info {
+      VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, // sType 
+      nullptr,                                         // pNext
+      0,                                               // flags (reserved for future use)
+      hinstance,                                       // hinstance 
+      hwnd,                                            // hwnd
+    };
     THROW_ERROR(vkCreateWin32SurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
   }
 
@@ -172,32 +173,33 @@ public:
   VulkanViewer(HINSTANCE hinstance, uint32_t width, uint32_t height)
     : Window(hinstance, "Innovator Viewer", width, height)
   {
-    std::vector<std::string> instance_layers = {
+    std::vector<std::string> instance_layers {
 #ifdef _DEBUG
       "VK_LAYER_LUNARG_standard_validation",
 #endif
     };
-    std::vector<std::string> instance_extensions = {
+    std::vector<std::string> instance_extensions {
       VK_KHR_SURFACE_EXTENSION_NAME,
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
       VK_EXT_DEBUG_REPORT_EXTENSION_NAME
     };
 
-    VkApplicationInfo application_info;
-    ::memset(&application_info, 0, sizeof(VkApplicationInfo));
-
-    application_info.pApplicationName = "Innovator Viewer";
-    application_info.applicationVersion = 1;
-    application_info.pEngineName = "Innovator";
-    application_info.engineVersion = 1;
-    application_info.apiVersion = VK_API_VERSION_1_0;
+    VkApplicationInfo application_info {
+      VK_STRUCTURE_TYPE_APPLICATION_INFO, // sType
+      nullptr,                            // pNext
+      "Innovator Viewer",                 // pApplicationName
+      1,                                  // applicationVersion
+      "Innovator",                        // pEngineName
+      1,                                  // engineVersion
+      VK_API_VERSION_1_0,                 // apiVersion
+    };
 
     this->vulkan = std::make_unique<VulkanInstance>(application_info, instance_layers, instance_extensions);
     this->debugcb = std::make_unique<VulkanDebugCallback>(this->vulkan, VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT, DebugCallback);
     this->surface = std::make_unique<VulkanSurfaceWin32>(this->vulkan, this->window, hinstance);
 
     VkPhysicalDeviceFeatures required_device_features;
-    ::memset(&required_device_features, 0, sizeof(VkPhysicalDeviceFeatures));
+    ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
     required_device_features.geometryShader = VK_TRUE;
     required_device_features.tessellationShader = VK_TRUE;
     required_device_features.textureCompressionBC = VK_TRUE;
@@ -209,22 +211,21 @@ public:
       VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
       this->surface->getPresentationFilter(physical_device));
 
-    std::vector<VkDeviceQueueCreateInfo> queue_create_info;
-    queue_create_info.push_back(VkDeviceQueueCreateInfo{
+    std::vector<VkDeviceQueueCreateInfo> queue_create_info { {
       VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,   // sType
       nullptr,                                      // pNext
       0,                                            // flags
       queue_index,                                  // queueFamilyIndex
       1,                                            // queueCount   
       queue_priorities                              // pQueuePriorities
-      });
+    } };
 
-    std::vector<std::string> device_layers = {
+    std::vector<std::string> device_layers {
 #ifdef _DEBUG
       "VK_LAYER_LUNARG_standard_validation",
 #endif
     };
-    std::vector<std::string> device_extensions = {
+    std::vector<std::string> device_extensions {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
@@ -243,7 +244,7 @@ public:
     this->depth_format = VK_FORMAT_D32_SFLOAT;
     this->color_format = this->surface_format.format;
 
-    std::vector<VkAttachmentDescription> attachment_descriptions = { {
+    std::vector<VkAttachmentDescription> attachment_descriptions { {
         0,                                                    // flags
         this->color_format,                                   // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
@@ -265,15 +266,14 @@ public:
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
       } };
 
-
-    VkAttachmentReference depth_stencil_attachment = {
+    VkAttachmentReference depth_stencil_attachment {
       1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
     };
-    std::vector<VkAttachmentReference> color_attachments = {
+    std::vector<VkAttachmentReference> color_attachments {
       { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }
     };
 
-    std::vector<VkSubpassDescription> subpass_descriptions = { {
+    std::vector<VkSubpassDescription> subpass_descriptions { {
         0,                                                      // flags
         VK_PIPELINE_BIND_POINT_GRAPHICS,                        // pipelineBindPoint
         0,                                                      // inputAttachmentCount
@@ -307,6 +307,8 @@ public:
 
   void setSceneGraph(std::shared_ptr<class Node> scene)
   {
+    this->renderaction->clearCache();
+
     this->root = std::make_shared<Separator>();
     this->camera = SearchAction<Camera>(scene);
 
@@ -360,10 +362,10 @@ public:
 
     std::vector<VkImageMemoryBarrier> memory_barriers;
     {
-      VkImageSubresourceRange subresource_range = { 
+      VkImageSubresourceRange subresource_range { 
         VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 
       };
-      VkComponentMapping component_mapping = { 
+      VkComponentMapping component_mapping { 
         VK_COMPONENT_SWIZZLE_R, 
         VK_COMPONENT_SWIZZLE_G, 
         VK_COMPONENT_SWIZZLE_B, 
@@ -398,10 +400,10 @@ public:
       });
     }
     {
-      VkImageSubresourceRange subresource_range = { 
+      VkImageSubresourceRange subresource_range { 
         VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 
       };
-      VkComponentMapping component_mapping = {
+      VkComponentMapping component_mapping {
         VK_COMPONENT_SWIZZLE_IDENTITY, 
         VK_COMPONENT_SWIZZLE_IDENTITY, 
         VK_COMPONENT_SWIZZLE_IDENTITY, 
@@ -436,7 +438,7 @@ public:
       });
     }
 
-    std::vector<VkImageView> framebuffer_attachments = {
+    std::vector<VkImageView> framebuffer_attachments {
       this->color_buffer->view->view,
       this->depth_buffer->view->view
     };
@@ -501,11 +503,11 @@ public:
     this->command->end();
     this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
-    VkImageSubresourceRange subresource_range = {
+    VkImageSubresourceRange subresource_range {
       VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
     };
 
-    std::vector<VkImageMemoryBarrier> src_image_barriers = { {
+    std::vector<VkImageMemoryBarrier> src_image_barriers { {
       VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
       nullptr,                                                       // pNext
       VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
@@ -543,24 +545,26 @@ public:
       src_image_barriers[0].image = swapchain_images[i];
       dst_image_barriers[0].image = swapchain_images[i];
 
-      CommandBufferRecorder buffer_scope(this->swap_buffers_command.get(), i);
+      this->swap_buffers_command->begin(i);
 
-      vkCmdPipelineBarrier(buffer_scope.command(),
+      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0, 0, nullptr, 0, nullptr,
         static_cast<uint32_t>(src_image_barriers.size()),
         src_image_barriers.data());
 
-      VkImageSubresourceLayers subresource_layers = {
+      VkImageSubresourceLayers subresource_layers {
         subresource_range.aspectMask,     // aspectMask
         subresource_range.baseMipLevel,   // mipLevel
         subresource_range.baseArrayLayer, // baseArrayLayer
         subresource_range.layerCount      // layerCount;
       };
+
       VkOffset3D offset = {
         0, 0, 0
       };
-      VkImageCopy image_copy = {
+
+      VkImageCopy image_copy {
         subresource_layers,             // srcSubresource
         offset,                         // srcOffset
         subresource_layers,             // dstSubresource
@@ -568,13 +572,21 @@ public:
         extent3d                        // extent
       };
 
-      vkCmdCopyImage(buffer_scope.command(), this->color_buffer->image->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain_images[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
+      vkCmdCopyImage(this->swap_buffers_command->buffer(i), 
+                     this->color_buffer->image->image, 
+                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+                     swapchain_images[i], 
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                     1, 
+                     &image_copy);
 
-      vkCmdPipelineBarrier(buffer_scope.command(),
+      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0, 0, nullptr, 0, nullptr,
         static_cast<uint32_t>(dst_image_barriers.size()),
         dst_image_barriers.data());
+
+      this->swap_buffers_command->end(i);
     }
   }
 
@@ -639,7 +651,7 @@ public:
 
   VkFormat depth_format;
   VkFormat color_format;
-
+  
   VkPresentModeKHR present_mode;
   VkSurfaceFormatKHR surface_format;
   VkSurfaceCapabilitiesKHR surface_capabilities;
