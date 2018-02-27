@@ -7,84 +7,63 @@
 #include <algorithm>
 #include <stdexcept>
 
-class VkException : public std::runtime_error {
-public:
-  explicit VkException(const std::string & what, const VkResult result)
-    : runtime_error(what), result(result) {}
-  VkResult result;
-};
-
-class VkErrorOutOfDateException : public std::exception {};
-
-#define THROW_ERROR(function)                                     \
-{                                                                 \
-	VkResult result = (function);                                   \
-	if (result != VK_SUCCESS) {                                     \
-    throw VkException("Vulkan API call failed", result);          \
-	} else if (result == VK_ERROR_OUT_OF_DATE_KHR) {                \
-    throw VkErrorOutOfDateException();                            \
-  }                                                               \
-}                                                                 \
-
 namespace {
-  std::vector<const char*> string2char(const std::vector<std::string> & v) 
-  {
-    std::vector<const char*> result(v.size());
-    std::transform(v.begin(), v.end(), result.begin(), [](const std::string & s) { return s.c_str(); });
-    return result;
-  }
+  class VkTimeoutException : public std::exception {};
+  class VkNotReadyException : public std::exception {};
+  class VkIncompleteException : public std::exception {};
+  class VkSuboptimalException : public std::exception {};
+  class VkErrorOutOfDateException : public std::exception {};
+  class VkErrorDeviceLostException : public std::exception {};
+  class VkErrorSurfaceLostException : public std::exception {};
+  class VkErrorInvalidShaderException : public std::exception {};
+  class VkErrorFragmentedPoolException : public std::exception {};
+  class VkErrorTooManyObjectsException : public std::exception {};
+  class VkErrorLayerNotPresentException : public std::exception {};
+  class VkErrorMemoryMapFailedException : public std::exception {};
+  class VkErrorOutOfHostMemoryException : public std::exception {};
+  class VkErrorOutOfPoolMemoryException : public std::exception {};
+  class VkErrorValidationFailedException : public std::exception {};
+  class VkErrorNativeWindowInUseException : public std::exception {};
+  class VkErrorFeatureNotPresentException : public std::exception {};
+  class VkErrorOutOfDeviceMemoryException : public std::exception {};
+  class VkErrorFormatNotSupportedException : public std::exception {};
+  class VkErrorIncompatibleDriverException : public std::exception {};
+  class VkErrorExtensionNotPresentException : public std::exception {};
+  class VkErrorIncompatibleDisplayException : public std::exception {};
+  class VkErrorInitializationFailedException : public std::exception {};
+  class VkErrorInvalidExternalHandleException : public std::exception {};
 
-  template<class PropertyType>
-  std::vector<std::string> extract_layer_names(std::vector<PropertyType> properties)
-  {
-    std::vector<std::string> layer_names;
-    std::transform(properties.begin(), properties.end(), std::back_inserter(layer_names), [](auto p) { return p.layerName; });
-    return layer_names;
-  }
+#define THROW_ON_ERROR(__function__) {                                                           \
+	VkResult __result__ = (__function__);                                                       \
+  switch (__result__) {                                                                       \
+    case VK_TIMEOUT: throw VkTimeoutException();                                              \
+    case VK_NOT_READY: throw VkNotReadyException();                                           \
+    case VK_INCOMPLETE: throw VkIncompleteException();                                        \
+    case VK_SUBOPTIMAL_KHR: throw VkSuboptimalException();                                    \
+    case VK_ERROR_DEVICE_LOST: throw VkErrorDeviceLostException();                            \
+    case VK_ERROR_OUT_OF_DATE_KHR: throw VkErrorOutOfDateException();                         \
+    case VK_ERROR_SURFACE_LOST_KHR: throw VkErrorSurfaceLostException();                      \
+    case VK_ERROR_FRAGMENTED_POOL: throw VkErrorFragmentedPoolException();                    \
+    case VK_ERROR_INVALID_SHADER_NV: throw VkErrorInvalidShaderException();                   \
+    case VK_ERROR_TOO_MANY_OBJECTS: throw VkErrorTooManyObjectsException();                   \
+    case VK_ERROR_MEMORY_MAP_FAILED: throw VkErrorMemoryMapFailedException();                 \
+    case VK_ERROR_LAYER_NOT_PRESENT: throw VkErrorLayerNotPresentException();                 \
+    case VK_ERROR_OUT_OF_HOST_MEMORY: throw VkErrorOutOfHostMemoryException();                \
+    case VK_ERROR_FEATURE_NOT_PRESENT: throw VkErrorFeatureNotPresentException();             \
+    case VK_ERROR_INCOMPATIBLE_DRIVER: throw VkErrorIncompatibleDriverException();            \
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY: throw VkErrorOutOfDeviceMemoryException();            \
+    case VK_ERROR_VALIDATION_FAILED_EXT: throw VkErrorValidationFailedException();            \
+    case VK_ERROR_OUT_OF_POOL_MEMORY_KHR: throw VkErrorOutOfPoolMemoryException();            \
+    case VK_ERROR_FORMAT_NOT_SUPPORTED: throw VkErrorFormatNotSupportedException();           \
+    case VK_ERROR_EXTENSION_NOT_PRESENT: throw VkErrorExtensionNotPresentException();         \
+    case VK_ERROR_INITIALIZATION_FAILED: throw VkErrorInitializationFailedException();        \
+    case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: throw VkErrorNativeWindowInUseException();        \
+    case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: throw VkErrorIncompatibleDisplayException();      \
+    case VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR: throw VkErrorInvalidExternalHandleException(); \
+  }                                                                                           \
+}                                                                                             \
 
-  template<class PropertyType>
-  std::vector<std::string> extract_extension_names(std::vector<PropertyType> properties)
-  {
-    std::vector<std::string> exension_names;
-    std::transform(properties.begin(), properties.end(), std::back_inserter(exension_names), [](auto p) { return p.extensionName; });
-    return exension_names;
-  }
-
-  std::vector<std::string> set_difference(std::vector<std::string> required, std::vector<std::string> supported)
-  {
-    std::sort(required.begin(), required.end());
-    std::sort(supported.begin(), supported.end());
-
-    std::vector<std::string> difference;
-    std::set_difference(required.begin(), required.end(), supported.begin(), supported.end(), std::back_inserter(difference));
-    return difference;
-  }
 }
-
-class VulkanCommandPool {
-public:
-  VulkanCommandPool(VkDevice device, 
-                    VkCommandPoolCreateFlags flags, 
-                    uint32_t queue_family_index)
-    : device(device)
-  {
-    VkCommandPoolCreateInfo create_info {
-      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, // sType
-      nullptr,                                    // pNext 
-      flags,                                      // flags
-      queue_family_index                          // queueFamilyIndex 
-    };
-    THROW_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->pool));
-  }
-
-  ~VulkanCommandPool()
-  {
-    vkDestroyCommandPool(this->device, this->pool, nullptr);
-  }
-
-  VkDevice device;
-  VkCommandPool pool;
-};
 
 class VulkanPhysicalDevice {
 public:
@@ -100,13 +79,13 @@ public:
     this->queue_family_properties.resize(count);
     vkGetPhysicalDeviceQueueFamilyProperties(this->device, &count, this->queue_family_properties.data());
 
-    THROW_ERROR(vkEnumerateDeviceLayerProperties(this->device, &count, nullptr));
+    THROW_ON_ERROR(vkEnumerateDeviceLayerProperties(this->device, &count, nullptr));
     this->layer_properties.resize(count);
-    THROW_ERROR(vkEnumerateDeviceLayerProperties(this->device, &count, this->layer_properties.data()));
+    THROW_ON_ERROR(vkEnumerateDeviceLayerProperties(this->device, &count, this->layer_properties.data()));
 
-    THROW_ERROR(vkEnumerateDeviceExtensionProperties(this->device, nullptr, &count, nullptr));
+    THROW_ON_ERROR(vkEnumerateDeviceExtensionProperties(this->device, nullptr, &count, nullptr));
     this->extension_properties.resize(count);
-    THROW_ERROR(vkEnumerateDeviceExtensionProperties(this->device, nullptr, &count, this->extension_properties.data()));
+    THROW_ON_ERROR(vkEnumerateDeviceExtensionProperties(this->device, nullptr, &count, this->extension_properties.data()));
   }
 
   ~VulkanPhysicalDevice() {}
@@ -163,79 +142,75 @@ public:
 class VulkanInstance {
 public:
   VulkanInstance(const VkApplicationInfo & application_info,
-                 const std::vector<std::string> & required_layers,
-                 const std::vector<std::string> & required_extensions)
+                 const std::vector<const char *> & required_layers,
+                 const std::vector<const char *> & required_extensions)
   {
-    { // check that required layers are supported
-      uint32_t count;
-      THROW_ERROR(vkEnumerateInstanceLayerProperties(&count, nullptr));
-      std::vector<VkLayerProperties> layer_properties(count);
-      THROW_ERROR(vkEnumerateInstanceLayerProperties(&count, layer_properties.data()));
+    uint32_t count;
+    // check that required layers are supported
+    THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&count, nullptr));
+    std::vector<VkLayerProperties> layer_properties(count);
+    THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&count, layer_properties.data()));
 
-      if (!set_difference(required_layers, extract_layer_names(layer_properties)).empty()) {
-        throw std::runtime_error("unsupported instance layers");
-      }
-    }
-    { // check that required extensions are supported
-      uint32_t count;
-      THROW_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr));
-      std::vector<VkExtensionProperties> extension_properties(count);
-      THROW_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &count, extension_properties.data()));
+    THROW_ON_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr));
+    std::vector<VkExtensionProperties> extension_properties(count);
+    THROW_ON_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &count, extension_properties.data()));
 
-      if (!set_difference(required_extensions, extract_extension_names(extension_properties)).empty()) {
-        throw std::runtime_error("unsupported instance extensions");
-      }
-    }
-    std::vector<const char*> layer_names = string2char(required_layers);
-    std::vector<const char*> extension_names = string2char(required_extensions);
+    std::for_each(required_layers.begin(), required_layers.end(), 
+      [&](const char * layer_name) {
+        for (VkLayerProperties properties : layer_properties)
+          if (std::strcmp(layer_name, properties.layerName) == 0)
+            return;
+        throw std::runtime_error("unsupported layer: " + std::string(layer_name));
+      });
 
-    VkInstanceCreateInfo create_info {
-      VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,        // sType 
-      nullptr,                                       // pNext 
-      0,                                             // flags
-      &application_info,                             // pApplicationInfo
-      static_cast<uint32_t>(layer_names.size()),     // enabledLayerCount
-      layer_names.data(),                            // ppEnabledLayerNames
-      static_cast<uint32_t>(extension_names.size()), // enabledExtensionCount
-      extension_names.data()                         // ppEnabledExtensionNames
+    std::for_each(required_extensions.begin(), required_extensions.end(), 
+      [&](const char * extension_name) {
+        for (VkExtensionProperties properties : extension_properties)
+          if (std::strcmp(extension_name, properties.extensionName) == 0)
+            return;
+      throw std::runtime_error("unsupported extension: " + std::string(extension_name));
+    });
+
+    VkInstanceCreateInfo create_info{
+      VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,            // sType 
+      nullptr,                                           // pNext 
+      0,                                                 // flags
+      &application_info,                                 // pApplicationInfo
+      static_cast<uint32_t>(required_layers.size()),     // enabledLayerCount
+      required_layers.data(),                            // ppEnabledLayerNames
+      static_cast<uint32_t>(required_extensions.size()), // enabledExtensionCount
+      required_extensions.data()                         // ppEnabledExtensionNames
     };
-    THROW_ERROR(vkCreateInstance(&create_info, nullptr, &this->instance));
+    THROW_ON_ERROR(vkCreateInstance(&create_info, nullptr, &this->instance));
 
     uint32_t physical_device_count;
-    THROW_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr));
+    THROW_ON_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr));
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
-    THROW_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data()));
+    THROW_ON_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data()));
 
     for (const VkPhysicalDevice & physical_device : physical_devices) {
       this->physical_devices.push_back(VulkanPhysicalDevice(physical_device));
     }
     {
-      vkQueuePresent = (PFN_vkQueuePresentKHR)vkGetInstanceProcAddr(this->instance, "vkQueuePresentKHR");
-      vkCreateSwapchain = (PFN_vkCreateSwapchainKHR)vkGetInstanceProcAddr(this->instance, "vkCreateSwapchainKHR");
-      vkAcquireNextImage = (PFN_vkAcquireNextImageKHR)vkGetInstanceProcAddr(this->instance, "vkAcquireNextImageKHR");
-      vkDestroySwapchain = (PFN_vkDestroySwapchainKHR)vkGetInstanceProcAddr(this->instance, "vkDestroySwapchainKHR");
-      vkGetSwapchainImages = (PFN_vkGetSwapchainImagesKHR)vkGetInstanceProcAddr(this->instance, "vkGetSwapchainImagesKHR");
-      vkCreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(this->instance, "vkCreateDebugReportCallbackEXT");
-      vkDestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(this->instance, "vkDestroyDebugReportCallbackEXT");
-      vkGetPhysicalDeviceSurfaceSupport = (PFN_vkGetPhysicalDeviceSurfaceSupportKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfaceSupportKHR");
-      vkGetPhysicalDeviceSurfaceFormats = (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
-      vkGetPhysicalDeviceSurfaceCapabilities = (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-      vkGetPhysicalDeviceSurfacePresentModes = (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(this->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
+      auto get_proc_address = [](VkInstance instance, const std::string & name) {
+        PFN_vkVoidFunction address = vkGetInstanceProcAddr(instance, name.c_str());
+        if (!address) {
+          throw std::runtime_error("vkGetInstanceProcAddr failed for " + name);
+        }
+        return address;
+      };
 
-      if (!(this->vkQueuePresent &&
-        this->vkCreateSwapchain &&
-        this->vkAcquireNextImage &&
-        this->vkDestroySwapchain &&
-        this->vkGetSwapchainImages &&
-        this->vkCreateDebugReportCallback &&
-        this->vkDestroyDebugReportCallback &&
-        this->vkGetPhysicalDeviceSurfaceSupport &&
-        this->vkGetPhysicalDeviceSurfaceFormats &&
-        this->vkGetPhysicalDeviceSurfaceCapabilities &&
-        this->vkGetPhysicalDeviceSurfacePresentModes))
-      {
-        throw std::runtime_error("VulkanFunctions::VulkanFunctions(): vkGetInstanceProcAddr failed.");
-      }
+      this->vkQueuePresent = (PFN_vkQueuePresentKHR)get_proc_address(this->instance, "vkQueuePresentKHR");
+      this->vkCreateSwapchain = (PFN_vkCreateSwapchainKHR)get_proc_address(this->instance, "vkCreateSwapchainKHR");
+      this->vkAcquireNextImage = (PFN_vkAcquireNextImageKHR)get_proc_address(this->instance, "vkAcquireNextImageKHR");
+      this->vkDestroySwapchain = (PFN_vkDestroySwapchainKHR)get_proc_address(this->instance, "vkDestroySwapchainKHR");
+      this->vkGetSwapchainImages = (PFN_vkGetSwapchainImagesKHR)get_proc_address(this->instance, "vkGetSwapchainImagesKHR");
+      this->vkCreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)get_proc_address(this->instance, "vkCreateDebugReportCallbackEXT");
+      this->vkDestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)get_proc_address(this->instance, "vkDestroyDebugReportCallbackEXT");
+      this->vkGetPhysicalDeviceSurfaceSupport = (PFN_vkGetPhysicalDeviceSurfaceSupportKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceSupportKHR");
+      this->vkGetPhysicalDeviceSurfaceFormats = (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
+      this->vkGetPhysicalDeviceSurfaceCapabilities = (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+      this->vkGetPhysicalDeviceSurfacePresentModes = (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
     }
   }
 
@@ -247,61 +222,61 @@ public:
   VulkanPhysicalDevice selectPhysicalDevice(const VkPhysicalDeviceFeatures & required_features) 
   {
     for (VulkanPhysicalDevice & physical_device : this->physical_devices) {
-      if (physical_device.features.robustBufferAccess >= required_features.robustBufferAccess &&
-          physical_device.features.fullDrawIndexUint32 >= required_features.fullDrawIndexUint32 &&
-          physical_device.features.imageCubeArray >= required_features.imageCubeArray &&
-          physical_device.features.independentBlend >= required_features.independentBlend &&
-          physical_device.features.geometryShader >= required_features.geometryShader &&
-          physical_device.features.tessellationShader >= required_features.tessellationShader &&
-          physical_device.features.sampleRateShading >= required_features.sampleRateShading &&
-          physical_device.features.dualSrcBlend >= required_features.dualSrcBlend &&
-          physical_device.features.logicOp >= required_features.logicOp &&
-          physical_device.features.multiDrawIndirect >= required_features.multiDrawIndirect &&
-          physical_device.features.drawIndirectFirstInstance >= required_features.drawIndirectFirstInstance &&
-          physical_device.features.depthClamp >= required_features.depthClamp &&
-          physical_device.features.depthBiasClamp >= required_features.depthBiasClamp &&
-          physical_device.features.fillModeNonSolid >= required_features.fillModeNonSolid &&
-          physical_device.features.depthBounds >= required_features.depthBounds &&
+      if (physical_device.features.logicOp >= required_features.logicOp &&
           physical_device.features.wideLines >= required_features.wideLines &&
-          physical_device.features.largePoints >= required_features.largePoints &&
+          physical_device.features.depthClamp >= required_features.depthClamp &&
           physical_device.features.alphaToOne >= required_features.alphaToOne &&
-          physical_device.features.multiViewport >= required_features.multiViewport &&
-          physical_device.features.samplerAnisotropy >= required_features.samplerAnisotropy &&
-          physical_device.features.textureCompressionETC2 >= required_features.textureCompressionETC2 &&
-          physical_device.features.textureCompressionASTC_LDR >= required_features.textureCompressionASTC_LDR &&
-          physical_device.features.textureCompressionBC >= required_features.textureCompressionBC &&
-          physical_device.features.occlusionQueryPrecise >= required_features.occlusionQueryPrecise &&
-          physical_device.features.pipelineStatisticsQuery >= required_features.pipelineStatisticsQuery &&
-          physical_device.features.vertexPipelineStoresAndAtomics >= required_features.vertexPipelineStoresAndAtomics &&
-          physical_device.features.fragmentStoresAndAtomics >= required_features.fragmentStoresAndAtomics &&
-          physical_device.features.shaderTessellationAndGeometryPointSize >= required_features.shaderTessellationAndGeometryPointSize &&
-          physical_device.features.shaderImageGatherExtended >= required_features.shaderImageGatherExtended &&
-          physical_device.features.shaderStorageImageExtendedFormats >= required_features.shaderStorageImageExtendedFormats &&
-          physical_device.features.shaderStorageImageMultisample >= required_features.shaderStorageImageMultisample &&
-          physical_device.features.shaderStorageImageReadWithoutFormat >= required_features.shaderStorageImageReadWithoutFormat &&
-          physical_device.features.shaderStorageImageWriteWithoutFormat >= required_features.shaderStorageImageWriteWithoutFormat &&
-          physical_device.features.shaderUniformBufferArrayDynamicIndexing >= required_features.shaderUniformBufferArrayDynamicIndexing &&
-          physical_device.features.shaderSampledImageArrayDynamicIndexing >= required_features.shaderSampledImageArrayDynamicIndexing &&
-          physical_device.features.shaderStorageBufferArrayDynamicIndexing >= required_features.shaderStorageBufferArrayDynamicIndexing &&
-          physical_device.features.shaderStorageImageArrayDynamicIndexing >= required_features.shaderStorageImageArrayDynamicIndexing &&
-          physical_device.features.shaderClipDistance >= required_features.shaderClipDistance &&
-          physical_device.features.shaderCullDistance >= required_features.shaderCullDistance &&
-          physical_device.features.shaderFloat64 >= required_features.shaderFloat64 &&
+          physical_device.features.depthBounds >= required_features.depthBounds &&
+          physical_device.features.largePoints >= required_features.largePoints &&
           physical_device.features.shaderInt64 >= required_features.shaderInt64 &&
           physical_device.features.shaderInt16 >= required_features.shaderInt16 &&
-          physical_device.features.shaderResourceResidency >= required_features.shaderResourceResidency &&
-          physical_device.features.shaderResourceMinLod >= required_features.shaderResourceMinLod &&
+          physical_device.features.dualSrcBlend >= required_features.dualSrcBlend &&
+          physical_device.features.multiViewport >= required_features.multiViewport &&
+          physical_device.features.shaderFloat64 >= required_features.shaderFloat64 &&
           physical_device.features.sparseBinding >= required_features.sparseBinding &&
+          physical_device.features.imageCubeArray >= required_features.imageCubeArray &&
+          physical_device.features.geometryShader >= required_features.geometryShader &&
+          physical_device.features.depthBiasClamp >= required_features.depthBiasClamp &&
+          physical_device.features.independentBlend >= required_features.independentBlend &&
+          physical_device.features.fillModeNonSolid >= required_features.fillModeNonSolid &&
+          physical_device.features.inheritedQueries >= required_features.inheritedQueries &&
+          physical_device.features.sampleRateShading >= required_features.sampleRateShading &&
+          physical_device.features.multiDrawIndirect >= required_features.multiDrawIndirect &&
+          physical_device.features.samplerAnisotropy >= required_features.samplerAnisotropy &&
+          physical_device.features.robustBufferAccess >= required_features.robustBufferAccess &&
+          physical_device.features.tessellationShader >= required_features.tessellationShader &&
+          physical_device.features.shaderClipDistance >= required_features.shaderClipDistance &&
+          physical_device.features.shaderCullDistance >= required_features.shaderCullDistance &&
+          physical_device.features.fullDrawIndexUint32 >= required_features.fullDrawIndexUint32 &&
+          physical_device.features.textureCompressionBC >= required_features.textureCompressionBC &&
+          physical_device.features.shaderResourceMinLod >= required_features.shaderResourceMinLod &&
+          physical_device.features.occlusionQueryPrecise >= required_features.occlusionQueryPrecise &&
           physical_device.features.sparseResidencyBuffer >= required_features.sparseResidencyBuffer &&
+          physical_device.features.textureCompressionETC2 >= required_features.textureCompressionETC2 &&
           physical_device.features.sparseResidencyImage2D >= required_features.sparseResidencyImage2D &&
           physical_device.features.sparseResidencyImage3D >= required_features.sparseResidencyImage3D &&
+          physical_device.features.sparseResidencyAliased >= required_features.sparseResidencyAliased &&
+          physical_device.features.pipelineStatisticsQuery >= required_features.pipelineStatisticsQuery &&
+          physical_device.features.shaderResourceResidency >= required_features.shaderResourceResidency &&
           physical_device.features.sparseResidency2Samples >= required_features.sparseResidency2Samples &&
           physical_device.features.sparseResidency4Samples >= required_features.sparseResidency4Samples &&
           physical_device.features.sparseResidency8Samples >= required_features.sparseResidency8Samples &&
-          physical_device.features.sparseResidency16Samples >= required_features.sparseResidency16Samples &&
-          physical_device.features.sparseResidencyAliased >= required_features.sparseResidencyAliased &&
           physical_device.features.variableMultisampleRate >= required_features.variableMultisampleRate &&
-          physical_device.features.inheritedQueries >= required_features.inheritedQueries) 
+          physical_device.features.sparseResidency16Samples >= required_features.sparseResidency16Samples &&
+          physical_device.features.fragmentStoresAndAtomics >= required_features.fragmentStoresAndAtomics &&
+          physical_device.features.drawIndirectFirstInstance >= required_features.drawIndirectFirstInstance &&
+          physical_device.features.shaderImageGatherExtended >= required_features.shaderImageGatherExtended &&
+          physical_device.features.textureCompressionASTC_LDR >= required_features.textureCompressionASTC_LDR &&
+          physical_device.features.shaderStorageImageMultisample >= required_features.shaderStorageImageMultisample &&
+          physical_device.features.vertexPipelineStoresAndAtomics >= required_features.vertexPipelineStoresAndAtomics &&
+          physical_device.features.shaderStorageImageExtendedFormats >= required_features.shaderStorageImageExtendedFormats &&
+          physical_device.features.shaderStorageImageReadWithoutFormat >= required_features.shaderStorageImageReadWithoutFormat &&
+          physical_device.features.shaderStorageImageWriteWithoutFormat >= required_features.shaderStorageImageWriteWithoutFormat &&
+          physical_device.features.shaderTessellationAndGeometryPointSize >= required_features.shaderTessellationAndGeometryPointSize &&
+          physical_device.features.shaderSampledImageArrayDynamicIndexing >= required_features.shaderSampledImageArrayDynamicIndexing &&
+          physical_device.features.shaderStorageImageArrayDynamicIndexing >= required_features.shaderStorageImageArrayDynamicIndexing &&
+          physical_device.features.shaderUniformBufferArrayDynamicIndexing >= required_features.shaderUniformBufferArrayDynamicIndexing &&
+          physical_device.features.shaderStorageBufferArrayDynamicIndexing >= required_features.shaderStorageBufferArrayDynamicIndexing) 
       {
         return physical_device;
       }
@@ -326,6 +301,123 @@ public:
   std::vector<VulkanPhysicalDevice> physical_devices;
 };
 
+class VulkanLogicalDevice {
+public:
+  VulkanLogicalDevice(const VulkanPhysicalDevice & physical_device,
+                      const VkPhysicalDeviceFeatures & enabled_features,
+                      const std::vector<const char *> & required_layers,
+                      const std::vector<const char *> & required_extensions,
+                      const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
+    : physical_device(physical_device)
+  {
+    std::for_each(required_layers.begin(), required_layers.end(),
+      [&](const char * layer_name) {
+      for (VkLayerProperties properties : physical_device.layer_properties)
+        if (std::strcmp(layer_name, properties.layerName) == 0)
+          return;
+      throw std::runtime_error("unsupported layer: " + std::string(layer_name));
+    });
+
+    std::for_each(required_extensions.begin(), required_extensions.end(),
+      [&](const char * extension_name) {
+      for (VkExtensionProperties properties : physical_device.extension_properties)
+        if (std::strcmp(extension_name, properties.extensionName) == 0)
+          return;
+      throw std::runtime_error("unsupported extension: " + std::string(extension_name));
+    });
+
+    VkDeviceCreateInfo device_create_info {
+      VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,                 // sType
+      nullptr,                                              // pNext
+      0,                                                    // flags
+      static_cast<uint32_t>(queue_create_infos.size()),     // queueCreateInfoCount
+      queue_create_infos.data(),                            // pQueueCreateInfos
+      static_cast<uint32_t>(required_layers.size()),        // enabledLayerCount
+      required_layers.data(),                               // ppEnabledLayerNames
+      static_cast<uint32_t>(required_extensions.size()),    // enabledExtensionCount
+      required_extensions.data(),                           // ppEnabledExtensionNames
+      &enabled_features,                                    // pEnabledFeatures
+    };
+    THROW_ON_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
+
+    this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
+    vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
+  }
+
+  ~VulkanLogicalDevice()
+  {
+    vkDestroyDevice(this->device, nullptr);
+  }
+
+  VkDevice device;
+  VkQueue default_queue;
+  uint32_t default_queue_index;
+  VulkanPhysicalDevice physical_device;
+};
+
+class VulkanCommandPool {
+public:
+  VulkanCommandPool(VkDevice device, 
+                    VkCommandPoolCreateFlags flags, 
+                    uint32_t queue_family_index)
+    : device(device)
+  {
+    VkCommandPoolCreateInfo create_info {
+      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, // sType
+      nullptr,                                    // pNext 
+      flags,                                      // flags
+      queue_family_index                          // queueFamilyIndex 
+    };
+    THROW_ON_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->pool));
+  }
+
+  ~VulkanCommandPool()
+  {
+    vkDestroyCommandPool(this->device, this->pool, nullptr);
+  }
+
+  VkDevice device;
+  VkCommandPool pool;
+};
+
+class VulkanDevice {
+public:
+  VulkanDevice(const VulkanPhysicalDevice & physical_device,
+               const VkPhysicalDeviceFeatures & enabled_features,
+               const std::vector<const char *> & required_layers,
+               const std::vector<const char *> & required_extensions,
+               const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
+    : physical_device(physical_device)
+  {
+    this->logical_device = std::make_unique<VulkanLogicalDevice>(physical_device, 
+                                                                 enabled_features, 
+                                                                 required_layers, 
+                                                                 required_extensions, 
+                                                                 queue_create_infos);
+
+    this->device = this->logical_device->device;
+    this->default_queue = this->logical_device->default_queue;
+    this->default_queue_index = this->logical_device->default_queue_index;
+
+    this->pool = std::make_unique<VulkanCommandPool>(this->device, 
+                                                     VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, 
+                                                     this->default_queue_index);
+    this->default_pool = this->pool->pool;
+  }
+
+  ~VulkanDevice() {}
+
+  VkDevice device;
+  VkQueue default_queue;
+  uint32_t default_queue_index;
+  VkCommandPool default_pool;
+  VulkanPhysicalDevice physical_device;
+  
+private:
+  std::unique_ptr<VulkanLogicalDevice> logical_device;
+  std::unique_ptr<VulkanCommandPool> pool;
+};
+
 class VulkanDebugCallback {
 public:
   VulkanDebugCallback(const std::shared_ptr<VulkanInstance> & vulkan,
@@ -342,7 +434,7 @@ public:
       nullptr,                                        // pUserData 
     };
 
-    THROW_ERROR(this->vulkan->vkCreateDebugReportCallback(this->vulkan->instance, &create_info, nullptr, &this->callback));
+    THROW_ON_ERROR(this->vulkan->vkCreateDebugReportCallback(this->vulkan->instance, &create_info, nullptr, &this->callback));
   }
 
   ~VulkanDebugCallback()
@@ -352,67 +444,6 @@ public:
 
   VkDebugReportCallbackEXT callback;
   std::shared_ptr<VulkanInstance> vulkan;
-};
-
-class VulkanDevice {
-public:
-  VulkanDevice(const VulkanPhysicalDevice & physical_device,
-               const VkPhysicalDeviceFeatures & enabled_features,
-               const std::vector<std::string> & required_layers,
-               const std::vector<std::string> & required_extensions,
-               const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
-    : physical_device(physical_device)
-  {
-    if (!set_difference(required_layers, extract_layer_names(physical_device.layer_properties)).empty()) {
-      throw std::runtime_error("unsupported device layers");
-    }
-    if (!set_difference(required_extensions, extract_extension_names(physical_device.extension_properties)).empty()) {
-      throw std::runtime_error("unsupported device extensions");
-    }
-    std::vector<const char*> layer_names = string2char(required_layers);
-    std::vector<const char*> extension_names = string2char(required_extensions);
-
-    VkDeviceCreateInfo device_create_info {
-      VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,             // sType
-      nullptr,                                          // pNext
-      0,                                                // flags
-      static_cast<uint32_t>(queue_create_infos.size()), // queueCreateInfoCount
-      queue_create_infos.data(),                        // pQueueCreateInfos
-      static_cast<uint32_t>(layer_names.size()),        // enabledLayerCount
-      layer_names.data(),                               // ppEnabledLayerNames
-      static_cast<uint32_t>(extension_names.size()),    // enabledExtensionCount
-      extension_names.data(),                           // ppEnabledExtensionNames
-      &enabled_features,                                // pEnabledFeatures
-    };
-    THROW_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
-
-    this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
-    vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
-
-    VkCommandPoolCreateInfo pool_create_info = {
-      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,      // sType 
-      nullptr,                                         // pNext
-      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, // flags
-      queue_create_infos[0].queueFamilyIndex,          // queueFamilyIndex
-    };
-    THROW_ERROR(vkCreateCommandPool(this->device, &pool_create_info, nullptr, &this->default_pool));
-  }
-
-  ~VulkanDevice()
-  {
-    vkDestroyCommandPool(this->device, this->default_pool, nullptr);
-    vkDestroyDevice(this->device, nullptr);
-  }
-
-  VkDevice device;
-  uint32_t default_queue_index;
-  VkQueue default_queue;
-  VkQueue compute_queue;
-  VkQueue transfer_queue;
-  VkCommandPool default_pool;
-  VkCommandPool compute_pool;
-  VkCommandPool transfer_pool;
-  VulkanPhysicalDevice physical_device;
 };
 
 class VulkanSemaphore {
@@ -425,7 +456,7 @@ public:
       nullptr,                                 // pNext
       0                                        // flags (reserved for future use)
     };
-    THROW_ERROR(vkCreateSemaphore(this->device->device, &create_info, nullptr, &this->semaphore));
+    THROW_ON_ERROR(vkCreateSemaphore(this->device->device, &create_info, nullptr, &this->semaphore));
   }
 
   ~VulkanSemaphore()
@@ -478,7 +509,7 @@ public:
       oldSwapchain
     };
 
-    THROW_ERROR(this->vulkan->vkCreateSwapchain(this->device->device, &create_info, nullptr, &this->swapchain));
+    THROW_ON_ERROR(this->vulkan->vkCreateSwapchain(this->device->device, &create_info, nullptr, &this->swapchain));
   }
 
   ~VulkanSwapchain()
@@ -489,16 +520,16 @@ public:
   std::vector<VkImage> getSwapchainImages()
   {
     uint32_t count;
-    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, nullptr));
+    THROW_ON_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, nullptr));
     std::vector<VkImage> images(count);
-    THROW_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, images.data()));
+    THROW_ON_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, images.data()));
     return images;
   }
 
   uint32_t getNextImageIndex(const std::shared_ptr<VulkanSemaphore> & semaphore)
   {
     uint32_t index;
-    THROW_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, this->swapchain, UINT64_MAX, semaphore->semaphore, nullptr, &index));
+    THROW_ON_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, this->swapchain, UINT64_MAX, semaphore->semaphore, nullptr, &index));
     return index;
   };
 
@@ -523,7 +554,7 @@ public:
       descriptor_pool_sizes.data()                         // pPoolSizes
     };
 
-    THROW_ERROR(vkCreateDescriptorPool(this->device->device, &create_info, nullptr, &this->pool));
+    THROW_ON_ERROR(vkCreateDescriptorPool(this->device->device, &create_info, nullptr, &this->pool));
   }
 
   ~VulkanDescriptorPool()
@@ -549,7 +580,7 @@ public:
       descriptor_set_layout_bindings.data()                         // pBindings
     };
 
-    THROW_ERROR(vkCreateDescriptorSetLayout(this->device->device, &create_info, nullptr, &this->layout));
+    THROW_ON_ERROR(vkCreateDescriptorSetLayout(this->device->device, &create_info, nullptr, &this->layout));
   }
 
   ~VulkanDescriptorSetLayout()
@@ -578,7 +609,7 @@ public:
     };
 
     this->descriptor_sets.resize(count);
-    THROW_ERROR(vkAllocateDescriptorSets(this->device->device, &allocate_info, this->descriptor_sets.data()));
+    THROW_ON_ERROR(vkAllocateDescriptorSets(this->device->device, &allocate_info, this->descriptor_sets.data()));
   }
 
   ~VulkanDescriptorSets()
@@ -618,7 +649,7 @@ public:
       VK_FENCE_CREATE_SIGNALED_BIT         // flags
     };
 
-    THROW_ERROR(vkCreateFence(this->device->device, &create_info, nullptr, &this->fence));
+    THROW_ON_ERROR(vkCreateFence(this->device->device, &create_info, nullptr, &this->fence));
   }
   
   ~VulkanFence() 
@@ -646,7 +677,7 @@ public:
     };
 
     this->buffers.resize(count);
-    THROW_ERROR(vkAllocateCommandBuffers(this->device->device, &allocate_info, this->buffers.data()));
+    THROW_ON_ERROR(vkAllocateCommandBuffers(this->device->device, &allocate_info, this->buffers.data()));
   }
 
   ~VulkanCommandBuffers()
@@ -678,12 +709,12 @@ public:
       &inheritance_info,                           // pInheritanceInfo 
     };
 
-    THROW_ERROR(vkBeginCommandBuffer(this->buffers[buffer_index], &begin_info));
+    THROW_ON_ERROR(vkBeginCommandBuffer(this->buffers[buffer_index], &begin_info));
   }
 
   void end(size_t buffer_index = 0)
   {
-    THROW_ERROR(vkEndCommandBuffer(this->buffers[buffer_index]));
+    THROW_ON_ERROR(vkEndCommandBuffer(this->buffers[buffer_index]));
   }
 
   void submit(VkQueue queue, 
@@ -723,7 +754,7 @@ public:
       static_cast<uint32_t>(signal_semaphores.size()), // signalSemaphoreCount
       signal_semaphores.data(),                        // pSignalSemaphores
     };
-    THROW_ERROR(vkQueueSubmit(queue, 1, &submit_info, fence));
+    THROW_ON_ERROR(vkQueueSubmit(queue, 1, &submit_info, fence));
   }
 
   VkCommandBuffer buffer(size_t buffer_index = 0)
@@ -771,7 +802,7 @@ public:
       initial_layout,                                     // initialLayout
     };
 
-    THROW_ERROR(vkCreateImage(this->device->device, &create_info, nullptr, &this->image));
+    THROW_ON_ERROR(vkCreateImage(this->device->device, &create_info, nullptr, &this->image));
     vkGetImageMemoryRequirements(this->device->device, this->image, &this->memory_requirements);
   }
 
@@ -806,7 +837,7 @@ public:
       queueFamilyIndices.data(),                        // pQueueFamilyIndices  
     };
 
-    THROW_ERROR(vkCreateBuffer(this->device->device, &create_info, nullptr, &this->buffer));
+    THROW_ON_ERROR(vkCreateBuffer(this->device->device, &create_info, nullptr, &this->buffer));
     vkGetBufferMemoryRequirements(this->device->device, this->buffer, &this->memory_requirements);
   }
 
@@ -841,19 +872,19 @@ public:
       device->physical_device.getMemoryTypeIndex(requirements, flags), // memoryTypeIndex 
     };
 
-    THROW_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
+    THROW_ON_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
   }
 
   VulkanMemory(const std::shared_ptr<VulkanDevice> & device, const std::unique_ptr<VulkanImage> & image, VkMemoryPropertyFlags flags)
     : VulkanMemory(device, image->memory_requirements, flags)
   {
-    THROW_ERROR(vkBindImageMemory(this->device->device, image->image, this->memory, 0));
+    THROW_ON_ERROR(vkBindImageMemory(this->device->device, image->image, this->memory, 0));
   }
 
   VulkanMemory(const std::shared_ptr<VulkanDevice> & device, const std::unique_ptr<VulkanBuffer> & buffer, VkMemoryPropertyFlags flags)
     : VulkanMemory(device, buffer->memory_requirements, flags)
   {
-    THROW_ERROR(vkBindBufferMemory(this->device->device, buffer->buffer, this->memory, 0));
+    THROW_ON_ERROR(vkBindBufferMemory(this->device->device, buffer->buffer, this->memory, 0));
   }
 
   ~VulkanMemory()
@@ -879,7 +910,7 @@ public:
   void * map(size_t size)
   {
     void * data;
-    THROW_ERROR(vkMapMemory(this->device->device, this->memory, 0, size, 0, &data));
+    THROW_ON_ERROR(vkMapMemory(this->device->device, this->memory, 0, size, 0, &data));
     return data;
   }
 
@@ -919,7 +950,7 @@ public:
       subresource_range,                        // subresourceRange 
     };
 
-    THROW_ERROR(vkCreateImageView(this->device->device, &create_info, nullptr, &this->view));
+    THROW_ON_ERROR(vkCreateImageView(this->device->device, &create_info, nullptr, &this->view));
   }
 
   ~VulkanImageView()
@@ -972,7 +1003,7 @@ public:
       unnormalizedCoordinates,               // unnormalizedCoordinates
     };
 
-    THROW_ERROR(vkCreateSampler(this->device->device, &create_info, nullptr, &this->sampler));
+    THROW_ON_ERROR(vkCreateSampler(this->device->device, &create_info, nullptr, &this->sampler));
   }
 
   ~VulkanSampler()
@@ -998,7 +1029,7 @@ public:
       reinterpret_cast<const uint32_t*>(code.data()), // pCode
     };
 
-    THROW_ERROR(vkCreateShaderModule(this->device->device, &create_info, nullptr, &this->module));
+    THROW_ON_ERROR(vkCreateShaderModule(this->device->device, &create_info, nullptr, &this->module));
   }
 
   ~VulkanShaderModule()
@@ -1024,7 +1055,7 @@ public:
       nullptr,                                      // pInitialData
     };
 
-    THROW_ERROR(vkCreatePipelineCache(this->device->device, &create_info, nullptr, &this->cache));
+    THROW_ON_ERROR(vkCreatePipelineCache(this->device->device, &create_info, nullptr, &this->cache));
   }
 
   ~VulkanPipelineCache()
@@ -1056,7 +1087,7 @@ public:
       dependencies.data(),                        // pDependencies
     };
 
-    THROW_ERROR(vkCreateRenderPass(this->device->device, &create_info, nullptr, &this->renderpass));
+    THROW_ON_ERROR(vkCreateRenderPass(this->device->device, &create_info, nullptr, &this->renderpass));
   }
 
   ~VulkanRenderpass()
@@ -1090,7 +1121,7 @@ public:
       layers,                                    // layers
     };
 
-    THROW_ERROR(vkCreateFramebuffer(this->device->device, &create_info, nullptr, &this->framebuffer));
+    THROW_ON_ERROR(vkCreateFramebuffer(this->device->device, &create_info, nullptr, &this->framebuffer));
   }
 
   ~VulkanFramebuffer()
@@ -1119,7 +1150,7 @@ public:
       pushconstantranges.data(),                        // pPushConstantRanges
     };
 
-    THROW_ERROR(vkCreatePipelineLayout(this->device->device, &create_info, nullptr, &this->layout));
+    THROW_ON_ERROR(vkCreatePipelineLayout(this->device->device, &create_info, nullptr, &this->layout));
   }
 
   ~VulkanPipelineLayout()
@@ -1152,7 +1183,7 @@ public:
       basePipelineIndex,                              // basePipelineIndex
     };
 
-    THROW_ERROR(vkCreateComputePipelines(this->device->device, pipelineCache, 1, &create_info, nullptr, &this->pipeline));
+    THROW_ON_ERROR(vkCreateComputePipelines(this->device->device, pipelineCache, 1, &create_info, nullptr, &this->pipeline));
   }
 
   ~VulkanComputePipeline()
@@ -1300,7 +1331,7 @@ public:
       0,                                               // basePipelineIndex
     };
 
-    THROW_ERROR(vkCreateGraphicsPipelines(this->device->device, pipeline_cache, 1, &create_info, nullptr, &this->pipeline));
+    THROW_ON_ERROR(vkCreateGraphicsPipelines(this->device->device, pipeline_cache, 1, &create_info, nullptr, &this->pipeline));
   }
 
   ~VulkanGraphicsPipeline()

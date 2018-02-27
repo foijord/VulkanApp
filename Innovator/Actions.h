@@ -156,7 +156,7 @@ public:
   ~RenderAction() 
   {
     try {
-      THROW_ERROR(vkDeviceWaitIdle(this->device->device));
+      THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
     } catch (std::exception & e) {
       std::cerr << e.what() << std::endl;
     }
@@ -164,7 +164,7 @@ public:
 
   void apply(const std::shared_ptr<Node> & root)
   {
-    THROW_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
 
     this->command->begin();
     root->traverse(this);
@@ -200,7 +200,7 @@ public:
     vkCmdEndRenderPass(this->command->buffer());
     this->command->end();
 
-    THROW_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
     this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, {}, this->fence->fence);
 
     this->graphic_states.clear();
@@ -209,7 +209,7 @@ public:
 
   void clearCache()
   {
-    THROW_ERROR(vkDeviceWaitIdle(this->device->device));
+    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
     this->draw_commands.clear();
     this->compute_commands.clear();
   }
