@@ -18,53 +18,20 @@ public:
   VulkanSurfaceWin32(const std::shared_ptr<VulkanInstance> & vulkan, HWND hwnd, HINSTANCE hinstance)
     : vulkan(vulkan)
   {
-    VkWin32SurfaceCreateInfoKHR create_info {
+    VkWin32SurfaceCreateInfoKHR create_info{
       VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, // sType 
       nullptr,                                         // pNext
       0,                                               // flags (reserved for future use)
       hinstance,                                       // hinstance 
       hwnd,                                            // hwnd
     };
+
     THROW_ON_ERROR(vkCreateWin32SurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
   }
 
   ~VulkanSurfaceWin32()
   {
     vkDestroySurfaceKHR(this->vulkan->instance, this->surface, nullptr);
-  }
-
-  std::vector<VkPresentModeKHR> getPresentModes(const VulkanPhysicalDevice & device)
-  {
-    uint32_t mode_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(device.device, this->surface, &mode_count, nullptr));
-    std::vector<VkPresentModeKHR> modes(mode_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(device.device, this->surface, &mode_count, modes.data()));
-    return modes;
-  }
-
-  VkSurfaceCapabilitiesKHR getSurfaceCapabilities(const VulkanPhysicalDevice & device)
-  {
-    VkSurfaceCapabilitiesKHR capabilities;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(device.device, this->surface, &capabilities));
-    return capabilities;
-  }
-
-  std::vector<VkSurfaceFormatKHR> getSurfaceFormats(const VulkanPhysicalDevice & device)
-  {
-    uint32_t format_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(device.device, this->surface, &format_count, nullptr));
-    std::vector<VkSurfaceFormatKHR> formats(format_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(device.device, this->surface, &format_count, formats.data()));
-    return formats;
-  }
-
-  std::vector<VkBool32> getPresentationFilter(const VulkanPhysicalDevice & device)
-  {
-    std::vector<VkBool32> filter(device.queue_family_properties.size());
-    for (uint32_t i = 0; i < device.queue_family_properties.size(); i++) {
-      vkGetPhysicalDeviceSurfaceSupportKHR(device.device, i, this->surface, &filter[i]);
-    }
-    return filter;
   }
 
   VkSurfaceKHR surface;
@@ -194,9 +161,17 @@ public:
       VK_API_VERSION_1_0,                 // apiVersion
     };
 
-    this->vulkan = std::make_unique<VulkanInstance>(application_info, instance_layers, instance_extensions);
-    this->debugcb = std::make_unique<VulkanDebugCallback>(this->vulkan, VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT, DebugCallback);
-    this->surface = std::make_unique<VulkanSurfaceWin32>(this->vulkan, this->window, hinstance);
+    this->vulkan = std::make_unique<VulkanInstance>(application_info, 
+                                                    instance_layers, 
+                                                    instance_extensions);
+
+    this->debugcb = std::make_unique<VulkanDebugCallback>(this->vulkan, 
+                                                          VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT, 
+                                                          DebugCallback);
+
+    this->surface = std::make_unique<VulkanSurfaceWin32>(this->vulkan, 
+                                                         this->window, 
+                                                         hinstance);
 
     VkPhysicalDeviceFeatures required_device_features;
     ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
@@ -206,10 +181,15 @@ public:
 
     VulkanPhysicalDevice physical_device = this->vulkan->selectPhysicalDevice(required_device_features);
 
+    std::vector<VkBool32> presentation_filter(physical_device.queue_family_properties.size());
+    for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
+      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, this->surface->surface, &presentation_filter[i]);
+    }
+
     float queue_priorities[1] = { 1.0f };
     uint32_t queue_index = physical_device.getQueueIndex(
       VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
-      this->surface->getPresentationFilter(physical_device));
+      presentation_filter);
 
     std::vector<VkDeviceQueueCreateInfo> queue_create_info { {
       VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,   // sType
@@ -236,10 +216,21 @@ public:
                                                   queue_create_info);
 
     this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
-    this->surface_format = this->surface->getSurfaceFormats(this->device->physical_device)[0];
+
+    uint32_t format_count;
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface, &format_count, nullptr));
+    std::vector<VkSurfaceFormatKHR> surface_formats(format_count);
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface, &format_count, surface_formats.data()));
+
+    this->surface_format = surface_formats[0];
 
     this->present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-    std::vector<VkPresentModeKHR> present_modes = this->surface->getPresentModes(this->device->physical_device);
+
+    uint32_t mode_count;
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &mode_count, nullptr));
+    std::vector<VkPresentModeKHR> present_modes(mode_count);
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &mode_count, present_modes.data()));
+
     if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
     }
@@ -363,7 +354,9 @@ public:
     // make sure all work submitted is done before we start recreating stuff
     THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
 
-    this->surface_capabilities = this->surface->getSurfaceCapabilities(this->device->physical_device);
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device, 
+                                                                        this->surface->surface, 
+                                                                        &this->surface_capabilities));
     
     VkExtent2D extent2d = this->surface_capabilities.currentExtent;
     VkExtent3D extent3d = { extent2d.width, extent2d.height, 1 };
