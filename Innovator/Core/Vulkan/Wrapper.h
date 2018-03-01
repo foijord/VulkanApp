@@ -4,36 +4,38 @@
 
 #include <vector>
 #include <memory>
+#include <iostream>
 #include <algorithm>
 #include <stdexcept>
 
 namespace {
-  class VkTimeoutException : public std::exception {};
-  class VkNotReadyException : public std::exception {};
-  class VkIncompleteException : public std::exception {};
-  class VkSuboptimalException : public std::exception {};
-  class VkErrorOutOfDateException : public std::exception {};
-  class VkErrorDeviceLostException : public std::exception {};
-  class VkErrorSurfaceLostException : public std::exception {};
-  class VkErrorInvalidShaderException : public std::exception {};
-  class VkErrorFragmentedPoolException : public std::exception {};
-  class VkErrorTooManyObjectsException : public std::exception {};
-  class VkErrorLayerNotPresentException : public std::exception {};
-  class VkErrorMemoryMapFailedException : public std::exception {};
-  class VkErrorOutOfHostMemoryException : public std::exception {};
-  class VkErrorOutOfPoolMemoryException : public std::exception {};
-  class VkErrorValidationFailedException : public std::exception {};
-  class VkErrorNativeWindowInUseException : public std::exception {};
-  class VkErrorFeatureNotPresentException : public std::exception {};
-  class VkErrorOutOfDeviceMemoryException : public std::exception {};
-  class VkErrorFormatNotSupportedException : public std::exception {};
-  class VkErrorIncompatibleDriverException : public std::exception {};
-  class VkErrorExtensionNotPresentException : public std::exception {};
-  class VkErrorIncompatibleDisplayException : public std::exception {};
-  class VkErrorInitializationFailedException : public std::exception {};
-  class VkErrorInvalidExternalHandleException : public std::exception {};
+  class VkException: public std::exception {};
+  class VkTimeoutException : public VkException {};
+  class VkNotReadyException : public VkException {};
+  class VkIncompleteException : public VkException {};
+  class VkSuboptimalException : public VkException {};
+  class VkErrorOutOfDateException : public VkException {};
+  class VkErrorDeviceLostException : public VkException {};
+  class VkErrorSurfaceLostException : public VkException {};
+  class VkErrorInvalidShaderException : public VkException {};
+  class VkErrorFragmentedPoolException : public VkException {};
+  class VkErrorTooManyObjectsException : public VkException {};
+  class VkErrorLayerNotPresentException : public VkException {};
+  class VkErrorMemoryMapFailedException : public VkException {};
+  class VkErrorOutOfHostMemoryException : public VkException {};
+  class VkErrorOutOfPoolMemoryException : public VkException {};
+  class VkErrorValidationFailedException : public VkException {};
+  class VkErrorNativeWindowInUseException : public VkException {};
+  class VkErrorFeatureNotPresentException : public VkException {};
+  class VkErrorOutOfDeviceMemoryException : public VkException {};
+  class VkErrorFormatNotSupportedException : public VkException {};
+  class VkErrorIncompatibleDriverException : public VkException {};
+  class VkErrorExtensionNotPresentException : public VkException {};
+  class VkErrorIncompatibleDisplayException : public VkException {};
+  class VkErrorInitializationFailedException : public VkException {};
+  class VkErrorInvalidExternalHandleException : public VkException {};
 
-#define THROW_ON_ERROR(__function__) {                                                           \
+#define THROW_ON_ERROR(__function__) {                                                        \
 	VkResult __result__ = (__function__);                                                       \
   switch (__result__) {                                                                       \
     case VK_TIMEOUT: throw VkTimeoutException();                                              \
@@ -139,39 +141,37 @@ public:
   std::vector<VkLayerProperties> layer_properties;
 };
 
-class VulkanInstance {
+class VulkanInstanceBase {
 public:
-  VulkanInstance(const VkApplicationInfo & application_info,
-                 const std::vector<const char *> & required_layers,
-                 const std::vector<const char *> & required_extensions)
+  VulkanInstanceBase(const VkApplicationInfo & application_info,
+                     const std::vector<const char *> & required_layers,
+                     const std::vector<const char *> & required_extensions)
   {
-    uint32_t count;
-    // check that required layers are supported
-    THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&count, nullptr));
-    std::vector<VkLayerProperties> layer_properties(count);
-    THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&count, layer_properties.data()));
+    uint32_t layer_count;
+    THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
+    std::vector<VkLayerProperties> layer_properties(layer_count);
+    THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&layer_count, layer_properties.data()));
 
-    THROW_ON_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr));
-    std::vector<VkExtensionProperties> extension_properties(count);
-    THROW_ON_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &count, extension_properties.data()));
-
-    std::for_each(required_layers.begin(), required_layers.end(), 
-      [&](const char * layer_name) {
-        for (VkLayerProperties properties : layer_properties)
-          if (std::strcmp(layer_name, properties.layerName) == 0)
-            return;
-        throw std::runtime_error("unsupported layer: " + std::string(layer_name));
-      });
-
-    std::for_each(required_extensions.begin(), required_extensions.end(), 
-      [&](const char * extension_name) {
-        for (VkExtensionProperties properties : extension_properties)
-          if (std::strcmp(extension_name, properties.extensionName) == 0)
-            return;
-      throw std::runtime_error("unsupported extension: " + std::string(extension_name));
+    std::for_each(required_layers.begin(), required_layers.end(), [&](const char * layer_name) {
+      for (VkLayerProperties properties : layer_properties)
+        if (std::strcmp(layer_name, properties.layerName) == 0)
+          return;
+      throw std::runtime_error("Required instance layer " + std::string(layer_name) + " not supported.");
     });
 
-    VkInstanceCreateInfo create_info{
+    uint32_t extension_count;
+    THROW_ON_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr));
+    std::vector<VkExtensionProperties> extension_properties(extension_count);
+    THROW_ON_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extension_properties.data()));
+
+    std::for_each(required_extensions.begin(), required_extensions.end(), [&](const char * extension_name) {
+      for (VkExtensionProperties properties : extension_properties)
+        if (std::strcmp(extension_name, properties.extensionName) == 0)
+          return;
+      throw std::runtime_error("Required instance extension " + std::string(extension_name) + " not supported.");
+    });
+
+    VkInstanceCreateInfo create_info {
       VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,            // sType 
       nullptr,                                           // pNext 
       0,                                                 // flags
@@ -181,43 +181,57 @@ public:
       static_cast<uint32_t>(required_extensions.size()), // enabledExtensionCount
       required_extensions.data()                         // ppEnabledExtensionNames
     };
-    THROW_ON_ERROR(vkCreateInstance(&create_info, nullptr, &this->instance));
 
+    THROW_ON_ERROR(vkCreateInstance(&create_info, nullptr, &this->instance));
+  }
+
+  ~VulkanInstanceBase()
+  {
+    vkDestroyInstance(this->instance, nullptr);
+  }
+
+  VkInstance instance;
+};
+
+class VulkanInstance : public VulkanInstanceBase {
+public:
+  VulkanInstance(const VkApplicationInfo & application_info,
+                 const std::vector<const char *> & required_layers,
+                 const std::vector<const char *> & required_extensions)
+    : VulkanInstanceBase(application_info, required_layers, required_extensions)
+  {
     uint32_t physical_device_count;
     THROW_ON_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr));
+
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
     THROW_ON_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data()));
 
     for (const VkPhysicalDevice & physical_device : physical_devices) {
       this->physical_devices.push_back(VulkanPhysicalDevice(physical_device));
     }
-    {
-      auto get_proc_address = [](VkInstance instance, const std::string & name) {
-        PFN_vkVoidFunction address = vkGetInstanceProcAddr(instance, name.c_str());
-        if (!address) {
-          throw std::runtime_error("vkGetInstanceProcAddr failed for " + name);
-        }
-        return address;
-      };
 
-      this->vkQueuePresent = (PFN_vkQueuePresentKHR)get_proc_address(this->instance, "vkQueuePresentKHR");
-      this->vkCreateSwapchain = (PFN_vkCreateSwapchainKHR)get_proc_address(this->instance, "vkCreateSwapchainKHR");
-      this->vkAcquireNextImage = (PFN_vkAcquireNextImageKHR)get_proc_address(this->instance, "vkAcquireNextImageKHR");
-      this->vkDestroySwapchain = (PFN_vkDestroySwapchainKHR)get_proc_address(this->instance, "vkDestroySwapchainKHR");
-      this->vkGetSwapchainImages = (PFN_vkGetSwapchainImagesKHR)get_proc_address(this->instance, "vkGetSwapchainImagesKHR");
-      this->vkCreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)get_proc_address(this->instance, "vkCreateDebugReportCallbackEXT");
-      this->vkDestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)get_proc_address(this->instance, "vkDestroyDebugReportCallbackEXT");
-      this->vkGetPhysicalDeviceSurfaceSupport = (PFN_vkGetPhysicalDeviceSurfaceSupportKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceSupportKHR");
-      this->vkGetPhysicalDeviceSurfaceFormats = (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
-      this->vkGetPhysicalDeviceSurfaceCapabilities = (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-      this->vkGetPhysicalDeviceSurfacePresentModes = (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
-    }
+    auto get_proc_address = [](VkInstance instance, const std::string & name) {
+      PFN_vkVoidFunction address = vkGetInstanceProcAddr(instance, name.c_str());
+      if (!address) {
+        throw std::runtime_error("vkGetInstanceProcAddr failed for " + name);
+      }
+      return address;
+    };
+
+    this->vkQueuePresent = (PFN_vkQueuePresentKHR)get_proc_address(this->instance, "vkQueuePresentKHR");
+    this->vkCreateSwapchain = (PFN_vkCreateSwapchainKHR)get_proc_address(this->instance, "vkCreateSwapchainKHR");
+    this->vkAcquireNextImage = (PFN_vkAcquireNextImageKHR)get_proc_address(this->instance, "vkAcquireNextImageKHR");
+    this->vkDestroySwapchain = (PFN_vkDestroySwapchainKHR)get_proc_address(this->instance, "vkDestroySwapchainKHR");
+    this->vkGetSwapchainImages = (PFN_vkGetSwapchainImagesKHR)get_proc_address(this->instance, "vkGetSwapchainImagesKHR");
+    this->vkCreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)get_proc_address(this->instance, "vkCreateDebugReportCallbackEXT");
+    this->vkDestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)get_proc_address(this->instance, "vkDestroyDebugReportCallbackEXT");
+    this->vkGetPhysicalDeviceSurfaceSupport = (PFN_vkGetPhysicalDeviceSurfaceSupportKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceSupportKHR");
+    this->vkGetPhysicalDeviceSurfaceFormats = (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
+    this->vkGetPhysicalDeviceSurfaceCapabilities = (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+    this->vkGetPhysicalDeviceSurfacePresentModes = (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
   }
 
-  ~VulkanInstance()
-  {
-    vkDestroyInstance(this->instance, nullptr);
-  }
+  ~VulkanInstance() {}
 
   VulkanPhysicalDevice selectPhysicalDevice(const VkPhysicalDeviceFeatures & required_features) 
   {
@@ -284,8 +298,6 @@ public:
     throw std::runtime_error("Could not find physical device with the required features");
   }
 
-  VkInstance instance;
-
   PFN_vkQueuePresentKHR vkQueuePresent;
   PFN_vkCreateSwapchainKHR vkCreateSwapchain;
   PFN_vkAcquireNextImageKHR vkAcquireNextImage;
@@ -310,20 +322,18 @@ public:
                       const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
     : physical_device(physical_device)
   {
-    std::for_each(required_layers.begin(), required_layers.end(),
-      [&](const char * layer_name) {
+    std::for_each(required_layers.begin(), required_layers.end(), [&](const char * layer_name) {
       for (VkLayerProperties properties : physical_device.layer_properties)
         if (std::strcmp(layer_name, properties.layerName) == 0)
           return;
-      throw std::runtime_error("unsupported layer: " + std::string(layer_name));
+      throw std::runtime_error("Required device layer " + std::string(layer_name) + " not supported.");
     });
 
-    std::for_each(required_extensions.begin(), required_extensions.end(),
-      [&](const char * extension_name) {
+    std::for_each(required_extensions.begin(), required_extensions.end(), [&](const char * extension_name) {
       for (VkExtensionProperties properties : physical_device.extension_properties)
         if (std::strcmp(extension_name, properties.extensionName) == 0)
           return;
-      throw std::runtime_error("unsupported extension: " + std::string(extension_name));
+      throw std::runtime_error("Required device extension " + std::string(extension_name) + " not supported.");
     });
 
     VkDeviceCreateInfo device_create_info {
@@ -339,9 +349,6 @@ public:
       &enabled_features,                                    // pEnabledFeatures
     };
     THROW_ON_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
-
-    this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
-    vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
   }
 
   ~VulkanLogicalDevice()
@@ -350,72 +357,39 @@ public:
   }
 
   VkDevice device;
-  VkQueue default_queue;
-  uint32_t default_queue_index;
   VulkanPhysicalDevice physical_device;
 };
 
-class VulkanCommandPool {
-public:
-  VulkanCommandPool(VkDevice device, 
-                    VkCommandPoolCreateFlags flags, 
-                    uint32_t queue_family_index)
-    : device(device)
-  {
-    VkCommandPoolCreateInfo create_info {
-      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, // sType
-      nullptr,                                    // pNext 
-      flags,                                      // flags
-      queue_family_index                          // queueFamilyIndex 
-    };
-    THROW_ON_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->pool));
-  }
-
-  ~VulkanCommandPool()
-  {
-    vkDestroyCommandPool(this->device, this->pool, nullptr);
-  }
-
-  VkDevice device;
-  VkCommandPool pool;
-};
-
-class VulkanDevice {
+class VulkanDevice : public VulkanLogicalDevice {
 public:
   VulkanDevice(const VulkanPhysicalDevice & physical_device,
                const VkPhysicalDeviceFeatures & enabled_features,
                const std::vector<const char *> & required_layers,
                const std::vector<const char *> & required_extensions,
                const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
-    : physical_device(physical_device)
-  {
-    this->logical_device = std::make_unique<VulkanLogicalDevice>(physical_device, 
-                                                                 enabled_features, 
-                                                                 required_layers, 
-                                                                 required_extensions, 
-                                                                 queue_create_infos);
+    : VulkanLogicalDevice(physical_device, enabled_features, required_layers, required_extensions, queue_create_infos)
+ {
+    this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
+    vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
 
-    this->device = this->logical_device->device;
-    this->default_queue = this->logical_device->default_queue;
-    this->default_queue_index = this->logical_device->default_queue_index;
+    VkCommandPoolCreateInfo create_info {
+      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,       // sType
+      nullptr,                                          // pNext 
+      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,  // flags
+      this->default_queue_index,                        // queueFamilyIndex 
+    };
 
-    this->pool = std::make_unique<VulkanCommandPool>(this->device, 
-                                                     VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, 
-                                                     this->default_queue_index);
-    this->default_pool = this->pool->pool;
+    THROW_ON_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->default_pool));
   }
 
-  ~VulkanDevice() {}
+  ~VulkanDevice() 
+  {
+    vkDestroyCommandPool(this->device, this->default_pool, nullptr);
+  }
 
-  VkDevice device;
   VkQueue default_queue;
   uint32_t default_queue_index;
   VkCommandPool default_pool;
-  VulkanPhysicalDevice physical_device;
-  
-private:
-  std::unique_ptr<VulkanLogicalDevice> logical_device;
-  std::unique_ptr<VulkanCommandPool> pool;
 };
 
 class VulkanDebugCallback {
@@ -764,7 +738,6 @@ public:
 
   std::shared_ptr<VulkanDevice> device;
   std::vector<VkCommandBuffer> buffers;
-  std::shared_ptr<VulkanCommandPool> pool;
 };
 
 class VulkanImage {
@@ -803,7 +776,6 @@ public:
     };
 
     THROW_ON_ERROR(vkCreateImage(this->device->device, &create_info, nullptr, &this->image));
-    vkGetImageMemoryRequirements(this->device->device, this->image, &this->memory_requirements);
   }
 
   ~VulkanImage()
@@ -812,7 +784,6 @@ public:
   }
 
   VkImage image;
-  VkMemoryRequirements memory_requirements;
   std::shared_ptr<VulkanDevice> device;
 };
 
@@ -838,7 +809,6 @@ public:
     };
 
     THROW_ON_ERROR(vkCreateBuffer(this->device->device, &create_info, nullptr, &this->buffer));
-    vkGetBufferMemoryRequirements(this->device->device, this->buffer, &this->memory_requirements);
   }
 
   ~VulkanBuffer()
@@ -847,13 +817,14 @@ public:
   }
 
   VkBuffer buffer;
-  VkMemoryRequirements memory_requirements;
   std::shared_ptr<VulkanDevice> device;
 };
 
 class VulkanMemory {
 public:
-  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, VkMemoryRequirements requirements, VkMemoryPropertyFlags flags)
+  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, 
+               VkMemoryRequirements requirements, 
+               VkMemoryPropertyFlags flags)
     : device(device)
   {
     VkAllocationCallbacks allocation_callbacks {
@@ -865,7 +836,7 @@ public:
       nullptr,                     // pfnInternalFree
     };
 
-    VkMemoryAllocateInfo allocate_info = {
+    VkMemoryAllocateInfo allocate_info {
       VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,                          // sType 
       nullptr,                                                         // pNext 
       requirements.size,                                               // allocationSize 
@@ -873,18 +844,6 @@ public:
     };
 
     THROW_ON_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
-  }
-
-  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, const std::unique_ptr<VulkanImage> & image, VkMemoryPropertyFlags flags)
-    : VulkanMemory(device, image->memory_requirements, flags)
-  {
-    THROW_ON_ERROR(vkBindImageMemory(this->device->device, image->image, this->memory, 0));
-  }
-
-  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, const std::unique_ptr<VulkanBuffer> & buffer, VkMemoryPropertyFlags flags)
-    : VulkanMemory(device, buffer->memory_requirements, flags)
-  {
-    THROW_ON_ERROR(vkBindBufferMemory(this->device->device, buffer->buffer, this->memory, 0));
   }
 
   ~VulkanMemory()
@@ -919,47 +878,83 @@ public:
     vkUnmapMemory(this->device->device, this->memory);
   }
 
-  void memcpy(const void * data, size_t size)
+  class MemoryCopy {
+  public:
+    MemoryCopy(VulkanMemory * memory, const void * src, size_t size)
+      : memory(memory) {
+      ::memcpy(this->memory->map(size), src, size);
+    }
+    ~MemoryCopy() {
+      this->memory->unmap();
+    }
+    VulkanMemory * memory;
+  };
+
+  void memcpy(const void * src, size_t size)
   {
-    ::memcpy(this->map(size), data, size);
-    this->unmap();
+    MemoryCopy copy(this, src, size);
   }
 
   VkDeviceMemory memory;
   std::shared_ptr<VulkanDevice> device;
 };
 
+class VulkanImageMemory : public VulkanMemory {
+public:
+  VulkanImageMemory(const std::shared_ptr<VulkanImage> & image, 
+                    const VkMemoryRequirements & memory_requirements, 
+                    VkMemoryPropertyFlags flags)
+    : VulkanMemory(image->device, memory_requirements, flags)
+  {
+    THROW_ON_ERROR(vkBindImageMemory(image->device->device, image->image, this->memory, 0));
+  }
+
+  ~VulkanImageMemory() {}
+};
+
+class VulkanBufferMemory : public VulkanMemory {
+public:
+  VulkanBufferMemory(const std::shared_ptr<VulkanBuffer> & buffer, 
+                     const VkMemoryRequirements & memory_requirements,
+                     VkMemoryPropertyFlags flags)
+    : VulkanMemory(buffer->device, memory_requirements, flags)
+  {
+    THROW_ON_ERROR(vkBindBufferMemory(buffer->device->device, buffer->buffer, this->memory, 0));
+  }
+
+  ~VulkanBufferMemory() {}
+};
+
 class VulkanImageView {
 public:
-  VulkanImageView(const std::shared_ptr<VulkanDevice> & device,
-                  VkImage image, 
-                  VkFormat format, 
+  VulkanImageView(const std::shared_ptr<VulkanImage> & image,
+                  VkFormat format,
                   VkImageViewType view_type, 
                   VkComponentMapping components,
                   VkImageSubresourceRange subresource_range)
-    : device(device)
+    : image(image)
   {
     VkImageViewCreateInfo create_info {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, // sType 
       nullptr,                                  // pNext 
       0,                                        // flags (reserved for future use)
-      image,                                    // image 
+      this->image->image,                       // image 
       view_type,                                // viewType 
       format,                                   // format 
       components,                               // components 
       subresource_range,                        // subresourceRange 
     };
 
-    THROW_ON_ERROR(vkCreateImageView(this->device->device, &create_info, nullptr, &this->view));
+    THROW_ON_ERROR(vkCreateImageView(this->image->device->device, &create_info, nullptr, &this->view));
   }
 
   ~VulkanImageView()
   {
-    vkDestroyImageView(this->device->device, this->view, nullptr);
+    vkDestroyImageView(this->image->device->device, this->view, nullptr);
   }
 
   VkImageView view;
-  std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanImage> image;
 };
 
 class VulkanSampler {

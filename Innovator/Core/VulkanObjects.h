@@ -17,14 +17,24 @@ public:
   VulkanBufferObject(const std::shared_ptr<VulkanDevice> & device,
                      size_t size,
                      VkBufferUsageFlagBits usage,
-                     VkMemoryPropertyFlags flags)
-    : buffer(std::make_unique<VulkanBuffer>(device, 0, size, usage, VK_SHARING_MODE_EXCLUSIVE)),
-      memory(std::make_unique<VulkanMemory>(device, this->buffer, flags))
-  {}
+                     VkMemoryPropertyFlags memory_property_flags)
+  {
+    this->buffer = std::make_shared<VulkanBuffer>(device, 
+                                                  0, 
+                                                  size, 
+                                                  usage, 
+                                                  VK_SHARING_MODE_EXCLUSIVE);
+    
+    VkMemoryRequirements memory_requirements;
+    vkGetBufferMemoryRequirements(device->device, this->buffer->buffer, &memory_requirements);
+    this->memory = std::make_unique<VulkanBufferMemory>(this->buffer, 
+                                                        memory_requirements, 
+                                                        memory_property_flags);
+  }
 
   ~VulkanBufferObject() {}
 
-  std::unique_ptr<VulkanBuffer> buffer;
+  std::shared_ptr<VulkanBuffer> buffer;
   std::unique_ptr<VulkanMemory> memory;
 };
 
@@ -47,7 +57,7 @@ public:
       layout(layout), 
       subresource_range(subresource_range)
   {
-    this->image = std::make_unique<VulkanImage>(
+    this->image = std::make_shared<VulkanImage>(
       device,
       0,
       image_type,
@@ -62,18 +72,19 @@ public:
       std::vector<uint32_t>(),
       layout);
 
-    this->memory = std::make_unique<VulkanMemory>(
-      device,
+    VkMemoryRequirements memory_requirements;
+    vkGetImageMemoryRequirements(this->device->device, this->image->image, &memory_requirements);
+    this->memory = std::make_unique<VulkanImageMemory>(
       this->image,
+      memory_requirements,
       memory_property_flags);
 
     this->view = std::make_unique<VulkanImageView>(
-      device,
-      this->image->image,
+      this->image,
       format,
       view_type,
       component_mapping,
-      this->subresource_range);
+      subresource_range);
   }
 
   ~ImageObject() {}
@@ -99,6 +110,7 @@ public:
                                                             texture.size(), 
                                                             VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
                                                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
     this->cpu_buffer->memory->memcpy(texture.data(), texture.size());
 
     VkDeviceSize buffer_offset = 0;
@@ -140,7 +152,7 @@ public:
 
   std::shared_ptr<VulkanDevice> device;
 
-  std::unique_ptr<VulkanImage> image;
+  std::shared_ptr<VulkanImage> image;
   std::unique_ptr<VulkanMemory> memory;
   std::unique_ptr<VulkanImageView> view;
 
