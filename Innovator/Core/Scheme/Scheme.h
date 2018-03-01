@@ -14,8 +14,8 @@
 class Expression;
 class Environment;
 
-std::shared_ptr<class Expression> eval(std::shared_ptr<Expression> exp,
-                                       std::shared_ptr<Environment> env);
+std::shared_ptr<class Expression> eval(std::shared_ptr<Expression> & exp,
+                                       std::shared_ptr<Environment> & env);
 
 class Expression : public std::list<std::shared_ptr<Expression>> {
 public:
@@ -151,7 +151,7 @@ public:
     }
   }
   
-  virtual std::string toString()
+  virtual std::string string()
   {
     return this->value ? "#t" : "#f";
   }
@@ -161,7 +161,7 @@ public:
 
 class Quote : public Expression {
 public:
-  Quote(std::shared_ptr<Expression> exp)
+  Quote(const std::shared_ptr<Expression> & exp)
     : exp(exp) 
   {}
   
@@ -175,7 +175,8 @@ public:
 
 class Define : public Expression {
 public:
-  Define(std::shared_ptr<Symbol> var, std::shared_ptr<Expression> exp) 
+  Define(const std::shared_ptr<Symbol> & var, 
+         const std::shared_ptr<Expression> & exp)
     : var(var), exp(exp)
   {}
   
@@ -191,9 +192,9 @@ public:
 
 class If : public Expression {
 public:
-  If(std::shared_ptr<Expression> test, 
-     std::shared_ptr<Expression> conseq, 
-     std::shared_ptr<Expression> alt) 
+  If(const std::shared_ptr<Expression> & test,
+     const std::shared_ptr<Expression> & conseq,
+     const std::shared_ptr<Expression> & alt)
     : test(test), conseq(conseq), alt(alt)
   {}
   
@@ -207,9 +208,9 @@ public:
 
 class Function : public Expression {
 public:
-  Function(std::shared_ptr<Expression> parms, 
-           std::shared_ptr<Expression> body, 
-           std::shared_ptr<Environment> env)
+  Function(const std::shared_ptr<Expression> & parms,
+           const std::shared_ptr<Expression> & body,
+           const std::shared_ptr<Environment> & env)
     : parms(parms), body(body), env(env) 
   {}
   
@@ -219,7 +220,8 @@ public:
 
 class Lambda : public Expression {
 public:
-  Lambda(std::shared_ptr<Expression> parms, std::shared_ptr<Expression> body) 
+  Lambda(const std::shared_ptr<Expression> & parms, 
+         const std::shared_ptr<Expression> & body)
     : parms(parms), body(body) 
   {}
   
@@ -235,7 +237,7 @@ class Callable : public Expression {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args) = 0;
   
-  std::vector<double> getDoubleArgs(const std::shared_ptr<Expression> & args)
+  static std::vector<double> argvec(const std::shared_ptr<Expression> & args)
   {
     std::vector<double> dargs(args->size());
     std::transform(args->begin(), args->end(), dargs.begin(), [](auto & arg) {
@@ -250,7 +252,7 @@ class Operator : public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    vector<double> dargs = this->getDoubleArgs(args);
+    std::vector<double> dargs = Callable::argvec(args);
     return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs[0], op));
   }
   
@@ -266,7 +268,7 @@ class Less : public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    std::vector<double> dargs = this->getDoubleArgs(args);
+    std::vector<double> dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] < dargs[1]);
   }
 };
@@ -275,7 +277,7 @@ class More : public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    std::vector<double> dargs = this->getDoubleArgs(args);
+    std::vector<double> dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] > dargs[1]);
   }
 };
@@ -284,7 +286,7 @@ class Same: public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    std::vector<double> dargs = this->getDoubleArgs(args);
+    std::vector<double> dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] == dargs[1]);
   }
 };
@@ -305,22 +307,8 @@ public:
   }
 };
 
-class ParseTree : public std::vector<ParseTree> {
-public:
-  ParseTree(std::sregex_token_iterator & it)
-  {
-    if (it->str() == "(") {
-      while (*(++it) != ")") {
-        this->push_back(ParseTree(it));
-      }
-    }
-    this->token = *it;
-  }
-  std::string token;
-};
-
-std::shared_ptr<Expression> eval(std::shared_ptr<Expression> exp, 
-                                 std::shared_ptr<Environment> env)
+std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp, 
+                                 std::shared_ptr<Environment> & env)
 {
   while (true) {
     const type_info &type = typeid(*exp.get());
@@ -354,6 +342,20 @@ std::shared_ptr<Expression> eval(std::shared_ptr<Expression> exp,
     }
   }
 }
+
+class ParseTree : public std::vector<ParseTree> {
+public:
+  ParseTree(std::sregex_token_iterator & it)
+  {
+    if (it->str() == "(") {
+      while (*(++it) != ")") {
+        this->push_back(ParseTree(it));
+      }
+    }
+    this->token = *it;
+  }
+  std::string token;
+};
 
 std::shared_ptr<Expression> parse(const ParseTree & parsetree)
 {
