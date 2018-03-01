@@ -1,12 +1,10 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 
-#include <Viewer.h>
+#include <Application.h>
 #include <Innovator/Nodes.h>
-#include <Innovator/Actions.h>
-
+#include <Innovator/Core/Scheme/Scheme.h>
 #include <glm/glm.hpp>
-
 #include <iostream>
 
 using namespace std;
@@ -95,34 +93,21 @@ public:
 };
 
 
-class VolumeViewer : public VulkanViewer {
-public:
-  VolumeViewer(HINSTANCE hinstance)
-    : VulkanViewer(hinstance, 1000, 800)
-  {
-    this->setSceneGraph(std::make_shared<Crate>());
-  }
-
-  virtual void keyDown(uint32_t key)
-  {
-    switch (key) {
-    case 'S': {
-      this->setSceneGraph(std::make_shared<ComputeTest>());
-      this->redraw();
-      break;
-    }
-    default:
-      VulkanViewer::keyDown(key);
-      break;
-    }
-  }
-};
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR pCmdLine, _In_ int nCmdShow)
 {
+  Scheme scheme;
+  scheme.eval("(define twice (lambda (x) (* 2 x)))");
+  scheme.eval("(define repeat (lambda (f) (lambda (x) (f (f x)))))");
+  scheme.eval("(define sum(lambda(n acc) (if (= n 0) acc(sum(-n 1) (+n acc)))))");
+  string twice = scheme.eval("(twice 1)");
+  string repeat = scheme.eval("((repeat twice) 10)");
+  string sum = scheme.eval("(sum 100 1)");
+
   try {
-    VolumeViewer viewer(hInstance);
-    viewer.run();
+    VulkanApplication app(hInstance);
+    app.viewer->setSceneGraph(std::make_shared<Crate>());
+    app.run();
   }
   catch (std::exception & e) {
     MessageBox(nullptr, e.what(), "Alert", MB_OK);

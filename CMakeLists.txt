@@ -1,7 +1,7 @@
 
 cmake_minimum_required(VERSION 3.10)
 
-project(VulkanViewer)
+project(VulkanApp)
 
 set(TARGET_NAME ${PROJECT_NAME})
 
@@ -17,11 +17,13 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/External/include)
 add_executable(${TARGET_NAME} WIN32
   main.cpp
   Viewer.h
+  Application.h
   Innovator/Node.h
   Innovator/Nodes.h
   Innovator/Actions.h
   Innovator/Core/State.h
   Innovator/Core/VulkanObjects.h
+  Innovator/Core/Scheme/Scheme.h
   Innovator/Core/Vulkan/Wrapper.h)
 
 target_link_libraries(${TARGET_NAME} ${Vulkan_LIBRARY})
@@ -39,16 +41,16 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
 
 set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
 
-add_custom_command(TARGET VulkanViewer POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:VulkanViewer>/Shaders)
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${TARGET_NAME}>/Shaders)
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
   get_filename_component(FILE_NAME ${GLSL} NAME)
-  add_custom_command(TARGET VulkanViewer POST_BUILD
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o $<TARGET_FILE_DIR:VulkanViewer>/Shaders/${FILE_NAME}.spv
+  add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o $<TARGET_FILE_DIR:${TARGET_NAME}>/Shaders/${FILE_NAME}.spv
     DEPENDS ${GLSL})
   
 endforeach(GLSL)
 
-add_custom_command(TARGET VulkanViewer POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Textures $<TARGET_FILE_DIR:VulkanViewer>/Textures)
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Textures $<TARGET_FILE_DIR:${TARGET_NAME}>/Textures)

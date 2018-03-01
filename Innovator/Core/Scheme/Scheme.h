@@ -1,3 +1,4 @@
+#pragma once
 
 #include <map>
 #include <list>
@@ -5,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <numeric>
+#include <typeinfo>
 #include <iostream>
 #include <algorithm>
 #include <functional>
@@ -19,32 +21,17 @@ shared_ptr<class Expression> eval(shared_ptr<Expression> exp,
 
 class Expression : public list<shared_ptr<Expression>> {
 public:
-  enum Type {
-    SYMBOL,
-    NUMBER,
-    BOOLEAN,
-    QUOTE,
-    DEFINE,
-    SET,
-    IF,
-    LIST,
-    LAMBDA,
-    FUNCTION
-  };
-
-  Expression(Type type = LIST);
+  Expression();
   Expression(Expression::iterator begin, Expression::iterator end);
-  
-  virtual string toString();
-  virtual shared_ptr<Expression> eval(shared_ptr<Environment> & env);
 
-  Type type;
+  virtual shared_ptr<Expression> eval(shared_ptr<Environment> & env);
+  virtual string toString();
+
 };
 
 class Environment : public map<string, shared_ptr<Expression>> {
 public:
   Environment();
-  
   Environment(shared_ptr<Expression> & parms,
               shared_ptr<Expression> & args,
               const shared_ptr<Environment> & outer = make_shared<Environment>());
@@ -66,7 +53,6 @@ public:
 
 
 Environment::Environment() {}
-  
 Environment::Environment(shared_ptr<Expression> & parms,
                          shared_ptr<Expression> & args,
                          const shared_ptr<Environment> & outer)
@@ -92,13 +78,10 @@ Environment::getEnv(const string & sym)
 }
 
 
-Expression::Expression(Type type)
-  : type(type)
-{}
+Expression::Expression() {}
   
 Expression::Expression(Expression::iterator begin, Expression::iterator end)
-  : list<shared_ptr<Expression>>(begin, end)
-{}
+  : list<shared_ptr<Expression>>(begin, end) {}
   
 string
 Expression::toString()
@@ -121,8 +104,7 @@ Expression::eval(shared_ptr<Environment> & env)
 }
   
 Symbol::Symbol(const string & token) 
-  : Expression(SYMBOL), token(token)
-{}
+  : token(token) {}
   
 string
 Symbol::toString()
@@ -139,12 +121,10 @@ Symbol::eval(shared_ptr<Environment> & env)
 class Number : public Expression {
 public:
   Number(double value) 
-    : Expression(NUMBER), value(value)
-  {}
+    : value(value) {}
 
   Number(const string & token) 
-    : Expression(NUMBER), value(stod(token))
-  {}
+    : Number(stod(token)) {}
   
   virtual string toString()
   {
@@ -157,11 +137,9 @@ public:
 class Boolean : public Expression {
 public:
   Boolean(bool value) 
-    : Expression(BOOLEAN), value(value)
-  {}
+    : value(value) {}
   
   Boolean(const string & token)
-    : Expression(BOOLEAN)
   {
     if (token == "#t") {
       this->value = true;
@@ -185,8 +163,7 @@ public:
 class Quote : public Expression {
 public:
   Quote(shared_ptr<Expression> exp)
-    : Expression(QUOTE), exp(exp)
-  {}
+    : exp(exp) {}
   
   virtual shared_ptr<Expression> eval(shared_ptr<Environment> & env)
   {
@@ -199,8 +176,7 @@ public:
 class Define : public Expression {
 public:
   Define(shared_ptr<Symbol> var, shared_ptr<Expression> exp) 
-    : Expression(DEFINE), var(var), exp(exp)
-  {}
+    : var(var), exp(exp) {}
   
   virtual shared_ptr<Expression> eval(shared_ptr<Environment> & env)
   {
@@ -215,8 +191,7 @@ public:
 class If : public Expression {
 public:
   If(shared_ptr<Expression> test, shared_ptr<Expression> conseq, shared_ptr<Expression> alt) 
-    : Expression(IF), test(test), conseq(conseq), alt(alt)
-  {}
+    : test(test), conseq(conseq), alt(alt) {}
   
   virtual shared_ptr<Expression> eval(shared_ptr<Environment> & env)
   {
@@ -229,8 +204,7 @@ public:
 class Function : public Expression {
 public:
   Function(shared_ptr<Expression> parms, shared_ptr<Expression> body, shared_ptr<Environment> env)
-    : Expression(FUNCTION), parms(parms), body(body), env(env)
-  {}
+    : parms(parms), body(body), env(env) {}
   
   shared_ptr<Environment> env;
   shared_ptr<Expression> parms, body;
@@ -239,8 +213,7 @@ public:
 class Lambda : public Expression {
 public:
   Lambda(shared_ptr<Expression> parms, shared_ptr<Expression> body) 
-    : Expression(LAMBDA), parms(parms), body(body)
-  {}
+    : parms(parms), body(body) {}
   
   virtual shared_ptr<Expression> eval(shared_ptr<Environment> & env)
   {
@@ -339,36 +312,34 @@ public:
 shared_ptr<Expression> eval(shared_ptr<Expression> exp, shared_ptr<Environment> env)
 {
   while (true) {
-    switch (exp->type) {
-      case Expression::NUMBER:
-      case Expression::BOOLEAN:
-        return exp;
+    const type_info &type = typeid(*exp.get());
+    if (type == typeid(Number) || 
+        type == typeid(Boolean)) {
+      return exp;
+    } 
+    else if (type == typeid(Quote) ||
+             type == typeid(Symbol) ||
+             type == typeid(Define) ||
+             type == typeid(Lambda)) {
+      return exp->eval(env);
+    } 
+    else if (type == typeid(If)) {
+      exp = exp->eval(env);
+      continue;
+    }
+    else {
+      auto exps = exp->eval(env);
+      auto front = exps->front();
+      exps->pop_front();
 
-      case Expression::SET:
-      case Expression::QUOTE:
-      case Expression::SYMBOL:
-      case Expression::DEFINE:
-      case Expression::LAMBDA:
-        return exp->eval(env);
-
-      case Expression::IF:
-        exp = exp->eval(env);
-        continue;
-
-      default: {
-        auto exps = exp->eval(env);
-        auto front = exps->front();
-        exps->pop_front();
-        
-        if (front->type == Expression::FUNCTION) {
-          auto func = dynamic_pointer_cast<Function>(front);
-          exp = func->body;
-          env = make_shared<Environment>(func->parms, exps, func->env);
-        }
-        else {
-          auto builtin = dynamic_pointer_cast<Callable>(front);
-          return (*builtin)(exps);
-        }
+      if (typeid(*front.get()) == typeid(Function)) {
+        auto func = dynamic_pointer_cast<Function>(front);
+        exp = func->body;
+        env = make_shared<Environment>(func->parms, exps, func->env);
+      }
+      else {
+        auto builtin = dynamic_pointer_cast<Callable>(front);
+        return (*builtin)(exps);
       }
     }
   }
@@ -455,62 +426,35 @@ shared_ptr<Expression> parse(const ParseTree & parsetree)
   return list;
 }
 
-int main() {
-  regex tokenizer("[()]|[a-z]+|[0-9]+|[+*-/<>=]");
+class Scheme {
+public:
+  Scheme()
+  {
+    this->tokenizer = std::regex("[()]|[a-z]+|[0-9]+|[+*-/<>=]");
+    this->environment = make_shared<Environment>();
 
-  auto global_env = make_shared<Environment>();
-  (*global_env)["+"] = make_shared<Add>();
-  (*global_env)["-"] = make_shared<Sub>();
-  (*global_env)["/"] = make_shared<Div>();
-  (*global_env)["*"] = make_shared<Mul>();
-  (*global_env)["<"] = make_shared<Less>();
-  (*global_env)[">"] = make_shared<More>();
-  (*global_env)["="] = make_shared<Same>();
-  (*global_env)["car"] = make_shared<Car>();
-  (*global_env)["cdr"] = make_shared<Cdr>();
-  (*global_env)["pi"] = make_shared<Number>(3.14159265358979323846);
-
-  while (true) {
-    cout << "scm> ";
-    string input;
-    {
-      input = string("(define twice (lambda (x) (* 2 x)))");
-      sregex_token_iterator tokens(input.begin(), input.end(), tokenizer);
-      ParseTree parsetree(tokens);
-      auto exp = parse(parsetree);
-      eval(exp, global_env);
-    }
-    {
-      input = string("(define repeat (lambda (f) (lambda (x) (f (f x)))))");
-      sregex_token_iterator tokens(input.begin(), input.end(), tokenizer);
-      ParseTree parsetree(tokens);
-      auto exp = parse(parsetree);
-      eval(exp, global_env);
-    }
-    {
-      input = string("(define sum(lambda(n acc) (if (= n 0) acc(sum(-n 1) (+n acc)))))");
-      sregex_token_iterator tokens(input.begin(), input.end(), tokenizer);
-      ParseTree parsetree(tokens);
-      auto exp = parse(parsetree);
-      eval(exp, global_env);
-    }
-    {
-      input = string("(sum 1000 0)");
-      sregex_token_iterator tokens(input.begin(), input.end(), tokenizer);
-      ParseTree parsetree(tokens);
-      auto exp = parse(parsetree);
-      eval(exp, global_env);
-    }
-    getline(cin, input);
-    sregex_token_iterator tokens(input.begin(), input.end(), tokenizer);
-    try {
-      ParseTree parsetree(tokens);
-      auto exp(parse(parsetree));
-      cout << "=> " << eval(exp, global_env)->toString() << endl;
-    }
-    catch (runtime_error & e) {
-      cout << e.what() << endl;
-    }
+    (*this->environment)["+"] = make_shared<Add>();
+    (*this->environment)["-"] = make_shared<Sub>();
+    (*this->environment)["/"] = make_shared<Div>();
+    (*this->environment)["*"] = make_shared<Mul>();
+    (*this->environment)["<"] = make_shared<Less>();
+    (*this->environment)[">"] = make_shared<More>();
+    (*this->environment)["="] = make_shared<Same>();
+    (*this->environment)["car"] = make_shared<Car>();
+    (*this->environment)["cdr"] = make_shared<Cdr>();
+    (*this->environment)["pi"] = make_shared<Number>(3.14159265358979323846);
   }
-  return 0;
-}
+
+  ~Scheme() {}
+
+  std::string eval(const std::string & input)
+  {
+    sregex_token_iterator tokens(input.begin(), input.end(), tokenizer);
+    ParseTree parsetree(tokens);
+    auto exp = parse(parsetree);
+    return ::eval(exp, this->environment)->toString();
+  }
+
+  std::regex tokenizer;
+  std::shared_ptr<Environment> environment;
+};
