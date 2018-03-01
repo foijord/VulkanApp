@@ -18,9 +18,9 @@ add_executable(${TARGET_NAME} WIN32
   main.cpp
   Viewer.h
   Application.h
-  Innovator/Node.h
   Innovator/Nodes.h
   Innovator/Actions.h
+  Innovator/Core/Node.h
   Innovator/Core/State.h
   Innovator/Core/VulkanObjects.h
   Innovator/Core/Scheme/Scheme.h

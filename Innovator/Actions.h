@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Innovator/Node.h>
+#include <Innovator/Core/Node.h>
 #include <Innovator/core/State.h>
 #include <Innovator/core/VulkanObjects.h>
 #include <Innovator/core/Math/Box.h>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Innovator/Actions.h>
-#include <Innovator/Node.h>
+#include <Innovator/Core/Node.h>
 
 #include <glm/glm.hpp>
 #include <gli/load.hpp>
