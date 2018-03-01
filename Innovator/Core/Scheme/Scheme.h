@@ -43,8 +43,8 @@ class Symbol : public Expression {
 public:
   Symbol(const std::string & token);
   
-  virtual std::string toString();
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env);
+  virtual std::string toString();
   
   std::string token;
 };
@@ -61,7 +61,6 @@ Environment::Environment(const std::shared_ptr<Expression> & parms,
     (*this)[parm->token] = *a;
   }
 }
-
   
 Environment *
 Environment::getEnv(const std::string & sym)
@@ -75,7 +74,6 @@ Environment::getEnv(const std::string & sym)
   return this->outer->getEnv(sym);
 }
 
-
 Expression::Expression() {}
 Expression::Expression(Expression::iterator begin, Expression::iterator end)
   : std::list<std::shared_ptr<Expression>>(begin, end) {}
@@ -85,9 +83,10 @@ Expression::toString()
 {
   std::string s = "(";
   for (auto it = this->begin(); it != this->end(); it++) {
-    s += (*it)->toString() + " ";
+    s += (*it)->toString() + ' ';
   }
-  return s += ")";
+  s.back() = ')';
+  return s;
 }
   
 std::shared_ptr<Expression>
@@ -101,7 +100,8 @@ Expression::eval(std::shared_ptr<Environment> & env)
 }
   
 Symbol::Symbol(const std::string & token)
-  : token(token) {}
+  : token(token) 
+{}
   
 std::string
 Symbol::toString()
@@ -118,7 +118,8 @@ Symbol::eval(std::shared_ptr<Environment> & env)
 class Number : public Expression {
 public:
   Number(double value) 
-    : value(value) {}
+    : value(value) 
+  {}
 
   Number(const std::string & token)
     : Number(stod(token)) {}
@@ -134,7 +135,8 @@ public:
 class Boolean : public Expression {
 public:
   Boolean(bool value) 
-    : value(value) {}
+    : value(value) 
+  {}
   
   Boolean(const std::string & token)
   {
@@ -160,7 +162,8 @@ public:
 class Quote : public Expression {
 public:
   Quote(std::shared_ptr<Expression> exp)
-    : exp(exp) {}
+    : exp(exp) 
+  {}
   
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
   {
@@ -173,7 +176,8 @@ public:
 class Define : public Expression {
 public:
   Define(std::shared_ptr<Symbol> var, std::shared_ptr<Expression> exp) 
-    : var(var), exp(exp) {}
+    : var(var), exp(exp)
+  {}
   
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
   {
@@ -190,7 +194,8 @@ public:
   If(std::shared_ptr<Expression> test, 
      std::shared_ptr<Expression> conseq, 
      std::shared_ptr<Expression> alt) 
-    : test(test), conseq(conseq), alt(alt) {}
+    : test(test), conseq(conseq), alt(alt)
+  {}
   
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
   {
@@ -205,7 +210,8 @@ public:
   Function(std::shared_ptr<Expression> parms, 
            std::shared_ptr<Expression> body, 
            std::shared_ptr<Environment> env)
-    : parms(parms), body(body), env(env) {}
+    : parms(parms), body(body), env(env) 
+  {}
   
   std::shared_ptr<Environment> env;
   std::shared_ptr<Expression> parms, body;
@@ -214,7 +220,8 @@ public:
 class Lambda : public Expression {
 public:
   Lambda(std::shared_ptr<Expression> parms, std::shared_ptr<Expression> body) 
-    : parms(parms), body(body) {}
+    : parms(parms), body(body) 
+  {}
   
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
   {
@@ -455,6 +462,7 @@ public:
     std::sregex_token_iterator tokens(input.begin(), input.end(), this->tokenizer);
     ParseTree parsetree(tokens);
     auto exp = parse(parsetree);
+    std::string s = exp->toString();
     return ::eval(exp, this->environment)->toString();
   }
 
