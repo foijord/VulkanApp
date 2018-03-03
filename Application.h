@@ -215,7 +215,7 @@ public:
       message += "PERFORMANCE_WARNING: "; 
     }
     message += std::string(layer) + " " + std::string(msg);
-    MessageBox(nullptr, message.c_str(), "Alert", MB_OK);
+    std::cout << message << std::endl;
     return false;
   }
 

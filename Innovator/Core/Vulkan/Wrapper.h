@@ -131,6 +131,66 @@ public:
     }
     throw std::runtime_error("VulkanDevice::getQueueIndex: could not find suitable memory type");
   }
+  
+  bool supportsFeatures(const VkPhysicalDeviceFeatures & required_features)
+  {
+	  return
+		  this->features.logicOp >= required_features.logicOp &&
+		  this->features.wideLines >= required_features.wideLines &&
+		  this->features.depthClamp >= required_features.depthClamp &&
+		  this->features.alphaToOne >= required_features.alphaToOne &&
+		  this->features.depthBounds >= required_features.depthBounds &&
+		  this->features.largePoints >= required_features.largePoints &&
+		  this->features.shaderInt64 >= required_features.shaderInt64 &&
+		  this->features.shaderInt16 >= required_features.shaderInt16 &&
+		  this->features.dualSrcBlend >= required_features.dualSrcBlend &&
+		  this->features.multiViewport >= required_features.multiViewport &&
+		  this->features.shaderFloat64 >= required_features.shaderFloat64 &&
+		  this->features.sparseBinding >= required_features.sparseBinding &&
+		  this->features.imageCubeArray >= required_features.imageCubeArray &&
+		  this->features.geometryShader >= required_features.geometryShader &&
+		  this->features.depthBiasClamp >= required_features.depthBiasClamp &&
+		  this->features.independentBlend >= required_features.independentBlend &&
+		  this->features.fillModeNonSolid >= required_features.fillModeNonSolid &&
+		  this->features.inheritedQueries >= required_features.inheritedQueries &&
+		  this->features.sampleRateShading >= required_features.sampleRateShading &&
+		  this->features.multiDrawIndirect >= required_features.multiDrawIndirect &&
+		  this->features.samplerAnisotropy >= required_features.samplerAnisotropy &&
+		  this->features.robustBufferAccess >= required_features.robustBufferAccess &&
+		  this->features.tessellationShader >= required_features.tessellationShader &&
+		  this->features.shaderClipDistance >= required_features.shaderClipDistance &&
+		  this->features.shaderCullDistance >= required_features.shaderCullDistance &&
+		  this->features.fullDrawIndexUint32 >= required_features.fullDrawIndexUint32 &&
+		  this->features.textureCompressionBC >= required_features.textureCompressionBC &&
+		  this->features.shaderResourceMinLod >= required_features.shaderResourceMinLod &&
+		  this->features.occlusionQueryPrecise >= required_features.occlusionQueryPrecise &&
+		  this->features.sparseResidencyBuffer >= required_features.sparseResidencyBuffer &&
+		  this->features.textureCompressionETC2 >= required_features.textureCompressionETC2 &&
+		  this->features.sparseResidencyImage2D >= required_features.sparseResidencyImage2D &&
+		  this->features.sparseResidencyImage3D >= required_features.sparseResidencyImage3D &&
+		  this->features.sparseResidencyAliased >= required_features.sparseResidencyAliased &&
+		  this->features.pipelineStatisticsQuery >= required_features.pipelineStatisticsQuery &&
+		  this->features.shaderResourceResidency >= required_features.shaderResourceResidency &&
+		  this->features.sparseResidency2Samples >= required_features.sparseResidency2Samples &&
+		  this->features.sparseResidency4Samples >= required_features.sparseResidency4Samples &&
+		  this->features.sparseResidency8Samples >= required_features.sparseResidency8Samples &&
+		  this->features.variableMultisampleRate >= required_features.variableMultisampleRate &&
+		  this->features.sparseResidency16Samples >= required_features.sparseResidency16Samples &&
+		  this->features.fragmentStoresAndAtomics >= required_features.fragmentStoresAndAtomics &&
+		  this->features.drawIndirectFirstInstance >= required_features.drawIndirectFirstInstance &&
+		  this->features.shaderImageGatherExtended >= required_features.shaderImageGatherExtended &&
+		  this->features.textureCompressionASTC_LDR >= required_features.textureCompressionASTC_LDR &&
+		  this->features.shaderStorageImageMultisample >= required_features.shaderStorageImageMultisample &&
+		  this->features.vertexPipelineStoresAndAtomics >= required_features.vertexPipelineStoresAndAtomics &&
+		  this->features.shaderStorageImageExtendedFormats >= required_features.shaderStorageImageExtendedFormats &&
+		  this->features.shaderStorageImageReadWithoutFormat >= required_features.shaderStorageImageReadWithoutFormat &&
+		  this->features.shaderStorageImageWriteWithoutFormat >= required_features.shaderStorageImageWriteWithoutFormat &&
+		  this->features.shaderTessellationAndGeometryPointSize >= required_features.shaderTessellationAndGeometryPointSize &&
+		  this->features.shaderSampledImageArrayDynamicIndexing >= required_features.shaderSampledImageArrayDynamicIndexing &&
+		  this->features.shaderStorageImageArrayDynamicIndexing >= required_features.shaderStorageImageArrayDynamicIndexing &&
+		  this->features.shaderUniformBufferArrayDynamicIndexing >= required_features.shaderUniformBufferArrayDynamicIndexing &&
+		  this->features.shaderStorageBufferArrayDynamicIndexing >= required_features.shaderStorageBufferArrayDynamicIndexing;
+  }
 
   VkPhysicalDevice device;
   VkPhysicalDeviceFeatures features;
@@ -235,67 +295,16 @@ public:
 
   VulkanPhysicalDevice selectPhysicalDevice(const VkPhysicalDeviceFeatures & required_features) 
   {
+    std::vector<VulkanPhysicalDevice> devices;
     for (VulkanPhysicalDevice & physical_device : this->physical_devices) {
-      if (physical_device.features.logicOp >= required_features.logicOp &&
-          physical_device.features.wideLines >= required_features.wideLines &&
-          physical_device.features.depthClamp >= required_features.depthClamp &&
-          physical_device.features.alphaToOne >= required_features.alphaToOne &&
-          physical_device.features.depthBounds >= required_features.depthBounds &&
-          physical_device.features.largePoints >= required_features.largePoints &&
-          physical_device.features.shaderInt64 >= required_features.shaderInt64 &&
-          physical_device.features.shaderInt16 >= required_features.shaderInt16 &&
-          physical_device.features.dualSrcBlend >= required_features.dualSrcBlend &&
-          physical_device.features.multiViewport >= required_features.multiViewport &&
-          physical_device.features.shaderFloat64 >= required_features.shaderFloat64 &&
-          physical_device.features.sparseBinding >= required_features.sparseBinding &&
-          physical_device.features.imageCubeArray >= required_features.imageCubeArray &&
-          physical_device.features.geometryShader >= required_features.geometryShader &&
-          physical_device.features.depthBiasClamp >= required_features.depthBiasClamp &&
-          physical_device.features.independentBlend >= required_features.independentBlend &&
-          physical_device.features.fillModeNonSolid >= required_features.fillModeNonSolid &&
-          physical_device.features.inheritedQueries >= required_features.inheritedQueries &&
-          physical_device.features.sampleRateShading >= required_features.sampleRateShading &&
-          physical_device.features.multiDrawIndirect >= required_features.multiDrawIndirect &&
-          physical_device.features.samplerAnisotropy >= required_features.samplerAnisotropy &&
-          physical_device.features.robustBufferAccess >= required_features.robustBufferAccess &&
-          physical_device.features.tessellationShader >= required_features.tessellationShader &&
-          physical_device.features.shaderClipDistance >= required_features.shaderClipDistance &&
-          physical_device.features.shaderCullDistance >= required_features.shaderCullDistance &&
-          physical_device.features.fullDrawIndexUint32 >= required_features.fullDrawIndexUint32 &&
-          physical_device.features.textureCompressionBC >= required_features.textureCompressionBC &&
-          physical_device.features.shaderResourceMinLod >= required_features.shaderResourceMinLod &&
-          physical_device.features.occlusionQueryPrecise >= required_features.occlusionQueryPrecise &&
-          physical_device.features.sparseResidencyBuffer >= required_features.sparseResidencyBuffer &&
-          physical_device.features.textureCompressionETC2 >= required_features.textureCompressionETC2 &&
-          physical_device.features.sparseResidencyImage2D >= required_features.sparseResidencyImage2D &&
-          physical_device.features.sparseResidencyImage3D >= required_features.sparseResidencyImage3D &&
-          physical_device.features.sparseResidencyAliased >= required_features.sparseResidencyAliased &&
-          physical_device.features.pipelineStatisticsQuery >= required_features.pipelineStatisticsQuery &&
-          physical_device.features.shaderResourceResidency >= required_features.shaderResourceResidency &&
-          physical_device.features.sparseResidency2Samples >= required_features.sparseResidency2Samples &&
-          physical_device.features.sparseResidency4Samples >= required_features.sparseResidency4Samples &&
-          physical_device.features.sparseResidency8Samples >= required_features.sparseResidency8Samples &&
-          physical_device.features.variableMultisampleRate >= required_features.variableMultisampleRate &&
-          physical_device.features.sparseResidency16Samples >= required_features.sparseResidency16Samples &&
-          physical_device.features.fragmentStoresAndAtomics >= required_features.fragmentStoresAndAtomics &&
-          physical_device.features.drawIndirectFirstInstance >= required_features.drawIndirectFirstInstance &&
-          physical_device.features.shaderImageGatherExtended >= required_features.shaderImageGatherExtended &&
-          physical_device.features.textureCompressionASTC_LDR >= required_features.textureCompressionASTC_LDR &&
-          physical_device.features.shaderStorageImageMultisample >= required_features.shaderStorageImageMultisample &&
-          physical_device.features.vertexPipelineStoresAndAtomics >= required_features.vertexPipelineStoresAndAtomics &&
-          physical_device.features.shaderStorageImageExtendedFormats >= required_features.shaderStorageImageExtendedFormats &&
-          physical_device.features.shaderStorageImageReadWithoutFormat >= required_features.shaderStorageImageReadWithoutFormat &&
-          physical_device.features.shaderStorageImageWriteWithoutFormat >= required_features.shaderStorageImageWriteWithoutFormat &&
-          physical_device.features.shaderTessellationAndGeometryPointSize >= required_features.shaderTessellationAndGeometryPointSize &&
-          physical_device.features.shaderSampledImageArrayDynamicIndexing >= required_features.shaderSampledImageArrayDynamicIndexing &&
-          physical_device.features.shaderStorageImageArrayDynamicIndexing >= required_features.shaderStorageImageArrayDynamicIndexing &&
-          physical_device.features.shaderUniformBufferArrayDynamicIndexing >= required_features.shaderUniformBufferArrayDynamicIndexing &&
-          physical_device.features.shaderStorageBufferArrayDynamicIndexing >= required_features.shaderStorageBufferArrayDynamicIndexing) 
-      {
-        return physical_device;
+      if (physical_device.supportsFeatures(required_features)) {
+        devices.push_back(physical_device);
       }
     }
-    throw std::runtime_error("Could not find physical device with the required features");
+    if (devices.empty()) {
+      throw std::runtime_error("Could not find physical device with the required features");
+    }
+    return devices.front();
   }
 
   PFN_vkQueuePresentKHR vkQueuePresent;

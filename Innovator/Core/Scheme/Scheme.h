@@ -375,32 +375,32 @@ std::shared_ptr<Expression> parse(const ParseTree & parsetree)
   
   if (parsetree[0].token == "quote") {
     if (parsetree.size() != 2) {
-      throw std::runtime_error("invalid num args to quote");
+      throw std::invalid_argument("invalid num args to quote");
     }
     return std::make_shared<Quote>(parse(parsetree[1]));
   }
   
   if (parsetree[0].token == "if") {
     if (parsetree.size() != 4) {
-      throw std::runtime_error("invalid num args to if");
+      throw std::invalid_argument("invalid num args to if");
     }
     return std::make_shared<If>(parse(parsetree[1]), parse(parsetree[2]), parse(parsetree[3]));
   }
   
   if (parsetree[0].token == "lambda") {
     if (parsetree.size() != 3) {
-      throw std::runtime_error("invalid num arguments for lambda");
+      throw std::invalid_argument("invalid num arguments for lambda");
     }
     return std::make_shared<Lambda>(parse(parsetree[1]), parse(parsetree[2]));
   }
   
   if (parsetree[0].token == "define") {
     if (parsetree.size() != 3) {
-      throw std::runtime_error("invalid num arguments for define");
+      throw std::invalid_argument("invalid num arguments for define");
     }
     auto var = std::dynamic_pointer_cast<Symbol>(parse(parsetree[1]));
     if (!var) {
-      throw std::runtime_error("variable name must be a symbol");
+      throw std::invalid_argument("variable name must be a symbol");
     }
     auto exp = parse(parsetree[2]);
     return std::make_shared<Define>(var, exp);
@@ -408,25 +408,25 @@ std::shared_ptr<Expression> parse(const ParseTree & parsetree)
   
   if (parsetree[0].token == "list") {
     if (parsetree.size() < 2) {
-      throw std::runtime_error("too few arguments to function list");
+      throw std::invalid_argument("too few arguments to function list");
     }
   }
   
   if (parsetree[0].token == "<") {
     if (parsetree.size() != 3) {
-      throw std::runtime_error("wrong number of arguments to <");
+      throw std::invalid_argument("wrong number of arguments to <");
     }
   }
   
   if (parsetree[0].token == ">") {
     if (parsetree.size() != 3) {
-      throw std::runtime_error("wrong number of arguments to >");
+      throw std::invalid_argument("wrong number of arguments to >");
     }
   }
   
   if (parsetree[0].token == "=") {
     if (parsetree.size() != 3) {
-      throw std::runtime_error("wrong number of arguments to =");
+      throw std::invalid_argument("wrong number of arguments to =");
     }
   }
 

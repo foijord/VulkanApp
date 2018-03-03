@@ -92,9 +92,7 @@ public:
   size_t t;
 };
 
-
-
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR pCmdLine, _In_ int nCmdShow)
+int main()
 {
   Scheme scheme;
   scheme.eval("(define twice (lambda (x) (* 2 x)))");
@@ -105,12 +103,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
   string sum = scheme.eval("(sum 100 1)");
 
   try {
-    VulkanApplication app(hInstance);
+    VulkanApplication app(GetModuleHandle(nullptr));
     app.viewer->setSceneGraph(std::make_shared<Crate>());
     app.run();
   }
   catch (std::exception & e) {
-    MessageBox(nullptr, e.what(), "Alert", MB_OK);
+    std::cout << e.what() << std::endl;
   }
   return 1;
 }

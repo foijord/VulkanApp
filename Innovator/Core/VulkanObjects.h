@@ -16,7 +16,7 @@ class VulkanBufferObject {
 public:
   VulkanBufferObject(const std::shared_ptr<VulkanDevice> & device,
                      size_t size,
-                     VkBufferUsageFlagBits usage,
+                     VkBufferUsageFlags usage,
                      VkMemoryPropertyFlags memory_property_flags)
   {
     this->buffer = std::make_shared<VulkanBuffer>(device, 

@@ -200,7 +200,7 @@ public:
 
       this->gpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
                                                               size, 
-                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
       this->cpu_buffer->memory->memcpy(this->values.data(), size);
@@ -318,12 +318,12 @@ public:
       size_t size = sizeof(T) * this->values.size();
       this->cpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
                                                               size, 
-                                                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+                                                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
       this->gpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
                                                               size, 
-                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
       this->cpu_buffer->memory->memcpy(this->values.data(), size);
