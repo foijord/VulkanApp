@@ -223,7 +223,12 @@ public:
   
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
   {
-    return (std::static_pointer_cast<Boolean>(::eval(this->test, env))->value) ? this->conseq : this->alt;
+    auto exp = ::eval(this->test, env);
+    auto boolexp = std::dynamic_pointer_cast<Boolean>(exp);
+    if (!boolexp) {
+      throw std::invalid_argument("expression did not evaluate to a boolean");
+    }
+    return (boolexp->value) ? this->conseq : this->alt;
   }
   
   std::shared_ptr<Expression> test, conseq, alt;
@@ -293,7 +298,6 @@ public:
     }
     return number;
   }
-
 };
 
 template <typename T>
@@ -301,7 +305,7 @@ class Operator : public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    std::vector<double> dargs = Callable::argvec(args);
+    auto dargs = Callable::argvec(args);
     return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs[0], op));
   }
   
@@ -317,7 +321,7 @@ class Less : public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    std::vector<double> dargs = Callable::argvec(args);
+    auto dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] < dargs[1]);
   }
 };
@@ -326,7 +330,7 @@ class More : public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    std::vector<double> dargs = Callable::argvec(args);
+    auto dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] > dargs[1]);
   }
 };
@@ -335,7 +339,7 @@ class Same: public Callable {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
   {
-    std::vector<double> dargs = Callable::argvec(args);
+    auto dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] == dargs[1]);
   }
 };
@@ -497,7 +501,7 @@ class Scheme {
 public:
   Scheme()
   {
-    this->tokenizer = std::regex("[()]|\"([^\\\"]|\\.)*\"|[a-zA-Z_]+|[0-9]+|[+*-/<>=]");
+    this->tokenizer = std::regex("[()]|\"([^\\\"]|\\.)*\"|[a-zA-Z_-]+|[0-9]+|[+*-/<>=]");
     this->environment = std::make_shared<Environment>();
 
     (*this->environment)["+"] = std::make_shared<Add>();
@@ -519,7 +523,6 @@ public:
     std::sregex_token_iterator tokens(input.begin(), input.end(), this->tokenizer);
     ParseTree parsetree(tokens);
     auto exp = parse(parsetree);
-    std::string s = exp->toString();
     return ::eval(exp, this->environment);
   }
 

@@ -31,9 +31,9 @@ public:
 template <typename NodeType> 
 static std::shared_ptr<NodeType> 
 SearchAction(const std::shared_ptr<Node> & root) {
-  std::shared_ptr<Group> group = dynamic_pointer_cast<Group>(root);
+  std::shared_ptr<Group> group = std::dynamic_pointer_cast<Group>(root);
   if (!group) {
-    return dynamic_pointer_cast<NodeType>(root);
+    return std::dynamic_pointer_cast<NodeType>(root);
   }
   for (const std::shared_ptr<Node> & node : group->children) {
     std::shared_ptr<NodeType> result = SearchAction<NodeType>(node);
