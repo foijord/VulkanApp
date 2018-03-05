@@ -1,10 +1,9 @@
 #pragma once
 
-#include <Innovator/core/VulkanObjects.h>
+#include <Innovator/Core/Vulkan/Wrapper.h>
 
 #include <glm/mat4x4.hpp>
 #include <vector>
-#include <memory>
 
 struct VulkanLayoutBinding {
   uint32_t binding;

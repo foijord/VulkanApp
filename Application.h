@@ -230,7 +230,7 @@ public:
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<Window> window;
-  std::unique_ptr<VulkanViewer> viewer;
   std::shared_ptr<VulkanSurfaceWin32> surface;
+  std::unique_ptr<VulkanViewer> viewer;
   std::unique_ptr<VulkanDebugCallback> debugcb;
 };

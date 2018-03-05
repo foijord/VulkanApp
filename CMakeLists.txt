@@ -21,6 +21,7 @@ add_executable(${TARGET_NAME} WIN32
   Innovator/Nodes.h
   Innovator/Actions.h
   Innovator/Core/Node.h
+  Innovator/Core/File.h
   Innovator/Core/State.h
   Innovator/Core/VulkanObjects.h
   Innovator/Core/Scheme/Scheme.h
@@ -54,3 +55,6 @@ endforeach(GLSL)
 
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Textures $<TARGET_FILE_DIR:${TARGET_NAME}>/Textures)
+
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Scenes $<TARGET_FILE_DIR:${TARGET_NAME}>/Scenes)

@@ -21,6 +21,7 @@ class Expression : public std::list<std::shared_ptr<Expression>> {
 public:
   Expression();
   Expression(Expression::iterator begin, Expression::iterator end);
+  virtual ~Expression();
 
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env);
   virtual std::string toString();
@@ -75,6 +76,9 @@ Environment::getEnv(const std::string & sym)
 }
 
 Expression::Expression() {}
+
+Expression::~Expression() {}
+
 Expression::Expression(Expression::iterator begin, Expression::iterator end)
   : std::list<std::shared_ptr<Expression>>(begin, end) {}
   
@@ -159,6 +163,25 @@ public:
   bool value;
 };
 
+class String : public Expression {
+public:
+  String(const std::string & token)
+  {
+    if (token.front() != '"' || token.back() != '"') {
+      throw std::invalid_argument("invalid string literal: " + token);
+    }
+    this->value = token.substr(1, token.size() - 2);
+  }
+
+  virtual std::string string()
+  {
+    return this->value;
+  }
+
+  std::string value;
+};
+
+
 class Quote : public Expression {
 public:
   Quote(const std::shared_ptr<Expression> & exp)
@@ -236,7 +259,7 @@ public:
 class Callable : public Expression {
 public:
   virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args) = 0;
-  
+ 
   static std::vector<double> argvec(const std::shared_ptr<Expression> & args)
   {
     std::vector<double> dargs(args->size());
@@ -245,6 +268,32 @@ public:
     });
     return dargs;
   }
+
+  void checkNumArgs(const std::shared_ptr<Expression> & args, size_t num)
+  {
+    if (args->size() != num) {
+      throw std::invalid_argument("invalid number of arguments");
+    }
+  }
+
+  std::shared_ptr<String> getString(const std::shared_ptr<Expression> & arg)
+  {
+    auto string = std::dynamic_pointer_cast<String>(arg);
+    if (!string) {
+      throw std::invalid_argument("parameter must be a string");
+    }
+    return string;
+  }
+
+  std::shared_ptr<Number> getNumber(const std::shared_ptr<Expression> & arg)
+  {
+    auto number = std::dynamic_pointer_cast<Number>(arg);
+    if (!number) {
+      throw std::invalid_argument("parameter must be a string");
+    }
+    return number;
+  }
+
 };
 
 template <typename T>
@@ -313,6 +362,7 @@ std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp,
   while (true) {
     const type_info &type = typeid(*exp.get());
     if (type == typeid(Number) ||
+        type == typeid(String) ||
         type == typeid(Boolean)) {
       return exp;
     }
@@ -363,12 +413,17 @@ std::shared_ptr<Expression> parse(const ParseTree & parsetree)
     try {
       return std::make_shared<Number>(parsetree.token);
     }
-    catch (std::invalid_argument) {
+    catch (const std::invalid_argument &) {
       try {
-        return std::make_shared<Boolean>(parsetree.token);
+        return std::make_shared<String>(parsetree.token);
       }
-      catch (std::invalid_argument) {
-        return std::make_shared<Symbol>(parsetree.token);
+      catch (const std::invalid_argument &) {
+        try {
+          return std::make_shared<Boolean>(parsetree.token);
+        }
+        catch (const std::invalid_argument &) {
+          return std::make_shared<Symbol>(parsetree.token);
+        }
       }
     }
   }
@@ -389,14 +444,14 @@ std::shared_ptr<Expression> parse(const ParseTree & parsetree)
   
   if (parsetree[0].token == "lambda") {
     if (parsetree.size() != 3) {
-      throw std::invalid_argument("invalid num arguments for lambda");
+      throw std::invalid_argument("invalid num arguments to lambda");
     }
     return std::make_shared<Lambda>(parse(parsetree[1]), parse(parsetree[2]));
   }
   
   if (parsetree[0].token == "define") {
     if (parsetree.size() != 3) {
-      throw std::invalid_argument("invalid num arguments for define");
+      throw std::invalid_argument("invalid num arguments to define");
     }
     auto var = std::dynamic_pointer_cast<Symbol>(parse(parsetree[1]));
     if (!var) {
@@ -442,7 +497,7 @@ class Scheme {
 public:
   Scheme()
   {
-    this->tokenizer = std::regex("[()]|[a-z]+|[0-9]+|[+*-/<>=]");
+    this->tokenizer = std::regex("[()]|\"([^\\\"]|\\.)*\"|[a-zA-Z_]+|[0-9]+|[+*-/<>=]");
     this->environment = std::make_shared<Environment>();
 
     (*this->environment)["+"] = std::make_shared<Add>();
@@ -459,13 +514,13 @@ public:
 
   ~Scheme() {}
 
-  std::string eval(const std::string & input)
+  std::shared_ptr<Expression> eval(const std::string & input)
   {
     std::sregex_token_iterator tokens(input.begin(), input.end(), this->tokenizer);
     ParseTree parsetree(tokens);
     auto exp = parse(parsetree);
     std::string s = exp->toString();
-    return ::eval(exp, this->environment)->toString();
+    return ::eval(exp, this->environment);
   }
 
   std::regex tokenizer;

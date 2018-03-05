@@ -3,7 +3,7 @@
 
 #include <Application.h>
 #include <Innovator/Nodes.h>
-#include <Innovator/Core/Scheme/Scheme.h>
+#include <Innovator/Core/File.h>
 #include <glm/glm.hpp>
 #include <iostream>
 
@@ -94,15 +94,9 @@ public:
 
 int main()
 {
-  Scheme scheme;
-  scheme.eval("(define twice (lambda (x) (* 2 x)))");
-  scheme.eval("(define repeat (lambda (f) (lambda (x) (f (f x)))))");
-  scheme.eval("(define sum(lambda(n acc) (if (= n 0) acc(sum(-n 1) (+n acc)))))");
-  string twice = scheme.eval("(twice 1)");
-  string repeat = scheme.eval("((repeat twice) 10)");
-  string sum = scheme.eval("(sum 100 1)");
-
   try {
+    File file;
+    auto separator = file.open("Scenes/test.scm");
     VulkanApplication app(GetModuleHandle(nullptr));
     app.viewer->setSceneGraph(std::make_shared<Crate>());
     app.run();

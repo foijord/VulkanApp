@@ -3,9 +3,7 @@
 #include <Innovator/Actions.h>
 #include <Innovator/Core/Node.h>
 
-#include <glm/glm.hpp>
 #include <gli/load.hpp>
-#include <gli/texture2d.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <vulkan/vulkan.h>
