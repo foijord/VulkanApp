@@ -22,8 +22,8 @@ typedef std::list<std::shared_ptr<Expression>> list;
 class Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Expression);
-
   Expression() = default;
+  virtual ~Expression() = default;
 
   explicit Expression(const list::const_iterator & begin, const list::const_iterator & end)
   {
@@ -48,6 +48,8 @@ public:
 class Symbol : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Symbol);
+  Symbol() = delete;
+  virtual ~Symbol() = default;
 
   explicit Symbol(std::string token)
     : token(std::move(token))
@@ -103,6 +105,8 @@ Symbol::eval(Environment & env)
 class Number : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Number);
+  Number() = delete;
+  virtual ~Number() = default;
 
   explicit Number(const double value) 
     : value(value) 
@@ -117,6 +121,8 @@ public:
 class Boolean : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Boolean);
+  Boolean() = delete;
+  virtual ~Boolean() = default;
 
   explicit Boolean(const bool value) 
     : value(value) 
@@ -137,6 +143,8 @@ public:
 class String : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(String);
+  String() = delete;
+  virtual ~String() = default;
 
   explicit String(const std::string & token)
   {
@@ -152,6 +160,8 @@ public:
 class Quote : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Quote);
+  Quote() = delete;
+  virtual ~Quote() = default;
 
   explicit Quote(std::shared_ptr<Expression> exp)
     : exp(std::move(exp)) 
@@ -168,6 +178,8 @@ public:
 class Define : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Define);
+  Define() = delete;
+  virtual ~Define() = default;
 
   explicit Define(std::shared_ptr<Symbol> var, 
                   std::shared_ptr<Expression> exp)
@@ -188,6 +200,8 @@ public:
 class If : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(If);
+  If() = delete;
+  virtual ~If() = default;
 
   If(std::shared_ptr<Expression> test,
      std::shared_ptr<Expression> conseq,
@@ -213,6 +227,8 @@ public:
 class Function : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Function);
+  Function() = delete;
+  virtual ~Function() = default;
 
   Function(std::shared_ptr<Expression> parms,
            std::shared_ptr<Expression> body,
@@ -227,6 +243,8 @@ public:
 class Lambda : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Lambda);
+  Lambda() = delete;
+  virtual ~Lambda() = default;
 
   Lambda(std::shared_ptr<Expression> parms, 
          std::shared_ptr<Expression> body)
@@ -290,7 +308,6 @@ template <typename T>
 class Operator : public Callable {
 public:
   NO_COPY_OR_ASSIGNMENT(Operator);
-
   Operator() = default;
 
   std::shared_ptr<Expression> operator()(const Expression * args) const override
@@ -310,8 +327,8 @@ typedef Operator<std::multiplies<>> Mul;
 class Less : public Callable {
 public:
   NO_COPY_OR_ASSIGNMENT(Less);
-
   Less() = default;
+  virtual ~Less() = default;
 
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
@@ -323,8 +340,8 @@ public:
 class More : public Callable {
 public:
   NO_COPY_OR_ASSIGNMENT(More);
-
   More() = default;
+  virtual ~More() = default;
 
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
@@ -336,8 +353,8 @@ public:
 class Same: public Callable {
 public:
   NO_COPY_OR_ASSIGNMENT(Same);
-
   Same() = default;
+  virtual ~Same() = default;
 
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
@@ -349,8 +366,8 @@ public:
 class Car : public Callable {
 public:
   NO_COPY_OR_ASSIGNMENT(Car);
-
   Car() = default;
+  virtual ~Car() = default;
 
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
@@ -361,8 +378,8 @@ public:
 class Cdr : public Callable {
 public:
   NO_COPY_OR_ASSIGNMENT(Cdr);
-
   Cdr() = default;
+  virtual ~Cdr() = default;
 
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {

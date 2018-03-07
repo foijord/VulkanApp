@@ -1,39 +1,42 @@
 #pragma once
 
+#include <Innovator/Core/Misc/Defines.h>
+
 #include <vulkan/vulkan.h>
 
+#include <utility>
 #include <vector>
 #include <memory>
 #include <iostream>
 #include <algorithm>
 #include <stdexcept>
 
-namespace {
-  class VkException: public std::exception {};
-  class VkTimeoutException : public VkException {};
-  class VkNotReadyException : public VkException {};
-  class VkIncompleteException : public VkException {};
-  class VkSuboptimalException : public VkException {};
-  class VkErrorOutOfDateException : public VkException {};
-  class VkErrorDeviceLostException : public VkException {};
-  class VkErrorSurfaceLostException : public VkException {};
-  class VkErrorInvalidShaderException : public VkException {};
-  class VkErrorFragmentedPoolException : public VkException {};
-  class VkErrorTooManyObjectsException : public VkException {};
-  class VkErrorLayerNotPresentException : public VkException {};
-  class VkErrorMemoryMapFailedException : public VkException {};
-  class VkErrorOutOfHostMemoryException : public VkException {};
-  class VkErrorOutOfPoolMemoryException : public VkException {};
-  class VkErrorValidationFailedException : public VkException {};
-  class VkErrorNativeWindowInUseException : public VkException {};
-  class VkErrorFeatureNotPresentException : public VkException {};
-  class VkErrorOutOfDeviceMemoryException : public VkException {};
-  class VkErrorFormatNotSupportedException : public VkException {};
-  class VkErrorIncompatibleDriverException : public VkException {};
-  class VkErrorExtensionNotPresentException : public VkException {};
-  class VkErrorIncompatibleDisplayException : public VkException {};
-  class VkErrorInitializationFailedException : public VkException {};
-  class VkErrorInvalidExternalHandleException : public VkException {};
+class VkException: public std::exception {};
+class VkTimeoutException : public VkException {};
+class VkNotReadyException : public VkException {};
+class VkIncompleteException : public VkException {};
+class VkSuboptimalException : public VkException {};
+class VkErrorOutOfDateException : public VkException {};
+class VkErrorDeviceLostException : public VkException {};
+class VkErrorSurfaceLostException : public VkException {};
+class VkErrorNotPermittedException : public VkException {};
+class VkErrorInvalidShaderException : public VkException {};
+class VkErrorFragmentedPoolException : public VkException {};
+class VkErrorTooManyObjectsException : public VkException {};
+class VkErrorLayerNotPresentException : public VkException {};
+class VkErrorMemoryMapFailedException : public VkException {};
+class VkErrorOutOfHostMemoryException : public VkException {};
+class VkErrorOutOfPoolMemoryException : public VkException {};
+class VkErrorValidationFailedException : public VkException {};
+class VkErrorNativeWindowInUseException : public VkException {};
+class VkErrorFeatureNotPresentException : public VkException {};
+class VkErrorOutOfDeviceMemoryException : public VkException {};
+class VkErrorFormatNotSupportedException : public VkException {};
+class VkErrorIncompatibleDriverException : public VkException {};
+class VkErrorExtensionNotPresentException : public VkException {};
+class VkErrorIncompatibleDisplayException : public VkException {};
+class VkErrorInitializationFailedException : public VkException {};
+class VkErrorInvalidExternalHandleException : public VkException {};
 
 #define THROW_ON_ERROR(__function__) {                                                        \
 	VkResult __result__ = (__function__);                                                       \
@@ -45,6 +48,7 @@ namespace {
     case VK_ERROR_DEVICE_LOST: throw VkErrorDeviceLostException();                            \
     case VK_ERROR_OUT_OF_DATE_KHR: throw VkErrorOutOfDateException();                         \
     case VK_ERROR_SURFACE_LOST_KHR: throw VkErrorSurfaceLostException();                      \
+    case VK_ERROR_NOT_PERMITTED_EXT: throw VkErrorNotPermittedException();                    \
     case VK_ERROR_FRAGMENTED_POOL: throw VkErrorFragmentedPoolException();                    \
     case VK_ERROR_INVALID_SHADER_NV: throw VkErrorInvalidShaderException();                   \
     case VK_ERROR_TOO_MANY_OBJECTS: throw VkErrorTooManyObjectsException();                   \
@@ -62,10 +66,9 @@ namespace {
     case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: throw VkErrorNativeWindowInUseException();        \
     case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: throw VkErrorIncompatibleDisplayException();      \
     case VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR: throw VkErrorInvalidExternalHandleException(); \
+    default: break;                                                                           \
   }                                                                                           \
 }                                                                                             \
-
-}
 
 class VulkanPhysicalDevice {
 public:
@@ -198,9 +201,9 @@ public:
   }
 
   VkPhysicalDevice device;
-  VkPhysicalDeviceFeatures features;
-  VkPhysicalDeviceProperties properties;
-  VkPhysicalDeviceMemoryProperties memory_properties;
+  VkPhysicalDeviceFeatures features{};
+  VkPhysicalDeviceProperties properties{};
+  VkPhysicalDeviceMemoryProperties memory_properties{};
   std::vector<VkQueueFamilyProperties> queue_family_properties;
   std::vector<VkExtensionProperties> extension_properties;
   std::vector<VkLayerProperties> layer_properties;
@@ -208,9 +211,12 @@ public:
 
 class VulkanInstanceBase {
 public:
-  VulkanInstanceBase(const VkApplicationInfo & application_info,
-                     const std::vector<const char *> & required_layers,
-                     const std::vector<const char *> & required_extensions)
+  NO_COPY_OR_ASSIGNMENT(VulkanInstanceBase);
+
+  explicit VulkanInstanceBase(const VkApplicationInfo & application_info,
+                              const std::vector<const char *> & required_layers,
+                              const std::vector<const char *> & required_extensions)
+    : instance(nullptr)
   {
     uint32_t layer_count;
     THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
@@ -218,7 +224,7 @@ public:
     THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&layer_count, layer_properties.data()));
 
     std::for_each(required_layers.begin(), required_layers.end(), [&](const char * layer_name) {
-      for (VkLayerProperties properties : layer_properties)
+      for (auto properties : layer_properties)
         if (std::strcmp(layer_name, properties.layerName) == 0)
           return;
       throw std::runtime_error("Required instance layer " + std::string(layer_name) + " not supported.");
@@ -230,7 +236,7 @@ public:
     THROW_ON_ERROR(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extension_properties.data()));
 
     std::for_each(required_extensions.begin(), required_extensions.end(), [&](const char * extension_name) {
-      for (VkExtensionProperties properties : extension_properties)
+      for (auto properties : extension_properties)
         if (std::strcmp(extension_name, properties.extensionName) == 0)
           return;
       throw std::runtime_error("Required instance extension " + std::string(extension_name) + " not supported.");
@@ -329,22 +335,24 @@ public:
 
 class VulkanLogicalDevice {
 public:
+  NO_COPY_OR_ASSIGNMENT(VulkanLogicalDevice);
+
   VulkanLogicalDevice(const VulkanPhysicalDevice & physical_device,
                       const VkPhysicalDeviceFeatures & enabled_features,
                       const std::vector<const char *> & required_layers,
                       const std::vector<const char *> & required_extensions,
                       const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
-    : physical_device(physical_device)
+    : device(nullptr), physical_device(physical_device)
   {
     std::for_each(required_layers.begin(), required_layers.end(), [&](const char * layer_name) {
-      for (VkLayerProperties properties : physical_device.layer_properties)
+      for (auto properties : physical_device.layer_properties)
         if (std::strcmp(layer_name, properties.layerName) == 0)
           return;
       throw std::runtime_error("Required device layer " + std::string(layer_name) + " not supported.");
     });
 
     std::for_each(required_extensions.begin(), required_extensions.end(), [&](const char * extension_name) {
-      for (VkExtensionProperties properties : physical_device.extension_properties)
+      for (auto properties : physical_device.extension_properties)
         if (std::strcmp(extension_name, properties.extensionName) == 0)
           return;
       throw std::runtime_error("Required device extension " + std::string(extension_name) + " not supported.");
@@ -376,12 +384,17 @@ public:
 
 class VulkanDevice : public VulkanLogicalDevice {
 public:
+  NO_COPY_OR_ASSIGNMENT(VulkanDevice);
+
   VulkanDevice(const VulkanPhysicalDevice & physical_device,
                const VkPhysicalDeviceFeatures & enabled_features,
                const std::vector<const char *> & required_layers,
                const std::vector<const char *> & required_extensions,
                const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
-    : VulkanLogicalDevice(physical_device, enabled_features, required_layers, required_extensions, queue_create_infos)
+    : VulkanLogicalDevice(physical_device, enabled_features, required_layers, required_extensions, queue_create_infos),
+      default_queue(nullptr),
+      default_pool(nullptr),
+      default_queue_index(0)
  {
     this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
     vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
@@ -402,17 +415,20 @@ public:
   }
 
   VkQueue default_queue;
-  uint32_t default_queue_index;
   VkCommandPool default_pool;
+  uint32_t default_queue_index;
 };
 
 class VulkanDebugCallback {
 public:
-  VulkanDebugCallback(const std::shared_ptr<VulkanInstance> & vulkan,
-                      VkDebugReportFlagsEXT flags,
-                      PFN_vkDebugReportCallbackEXT callback,
-                      void * pUserData = nullptr)
-    : vulkan(vulkan)
+  NO_COPY_OR_ASSIGNMENT(VulkanDebugCallback);
+
+  explicit VulkanDebugCallback(std::shared_ptr<VulkanInstance> vulkan,
+                               VkDebugReportFlagsEXT flags,
+                               PFN_vkDebugReportCallbackEXT callback,
+                               void * pUserData = nullptr)
+    : vulkan(std::move(vulkan)),
+      callback(nullptr)
   {
     VkDebugReportCallbackCreateInfoEXT create_info {
       VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT, // sType
@@ -430,14 +446,16 @@ public:
     this->vulkan->vkDestroyDebugReportCallback(this->vulkan->instance, this->callback, nullptr);
   }
 
-  VkDebugReportCallbackEXT callback;
   std::shared_ptr<VulkanInstance> vulkan;
+  VkDebugReportCallbackEXT callback;
 };
 
 class VulkanSemaphore {
 public:
-  VulkanSemaphore(const std::shared_ptr<VulkanDevice> & device)
-    : device(device)
+  NO_COPY_OR_ASSIGNMENT(VulkanSemaphore);
+
+  VulkanSemaphore(std::shared_ptr<VulkanDevice> device)
+    : device(std::move(device))
   {
     VkSemaphoreCreateInfo create_info {
       VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, // sType
@@ -458,8 +476,10 @@ public:
 
 class VulkanSwapchain {
 public:
-  VulkanSwapchain(const std::shared_ptr<VulkanDevice> & device, 
-                  const std::shared_ptr<VulkanInstance> & vulkan,
+  NO_COPY_OR_ASSIGNMENT(VulkanSwapchain);
+
+  VulkanSwapchain(std::shared_ptr<VulkanDevice> device,
+                  std::shared_ptr<VulkanInstance> vulkan,
                   VkSurfaceKHR surface,
                   uint32_t minImageCount,
                   VkFormat imageFormat,
@@ -474,7 +494,9 @@ public:
                   VkPresentModeKHR presentMode,
                   VkBool32 clipped,
                   VkSwapchainKHR oldSwapchain)
-    : vulkan(vulkan), device(device)
+    : vulkan(std::move(vulkan)), 
+      device(std::move(device)),
+      swapchain(nullptr)
   {
     VkSwapchainCreateInfoKHR create_info {
       VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, // sType
@@ -505,7 +527,7 @@ public:
     this->vulkan->vkDestroySwapchain(this->device->device, this->swapchain, nullptr);
   }
 
-  std::vector<VkImage> getSwapchainImages()
+  std::vector<VkImage> getSwapchainImages() const
   {
     uint32_t count;
     THROW_ON_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, nullptr));
@@ -514,7 +536,7 @@ public:
     return images;
   }
 
-  uint32_t getNextImageIndex(const std::shared_ptr<VulkanSemaphore> & semaphore)
+  uint32_t getNextImageIndex(const std::shared_ptr<VulkanSemaphore> & semaphore) const
   {
     uint32_t index;
     THROW_ON_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, this->swapchain, UINT64_MAX, semaphore->semaphore, nullptr, &index));
@@ -522,16 +544,19 @@ public:
   };
 
 
-  VkSwapchainKHR swapchain;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanInstance> vulkan;
+  VkSwapchainKHR swapchain;
 };
 
 class VulkanDescriptorPool {
 public:
-  VulkanDescriptorPool(const std::shared_ptr<VulkanDevice> & device, 
+  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorPool);
+
+  VulkanDescriptorPool(std::shared_ptr<VulkanDevice> device, 
                        std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
-    : device(device)
+    : device(std::move(device)),
+      pool(nullptr)
   {
     VkDescriptorPoolCreateInfo create_info {
     VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,         // sType 
@@ -550,15 +575,18 @@ public:
     vkDestroyDescriptorPool(this->device->device, this->pool, nullptr);
   }
 
-  VkDescriptorPool pool;
   std::shared_ptr<VulkanDevice> device;
+  VkDescriptorPool pool;
 };
 
 class VulkanDescriptorSetLayout {
 public:
-  VulkanDescriptorSetLayout(const std::shared_ptr<VulkanDevice> & device, 
+  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSetLayout);
+
+  VulkanDescriptorSetLayout(std::shared_ptr<VulkanDevice> device, 
                             std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings)
-    : device(device)
+    : device(std::move(device)),
+      layout(nullptr)
   {
     VkDescriptorSetLayoutCreateInfo create_info {
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,          // sType
@@ -576,17 +604,20 @@ public:
     vkDestroyDescriptorSetLayout(this->device->device, this->layout, nullptr);
   }
 
-  VkDescriptorSetLayout layout;
   std::shared_ptr<VulkanDevice> device;
+  VkDescriptorSetLayout layout;
 };
 
 class VulkanDescriptorSets {
 public:
-  VulkanDescriptorSets(const std::shared_ptr<VulkanDevice> & device,
-                       const std::shared_ptr<VulkanDescriptorPool> & pool,
+  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSets);
+
+  VulkanDescriptorSets(std::shared_ptr<VulkanDevice> device,
+                       std::shared_ptr<VulkanDescriptorPool> pool,
                        uint32_t count,
                        VkDescriptorSetLayout descriptor_set_layout)
-    : device(device), pool(pool)
+    : device(std::move(device)), 
+      pool(std::move(pool))
   {
     VkDescriptorSetAllocateInfo allocate_info {
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, // sType
@@ -609,7 +640,7 @@ public:
   }
 
   void update(const std::vector<VkWriteDescriptorSet> & descriptor_writes, 
-              const std::vector<VkCopyDescriptorSet> & descriptor_copies = std::vector<VkCopyDescriptorSet>())
+              const std::vector<VkCopyDescriptorSet> & descriptor_copies = std::vector<VkCopyDescriptorSet>()) const
   {
     vkUpdateDescriptorSets(this->device->device, 
                            static_cast<uint32_t>(descriptor_writes.size()), descriptor_writes.data(),
@@ -628,8 +659,11 @@ public:
 
 class VulkanFence {
 public:
-  VulkanFence(const std::shared_ptr<VulkanDevice> & device)
-    : device(device)
+  NO_COPY_OR_ASSIGNMENT(VulkanFence);
+
+  explicit VulkanFence(std::shared_ptr<VulkanDevice> device)
+    : device(std::move(device)),
+      fence(nullptr)
   {
     VkFenceCreateInfo create_info {
       VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, // sType
@@ -645,21 +679,23 @@ public:
     vkDestroyFence(this->device->device, this->fence, nullptr);
   }
 
-  VkFence fence;
   std::shared_ptr<VulkanDevice> device;
+  VkFence fence;
 };
 
 class VulkanCommandBuffers {
 public:
-  VulkanCommandBuffers(const std::shared_ptr<VulkanDevice> & device, 
-                       size_t count = 1,
-                       VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-    : device(device)
+  NO_COPY_OR_ASSIGNMENT(VulkanCommandBuffers);
+
+  explicit VulkanCommandBuffers(std::shared_ptr<VulkanDevice> device, 
+                                size_t count = 1,
+                                VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+    : device(std::move(device))
   {
     VkCommandBufferAllocateInfo allocate_info {
       VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, // sType 
       nullptr,                                        // pNext 
-      device->default_pool,                           // commandPool 
+      this->device->default_pool,                     // commandPool 
       level,                                          // level 
       static_cast<uint32_t>(count),                   // commandBufferCount 
     };
@@ -756,7 +792,9 @@ public:
 
 class VulkanImage {
 public:
-  VulkanImage(const std::shared_ptr<VulkanDevice> & device, 
+  NO_COPY_OR_ASSIGNMENT(VulkanImage);
+
+  VulkanImage(std::shared_ptr<VulkanDevice> device, 
               VkImageCreateFlags flags,
               VkImageType image_type, 
               VkFormat format, 
@@ -769,7 +807,8 @@ public:
               VkSharingMode sharing_mode,
               std::vector<uint32_t> queue_family_indices,
               VkImageLayout initial_layout)
-    : device(device)
+    : device(std::move(device)),
+      image(nullptr)
   {
     VkImageCreateInfo create_info {
       VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,                // sType  
@@ -797,19 +836,22 @@ public:
     vkDestroyImage(this->device->device, this->image, nullptr);
   }
 
-  VkImage image;
   std::shared_ptr<VulkanDevice> device;
+  VkImage image;
 };
 
 class VulkanBuffer {
 public:
-  VulkanBuffer(const std::shared_ptr<VulkanDevice> & device,
+  NO_COPY_OR_ASSIGNMENT(VulkanBuffer);
+
+  VulkanBuffer(std::shared_ptr<VulkanDevice> device,
                VkBufferCreateFlags flags, 
                VkDeviceSize size, 
                VkBufferUsageFlags usage,
                VkSharingMode sharingMode,
                const std::vector<uint32_t> & queueFamilyIndices = std::vector<uint32_t>())
-    : device(device)
+    : device(std::move(device)),
+      buffer(nullptr)
   {
     VkBufferCreateInfo create_info {
       VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,             // sType  
@@ -830,16 +872,19 @@ public:
     vkDestroyBuffer(this->device->device, this->buffer, nullptr);
   }
 
-  VkBuffer buffer;
   std::shared_ptr<VulkanDevice> device;
+  VkBuffer buffer;
 };
 
 class VulkanMemory {
 public:
-  VulkanMemory(const std::shared_ptr<VulkanDevice> & device, 
+  NO_COPY_OR_ASSIGNMENT(VulkanMemory);
+  
+  VulkanMemory(std::shared_ptr<VulkanDevice> device, 
                VkMemoryRequirements requirements, 
                VkMemoryPropertyFlags flags)
-    : device(device)
+    : device(std::move(device)),
+      memory(nullptr)
   {
     VkAllocationCallbacks allocation_callbacks {
       nullptr,                     // pUserData  
@@ -851,10 +896,10 @@ public:
     };
 
     VkMemoryAllocateInfo allocate_info {
-      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,                          // sType 
-      nullptr,                                                         // pNext 
-      requirements.size,                                               // allocationSize 
-      device->physical_device.getMemoryTypeIndex(requirements, flags), // memoryTypeIndex 
+      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,                                 // sType 
+      nullptr,                                                                // pNext 
+      requirements.size,                                                      // allocationSize 
+      this->device->physical_device.getMemoryTypeIndex(requirements, flags),  // memoryTypeIndex 
     };
 
     THROW_ON_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
@@ -894,6 +939,8 @@ public:
 
   class MemoryCopy {
   public:
+    NO_COPY_OR_ASSIGNMENT(MemoryCopy);
+
     MemoryCopy(VulkanMemory * memory, const void * src, size_t size)
       : memory(memory) {
       ::memcpy(this->memory->map(size), src, size);
@@ -909,12 +956,14 @@ public:
     MemoryCopy copy(this, src, size);
   }
 
-  VkDeviceMemory memory;
   std::shared_ptr<VulkanDevice> device;
+  VkDeviceMemory memory;
 };
 
 class VulkanImageMemory : public VulkanMemory {
 public:
+  NO_COPY_OR_ASSIGNMENT(VulkanImageMemory);
+
   VulkanImageMemory(const std::shared_ptr<VulkanImage> & image, 
                     const VkMemoryRequirements & memory_requirements, 
                     VkMemoryPropertyFlags flags)
@@ -923,11 +972,13 @@ public:
     THROW_ON_ERROR(vkBindImageMemory(image->device->device, image->image, this->memory, 0));
   }
 
-  ~VulkanImageMemory() {}
+  ~VulkanImageMemory() = default;
 };
 
 class VulkanBufferMemory : public VulkanMemory {
 public:
+  NO_COPY_OR_ASSIGNMENT(VulkanBufferMemory);
+
   VulkanBufferMemory(const std::shared_ptr<VulkanBuffer> & buffer, 
                      const VkMemoryRequirements & memory_requirements,
                      VkMemoryPropertyFlags flags)
@@ -936,17 +987,20 @@ public:
     THROW_ON_ERROR(vkBindBufferMemory(buffer->device->device, buffer->buffer, this->memory, 0));
   }
 
-  ~VulkanBufferMemory() {}
+  ~VulkanBufferMemory() = default;
 };
 
 class VulkanImageView {
 public:
-  VulkanImageView(const std::shared_ptr<VulkanImage> & image,
+  NO_COPY_OR_ASSIGNMENT(VulkanImageView);
+
+  VulkanImageView(std::shared_ptr<VulkanImage> image,
                   VkFormat format,
                   VkImageViewType view_type, 
                   VkComponentMapping components,
                   VkImageSubresourceRange subresource_range)
-    : image(image)
+    : image(std::move(image)),
+      view(nullptr)
   {
     VkImageViewCreateInfo create_info {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, // sType 
@@ -967,13 +1021,15 @@ public:
     vkDestroyImageView(this->image->device->device, this->view, nullptr);
   }
 
-  VkImageView view;
   std::shared_ptr<VulkanImage> image;
+  VkImageView view;
 };
 
 class VulkanSampler {
 public:
-  VulkanSampler(const std::shared_ptr<VulkanDevice> & device, 
+  NO_COPY_OR_ASSIGNMENT(VulkanSampler);
+
+  VulkanSampler(std::shared_ptr<VulkanDevice> device, 
                 VkFilter magFilter,
                 VkFilter minFilter,
                 VkSamplerMipmapMode mipmapMode,
@@ -989,7 +1045,8 @@ public:
                 float maxLod,
                 VkBorderColor borderColor,
                 VkBool32 unnormalizedCoordinates)
-    : device(device)
+    : device(std::move(device)),
+      sampler(nullptr)
   {
     VkSamplerCreateInfo create_info {
       VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, // sType
@@ -1020,15 +1077,18 @@ public:
     vkDestroySampler(this->device->device, this->sampler, nullptr);
   }
 
-  VkSampler sampler;
   std::shared_ptr<VulkanDevice> device;
+  VkSampler sampler;
 };
 
 class VulkanShaderModule {
 public:
-  VulkanShaderModule(const std::shared_ptr<VulkanDevice> & device,
+  NO_COPY_OR_ASSIGNMENT(VulkanShaderModule);
+
+  VulkanShaderModule(std::shared_ptr<VulkanDevice> device,
                      const std::vector<char> & code)
-    : device(device)
+    : device(std::move(device)),
+      module(nullptr)
   {
     VkShaderModuleCreateInfo create_info {
     VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,      // sType
@@ -1046,15 +1106,18 @@ public:
     vkDestroyShaderModule(this->device->device, this->module, nullptr);
   }
 
-  VkShaderModule module;
   std::shared_ptr<VulkanDevice> device;
+  VkShaderModule module;
 };
 
 
 class VulkanPipelineCache {
 public:
-  VulkanPipelineCache(const std::shared_ptr<VulkanDevice> & device)
-    : device(device)
+  NO_COPY_OR_ASSIGNMENT(VulkanPipelineCache);
+
+  explicit VulkanPipelineCache(std::shared_ptr<VulkanDevice> device)
+    : device(std::move(device)),
+      cache(nullptr)
   {
     VkPipelineCacheCreateInfo create_info {
       VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO, // sType
@@ -1072,17 +1135,20 @@ public:
     vkDestroyPipelineCache(this->device->device, this->cache, nullptr);
   }
 
-  VkPipelineCache cache;
   std::shared_ptr<VulkanDevice> device;
+  VkPipelineCache cache;
 };
 
 class VulkanRenderpass {
 public:
-  VulkanRenderpass(const std::shared_ptr<VulkanDevice> & device,
+  NO_COPY_OR_ASSIGNMENT(VulkanRenderpass);
+
+  VulkanRenderpass(std::shared_ptr<VulkanDevice> device,
                    const std::vector<VkAttachmentDescription> & attachments,
                    const std::vector<VkSubpassDescription> & subpasses,
                    const std::vector<VkSubpassDependency> & dependencies = std::vector<VkSubpassDependency>())
-    : device(device)
+    : device(std::move(device)),
+      renderpass(nullptr)
   {
     VkRenderPassCreateInfo create_info {
     VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,    // sType
@@ -1104,19 +1170,22 @@ public:
     vkDestroyRenderPass(this->device->device, this->renderpass, nullptr);
   }
 
-  VkRenderPass renderpass;
   std::shared_ptr<VulkanDevice> device;
+  VkRenderPass renderpass;
 };
 
 
 class VulkanFramebuffer {
 public:
-  VulkanFramebuffer(const std::shared_ptr<VulkanDevice> & device,
+  NO_COPY_OR_ASSIGNMENT(VulkanFramebuffer);
+
+  VulkanFramebuffer(std::shared_ptr<VulkanDevice> device,
                     const std::shared_ptr<VulkanRenderpass> & renderpass,
                     std::vector<VkImageView> attachments, 
                     VkExtent2D extent,
                     uint32_t layers)
-    : device(device)
+    : device(std::move(device)),
+      framebuffer(nullptr)
   {
     VkFramebufferCreateInfo create_info {
       VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO, // sType
@@ -1138,16 +1207,19 @@ public:
     vkDestroyFramebuffer(this->device->device, this->framebuffer, nullptr);
   }
 
-  VkFramebuffer framebuffer;
   std::shared_ptr<VulkanDevice> device;
+  VkFramebuffer framebuffer;
 };
 
 class VulkanPipelineLayout {
 public:
-  VulkanPipelineLayout(const std::shared_ptr<VulkanDevice> & device, 
+  NO_COPY_OR_ASSIGNMENT(VulkanPipelineLayout);
+
+  VulkanPipelineLayout(std::shared_ptr<VulkanDevice> device, 
                        const std::vector<VkDescriptorSetLayout> & setlayouts,
                        const std::vector<VkPushConstantRange> & pushconstantranges = std::vector<VkPushConstantRange>())
-    : device(device)
+    : device(std::move(device)),
+      layout(nullptr)
   {
     VkPipelineLayoutCreateInfo create_info {
       VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,    // sType
@@ -1167,20 +1239,23 @@ public:
     vkDestroyPipelineLayout(this->device->device, this->layout, nullptr);
   }
 
-  VkPipelineLayout layout;
   std::shared_ptr<VulkanDevice> device;
+  VkPipelineLayout layout;
 };
 
 class VulkanComputePipeline {
 public:
-  VulkanComputePipeline(const std::shared_ptr<VulkanDevice> & device,
+  NO_COPY_OR_ASSIGNMENT(VulkanComputePipeline);
+
+  VulkanComputePipeline(std::shared_ptr<VulkanDevice> device,
                         VkPipelineCache pipelineCache,
                         VkPipelineCreateFlags flags,
                         const VkPipelineShaderStageCreateInfo & stage,
                         VkPipelineLayout layout,
                         VkPipeline basePipelineHandle = nullptr,
                         int32_t basePipelineIndex = 0)
-    : device(device)
+    : device(std::move(device)),
+      pipeline(nullptr)
   {
     VkComputePipelineCreateInfo create_info {
       VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, // sType
@@ -1205,13 +1280,15 @@ public:
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->pipeline);
   }
 
-  VkPipeline pipeline;
   std::shared_ptr<VulkanDevice> device;
+  VkPipeline pipeline;
 };
 
 class VulkanGraphicsPipeline {
 public:
-  VulkanGraphicsPipeline(const std::shared_ptr<VulkanDevice> & device, 
+  NO_COPY_OR_ASSIGNMENT(VulkanGraphicsPipeline);
+
+  VulkanGraphicsPipeline(std::shared_ptr<VulkanDevice> device, 
                          VkRenderPass render_pass,
                          VkPipelineCache pipeline_cache,
                          VkPipelineLayout pipeline_layout,
@@ -1221,15 +1298,16 @@ public:
                          std::vector<VkPipelineShaderStageCreateInfo> shaderstages,
                          std::vector<VkVertexInputBindingDescription> binding_descriptions,
                          std::vector<VkVertexInputAttributeDescription> attribute_descriptions)
-    : device(device)
+    : device(std::move(device)),
+      pipeline(nullptr)
   {
     VkPipelineVertexInputStateCreateInfo vertex_input_state {
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, // sType
       nullptr,                                                   // pNext
       0,                                                         // flags (reserved for future use)
-      (uint32_t)binding_descriptions.size(),                     // vertexBindingDescriptionCount
+      static_cast<uint32_t>(binding_descriptions.size()),        // vertexBindingDescriptionCount
       binding_descriptions.data(),                               // pVertexBindingDescriptions
-      (uint32_t)attribute_descriptions.size(),                   // vertexAttributeDescriptionCount
+      static_cast<uint32_t>(attribute_descriptions.size()),      // vertexAttributeDescriptionCount
       attribute_descriptions.data(),                             // pVertexAttributeDescriptions
     };
 
@@ -1267,7 +1345,7 @@ public:
       VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, // sType
       nullptr,                                              // pNext
       0,                                                    // flags (reserved for future use)
-      (uint32_t)dynamic_states.size(),                      // dynamicStateCount
+      static_cast<uint32_t>(dynamic_states.size()),         // dynamicStateCount
       dynamic_states.data(),                                // pDynamicStates
     };
 
@@ -1322,7 +1400,7 @@ public:
       VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, // sType
       nullptr,                                         // pNext
       0,                                               // flags is a bitmask of VkPipelineCreateFlagBits specifying how the pipeline will be generated.
-      (uint32_t)shaderstages.size(),                   // stageCount
+      static_cast<uint32_t>(shaderstages.size()),      // stageCount
       shaderstages.data(),                             // pStages
       &vertex_input_state,                             // pVertexInputState
       &input_assembly_state,                           // pInputAssemblyState
@@ -1353,6 +1431,6 @@ public:
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
   }
 
-  VkPipeline pipeline;
   std::shared_ptr<VulkanDevice> device;
+  VkPipeline pipeline;
 };

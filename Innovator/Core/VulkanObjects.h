@@ -1,19 +1,22 @@
 #pragma once
 
-#include <Innovator/core/Vulkan/Wrapper.h>
-#include <Innovator/core/State.h>
+#include <Innovator/Core/Misc/Defines.h>
+#include <Innovator/Core/Vulkan/Wrapper.h>
+#include <Innovator/Core/State.h>
 
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 #include <gli/texture.hpp>
 
-#include <map>
 #include <vector>
-#include <string>
 #include <memory>
 
 class VulkanBufferObject {
 public:
+  NO_COPY_OR_ASSIGNMENT(VulkanBufferObject);
+  VulkanBufferObject() = delete;
+  ~VulkanBufferObject() = default;
+
   VulkanBufferObject(const std::shared_ptr<VulkanDevice> & device,
                      size_t size,
                      VkBufferUsageFlags usage,
@@ -32,7 +35,6 @@ public:
                                                         memory_property_flags);
   }
 
-  ~VulkanBufferObject() {}
 
   std::shared_ptr<VulkanBuffer> buffer;
   std::unique_ptr<VulkanMemory> memory;
@@ -40,7 +42,11 @@ public:
 
 class ImageObject {
 public:
-  ImageObject(const std::shared_ptr<VulkanDevice> & device,
+  NO_COPY_OR_ASSIGNMENT(ImageObject);
+  ImageObject() = delete;
+  ~ImageObject() = default;
+
+  ImageObject(std::shared_ptr<VulkanDevice> device,
               VkFormat format,
               VkExtent3D extent,
               VkImageLayout layout,
@@ -52,13 +58,13 @@ public:
               VkMemoryPropertyFlags memory_property_flags,
               VkImageSubresourceRange subresource_range,
               VkComponentMapping component_mapping)
-    : device(device),
+    : device(std::move(device)),
       extent(extent), 
       layout(layout), 
       subresource_range(subresource_range)
   {
     this->image = std::make_shared<VulkanImage>(
-      device,
+      this->device,
       0,
       image_type,
       format,
@@ -86,8 +92,6 @@ public:
       component_mapping,
       subresource_range);
   }
-
-  ~ImageObject() {}
 
   void setData(VkCommandBuffer command, const gli::texture & texture)
   {
@@ -146,11 +150,10 @@ public:
     }
   }
 
+  std::shared_ptr<VulkanDevice> device;
   VkExtent3D extent;
   VkImageLayout layout;
   VkImageSubresourceRange subresource_range;
-
-  std::shared_ptr<VulkanDevice> device;
 
   std::shared_ptr<VulkanImage> image;
   std::unique_ptr<VulkanMemory> memory;
@@ -161,6 +164,10 @@ public:
 
 class DescriptorSetObject {
 public:
+  NO_COPY_OR_ASSIGNMENT(DescriptorSetObject);
+  DescriptorSetObject() = delete;
+  ~DescriptorSetObject() = default;
+
   DescriptorSetObject(const std::shared_ptr<VulkanDevice> & device, 
                       const std::vector<VulkanTextureDescription> & textures,
                       const std::vector<VulkanBufferDescription> & buffers)
@@ -251,7 +258,6 @@ public:
     }
   }
 
-  ~DescriptorSetObject() {}
 
   void bind(VkCommandBuffer command, VkPipelineBindPoint bind_point)
   {
@@ -266,18 +272,22 @@ public:
 
 class GraphicsPipelineObject {
 public:
-  GraphicsPipelineObject(const std::shared_ptr<VulkanDevice> & device,
+  NO_COPY_OR_ASSIGNMENT(GraphicsPipelineObject);
+  GraphicsPipelineObject() = delete;
+  ~GraphicsPipelineObject() = default;
+
+  GraphicsPipelineObject(std::shared_ptr<VulkanDevice> device,
                          const std::vector<VulkanVertexAttributeDescription> & attributes,
                          const std::vector<VulkanShaderModuleDescription> & shaders,
                          const std::vector<VulkanBufferDescription> & buffers,
-                         const std::vector<VulkanTextureDescription> textures,
+                         const std::vector<VulkanTextureDescription> & textures,
                          const VkPipelineRasterizationStateCreateInfo & rasterizationstate,
                          const std::shared_ptr<VulkanRenderpass> & renderpass,
                          const std::unique_ptr<VulkanPipelineCache> & pipelinecache,
                          const VulkanDrawDescription & drawdescription)
-    : device(device)
+    : device(std::move(device))
   {
-    this->descriptor_set = std::make_unique<DescriptorSetObject>(device, textures, buffers);
+    this->descriptor_set = std::make_unique<DescriptorSetObject>(this->device, textures, buffers);
 
     std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
     for (const VulkanShaderModuleDescription & shader : shaders) {
@@ -315,7 +325,7 @@ public:
     };
 
     this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
-      device,
+      this->device,
       renderpass->renderpass,
       pipelinecache->cache,
       this->descriptor_set->pipeline_layout->layout,
@@ -326,8 +336,6 @@ public:
       binding_descriptions,
       attribute_descriptions);
   }
-
-  ~GraphicsPipelineObject() {}
 
   void bind(VkCommandBuffer command)
   {
@@ -342,6 +350,10 @@ public:
 
 class ComputePipelineObject {
 public:
+  NO_COPY_OR_ASSIGNMENT(ComputePipelineObject);
+  ComputePipelineObject() = delete;
+  ~ComputePipelineObject() = default;
+
   ComputePipelineObject(const std::shared_ptr<VulkanDevice> & device, 
                         const VulkanShaderModuleDescription & shader,
                         const std::vector<VulkanBufferDescription> & buffers,
@@ -368,7 +380,6 @@ public:
       this->descriptor_set->pipeline_layout->layout);
   }
 
-  ~ComputePipelineObject() {}
 
   void bind(VkCommandBuffer command)
   {

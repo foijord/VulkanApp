@@ -1,11 +1,15 @@
 #pragma once
 
+#include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Math/Box.h>
 #include <Innovator/Core/Node.h>
+#include <Innovator/Group.h>
 #include <Innovator/Core/State.h>
 #include <Innovator/Core/VulkanObjects.h>
 
+#include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -13,11 +17,19 @@
 
 class Action {
 public:
+  NO_COPY_OR_ASSIGNMENT(Action);
+  Action() = default;
+  virtual ~Action() = default;
+
   State state;
 };
 
 class HandleEventAction : public Action {
 public:
+  NO_COPY_OR_ASSIGNMENT(HandleEventAction);
+  HandleEventAction() = default;
+  virtual ~HandleEventAction() = default;
+
   void apply(const std::shared_ptr<Node> & root)
   {
     root->traverse(this);
@@ -43,6 +55,10 @@ SearchAction(const std::shared_ptr<Node> & root) {
 
 class BoundingBoxAction : public Action {
 public:
+  NO_COPY_OR_ASSIGNMENT(BoundingBoxAction);
+  BoundingBoxAction() = default;
+  virtual ~BoundingBoxAction() = default;
+
   void apply(const std::shared_ptr<Node> & root)
   {
     root->traverse(this);
@@ -53,14 +69,20 @@ public:
     this->bounding_box.extendBy(box);
   }
 
-
   box3 bounding_box;
 };
 
 class RenderAction : public Action {
 public:
+  NO_COPY_OR_ASSIGNMENT(RenderAction);
+  RenderAction() = default;
+
   class DrawCommandObject {
   public:
+    NO_COPY_OR_ASSIGNMENT(DrawCommandObject);
+    DrawCommandObject() = default;
+    virtual ~DrawCommandObject() = default;
+
     DrawCommandObject(RenderAction * action, State & state)
     {
       this->pipeline = std::make_unique<GraphicsPipelineObject>(
@@ -79,7 +101,7 @@ public:
 
       this->pipeline->bind(this->command->buffer());
 
-      for (const VulkanVertexAttributeDescription & attribute : state.attributes) {
+      for (const auto& attribute : state.attributes) {
         VkDeviceSize offsets[1] = { 0 };
         vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
       }
@@ -97,7 +119,6 @@ public:
       }
       this->command->end();
     }
-    ~DrawCommandObject() = default;
 
     std::unique_ptr<GraphicsPipelineObject> pipeline;
     std::unique_ptr<VulkanCommandBuffers> command;
@@ -105,6 +126,10 @@ public:
 
   class ComputeCommandObject {
   public:
+    NO_COPY_OR_ASSIGNMENT(ComputeCommandObject);
+    ComputeCommandObject() = delete;
+    ~ComputeCommandObject() = default;
+
     ComputeCommandObject(RenderAction * action, State & state)
     {
       this->pipeline = std::make_unique<ComputePipelineObject>(
@@ -127,31 +152,45 @@ public:
       this->command->end();
     }
 
-    ~ComputeCommandObject() = default;
-
     std::unique_ptr<ComputePipelineObject> pipeline;
     std::unique_ptr<VulkanCommandBuffers> command;
   };
 
-  RenderAction(const std::shared_ptr<VulkanDevice> & device, 
-               const std::shared_ptr<VulkanRenderpass> & renderpass, 
-               const std::shared_ptr<VulkanFramebuffer> & framebuffer, 
+  RenderAction(std::shared_ptr<VulkanDevice> device,
+               std::shared_ptr<VulkanRenderpass> renderpass,
+               std::shared_ptr<VulkanFramebuffer> framebuffer, 
                VkExtent2D extent)
-    : device(device), 
+    : device(std::move(device)), 
+      renderpass(std::move(renderpass)),
+      framebuffer(std::move(framebuffer)),
       extent(extent),
-      renderpass(renderpass),
-      framebuffer(framebuffer),
-      fence(std::make_unique<VulkanFence>(device)),
-      command(std::make_unique<VulkanCommandBuffers>(device)),
-      pipelinecache(std::make_unique<VulkanPipelineCache>(device))
+      fence(std::make_unique<VulkanFence>(this->device)),
+      command(std::make_unique<VulkanCommandBuffers>(this->device)),
+      pipelinecache(std::make_unique<VulkanPipelineCache>(this->device))
   {
-    this->scissor = { { 0, 0 },  this->extent };
-    this->renderarea = { { 0, 0 }, this->extent };
-    this->clearvalues = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 1.0f, 0 } };
-    this->viewport = { 0.0f, 0.0f, (float)this->extent.width, (float)this->extent.height, 0.0f, 1.0f };
+    this->scissor = VkRect2D{{ 0, 0 }, this->extent};
+
+    this->renderarea = { 
+      { 0, 0 },             // offset
+      this->extent          // extent
+    };
+
+    this->clearvalues = { 
+      {{0.0f, 0.0f, 0.0f, 0.0f}},
+      { 1.0f, 0 } 
+    };
+
+    this->viewport = { 
+      0.0f,                                     // x
+      0.0f,                                     // y
+      static_cast<float>(this->extent.width),   // width
+      static_cast<float>(this->extent.height),  // height
+      0.0f,                                     // minDepth
+      1.0f                                      // maxDepth
+    };
   }
 
-  ~RenderAction() 
+  virtual ~RenderAction() 
   {
     try {
       THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
@@ -212,6 +251,10 @@ public:
     this->compute_commands.clear();
   }
 
+  std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanRenderpass> renderpass;
+  std::shared_ptr<VulkanFramebuffer> framebuffer;
+
   VkExtent2D extent;
   VkRect2D scissor;
   VkViewport viewport;
@@ -224,18 +267,15 @@ public:
   std::map<VulkanDrawDescription *, std::unique_ptr<DrawCommandObject>> draw_commands;
   std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
 
-  std::shared_ptr<VulkanDevice> device;
   std::unique_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<VulkanPipelineCache> pipelinecache;
-
-  std::shared_ptr<VulkanFramebuffer> framebuffer;
-  std::shared_ptr<VulkanRenderpass> renderpass;
 };
 
 class StateScope {
 public:
-  StateScope(Action * action) : state(action->state), action(action) {}
+  NO_COPY_OR_ASSIGNMENT(StateScope);
+  explicit StateScope(Action * action) : state(action->state), action(action) {}
   ~StateScope() { action->state = state; }
 private:
   State state;

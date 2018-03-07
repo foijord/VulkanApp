@@ -19,6 +19,7 @@ add_executable(${TARGET_NAME} WIN32
   Viewer.h
   Application.h
   Innovator/Nodes.h
+  Innovator/Group.h
   Innovator/Actions.h
   Innovator/Core/Node.h
   Innovator/Core/File.h

@@ -1,21 +1,25 @@
 #pragma once
 
-#include <Innovator/core/VulkanObjects.h>
+#include <Innovator/Core/Misc/Defines.h>
+#include <Innovator/Core/VulkanObjects.h>
 #include <Innovator/Actions.h>
 #include <Innovator/Nodes.h>
-
-#include <glm/glm.hpp>
 
 #include <map>
 #include <string>
 #include <memory>
+#include <utility>
 #include <vector>
 #include <iostream>
 
 class VulkanViewer {
 public:
-  VulkanViewer(const std::shared_ptr<VulkanInstance> & vulkan, VkSurfaceKHR surface)
-    : vulkan(vulkan), surface(surface)
+  NO_COPY_OR_ASSIGNMENT(VulkanViewer);
+  VulkanViewer() = delete;
+
+  VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, VkSurfaceKHR surface)
+    : vulkan(std::move(vulkan)), 
+      surface(surface)
   {
     VkPhysicalDeviceFeatures required_device_features;
     ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
@@ -53,7 +57,8 @@ public:
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
-    this->device = std::make_shared<VulkanDevice>(physical_device,
+    this->device = std::make_shared<VulkanDevice>(
+      physical_device,
       required_device_features,
       device_layers,
       device_extensions,
@@ -133,7 +138,7 @@ public:
     this->resize();
   }
 
-  virtual ~VulkanViewer()
+  ~VulkanViewer()
   {
     try {
       // make sure all work submitted to GPU is done before we start deleting stuff...
@@ -161,7 +166,7 @@ public:
     }
   }
 
-  virtual void render()
+  void render()
   {
     try {
       this->renderaction->apply(this->root);
@@ -193,7 +198,7 @@ public:
     }
   }
 
-  virtual void resize()
+  void resize()
   {
     // make sure all work submitted is done before we start recreating stuff
     THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
@@ -440,7 +445,7 @@ public:
     }
   }
 
-  virtual void keyDown(uint32_t key)
+  void keyDown(uint32_t key)
   {
     std::map<uint32_t, std::string> keymap{
       { 0x25, "LEFT_ARROW" },{ 0x26, "UP_ARROW" },{ 0x27, "RIGHT_ARROW" },{ 0x28, "DOWN_ARROW" },
@@ -453,19 +458,19 @@ public:
     this->handleeventaction->apply(this->root);
   }
 
-  virtual void mousePressed(uint32_t x, uint32_t y, int button)
+  void mousePressed(uint32_t x, uint32_t y, int button)
   {
     this->button = button;
     this->mouse_pos = glm::vec2(x, y);
     this->mouse_pressed = true;
   }
 
-  virtual void mouseReleased(uint32_t x, uint32_t y, int button)
+  void mouseReleased(uint32_t x, uint32_t y, int button)
   {
     this->mouse_pressed = false;
   }
 
-  virtual void mouseMoved(uint32_t x, uint32_t y)
+  void mouseMoved(uint32_t x, uint32_t y)
   {
     if (this->mouse_pressed) {
       glm::vec2 pos = glm::vec2(x, y);

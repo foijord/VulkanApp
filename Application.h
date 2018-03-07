@@ -1,26 +1,31 @@
 #pragma once
 
+#include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/VulkanObjects.h>
 #include <Viewer.h>
+#include <utility>
 #include <vector>
 
 class Window {
 public:
+  NO_COPY_OR_ASSIGNMENT(Window);
+  Window() = delete;
+
   Window(HINSTANCE hinstance, WNDPROC WndProc, std::string name, uint32_t width, uint32_t height)
   {
     WNDCLASSEX wndclass {
-      sizeof(WNDCLASSEX),                   // cbSize 
-      CS_HREDRAW | CS_VREDRAW,              // style
-      WndProc,                              // lpfnWndProc 
-      0,                                    // cbClsExtra
-      0,                                    // cbWndExtra
-      hinstance,                            // hInstance 
-      LoadIcon(nullptr, IDI_APPLICATION),   // hIcon 
-      LoadCursor(nullptr, IDC_ARROW),       // hCursor 
-      (HBRUSH)GetStockObject(WHITE_BRUSH),  // hbrBackground
-      name.c_str(),                         // lpszMenuName
-      name.c_str(),                         // lpszClassName 
-      LoadIcon(nullptr, IDI_WINLOGO),       // hIconSm 
+      sizeof(WNDCLASSEX),                                 // cbSize 
+      CS_HREDRAW | CS_VREDRAW,                            // style
+      WndProc,                                            // lpfnWndProc 
+      0,                                                  // cbClsExtra
+      0,                                                  // cbWndExtra
+      hinstance,                                          // hInstance 
+      LoadIcon(nullptr, IDI_APPLICATION),                 // hIcon 
+      LoadCursor(nullptr, IDC_ARROW),                     // hCursor 
+      static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)),   // hbrBackground
+      name.c_str(),                                       // lpszMenuName
+      name.c_str(),                                       // lpszClassName 
+      LoadIcon(nullptr, IDI_WINLOGO),                     // hIconSm 
     };
 
     if (!RegisterClassEx(&wndclass)) {
@@ -57,10 +62,14 @@ public:
 
 class VulkanSurfaceWin32 {
 public:
-  VulkanSurfaceWin32(const std::shared_ptr<VulkanInstance> & vulkan,
+  NO_COPY_OR_ASSIGNMENT(VulkanSurfaceWin32);
+  VulkanSurfaceWin32() = delete;
+
+  VulkanSurfaceWin32(std::shared_ptr<VulkanInstance> vulkan,
                      const std::shared_ptr<Window> & window,
                      HINSTANCE hinstance)
-    : vulkan(vulkan)
+    : vulkan(std::move(vulkan)),
+      surface(nullptr)
   {
     VkWin32SurfaceCreateInfoKHR create_info {
       VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, // sType 
@@ -78,12 +87,15 @@ public:
     vkDestroySurfaceKHR(this->vulkan->instance, this->surface, nullptr);
   }
 
-  VkSurfaceKHR surface;
   std::shared_ptr<VulkanInstance> vulkan;
+  VkSurfaceKHR surface;
 };
 
 class VulkanApplication {
 public:
+  NO_COPY_OR_ASSIGNMENT(VulkanApplication);
+  VulkanApplication() = delete;
+
   explicit VulkanApplication(HINSTANCE hinstance)
   {
     std::vector<const char *> instance_layers {
