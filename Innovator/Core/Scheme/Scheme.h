@@ -20,7 +20,7 @@ std::shared_ptr<class Expression> eval(std::shared_ptr<Expression> & exp,
 class Expression : public std::list<std::shared_ptr<Expression>> {
 public:
   Expression();
-  Expression(const iterator & begin, const iterator & end);
+  Expression(const const_iterator & begin, const const_iterator & end);
   virtual ~Expression();
 
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env);
@@ -31,8 +31,8 @@ public:
 class Environment : public std::map<std::string, std::shared_ptr<Expression>> {
 public:
   Environment();
-  Environment(const std::shared_ptr<Expression> & parms,
-              const std::shared_ptr<Expression> & args,
+  Environment(const Expression * parms,
+              const Expression * args,
               const std::shared_ptr<Environment> & outer = std::make_shared<Environment>());
   
   Environment * getEnv(const std::string & sym);
@@ -52,8 +52,8 @@ public:
 
 
 Environment::Environment() {}
-Environment::Environment(const std::shared_ptr<Expression> & parms,
-                         const std::shared_ptr<Expression> & args,
+Environment::Environment(const Expression * parms,
+                         const Expression * args,
                          const std::shared_ptr<Environment> & outer)
   : outer(outer)
 {
@@ -79,7 +79,7 @@ Expression::Expression() {}
 
 Expression::~Expression() {}
 
-Expression::Expression(const iterator & begin, const iterator & end)
+Expression::Expression(const const_iterator & begin, const const_iterator & end)
   : std::list<std::shared_ptr<Expression>>(begin, end) {}
   
 std::string
@@ -263,9 +263,9 @@ public:
 
 class Callable : public Expression {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args) = 0;
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const = 0;
  
-  static std::vector<double> argvec(const std::shared_ptr<Expression> & args)
+  static std::vector<double> argvec(const Expression * args)
   {
     std::vector<double> dargs(args->size());
     std::transform(args->begin(), args->end(), dargs.begin(), [](auto & arg) {
@@ -274,14 +274,14 @@ public:
     return dargs;
   }
 
-  void checkNumArgs(const std::shared_ptr<Expression> & args, size_t num)
+  void checkNumArgs(const Expression * args, size_t num) const
   {
     if (args->size() != num) {
       throw std::invalid_argument("invalid number of arguments");
     }
   }
 
-  std::shared_ptr<String> getString(const std::shared_ptr<Expression> & arg)
+  std::shared_ptr<String> getString(const std::shared_ptr<Expression> & arg) const
   {
     auto string = std::dynamic_pointer_cast<String>(arg);
     if (!string) {
@@ -290,7 +290,7 @@ public:
     return string;
   }
 
-  std::shared_ptr<Number> getNumber(const std::shared_ptr<Expression> & arg)
+  std::shared_ptr<Number> getNumber(const std::shared_ptr<Expression> & arg) const
   {
     auto number = std::dynamic_pointer_cast<Number>(arg);
     if (!number) {
@@ -303,7 +303,7 @@ public:
 template <typename T>
 class Operator : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     auto dargs = Callable::argvec(args);
     return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs[0], op));
@@ -319,7 +319,7 @@ typedef Operator<std::multiplies<double>> Mul;
 
 class Less : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     auto dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] < dargs[1]);
@@ -328,7 +328,7 @@ public:
 
 class More : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     auto dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] > dargs[1]);
@@ -337,7 +337,7 @@ public:
 
 class Same: public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     auto dargs = Callable::argvec(args);
     return std::make_shared<Boolean>(dargs[0] == dargs[1]);
@@ -346,7 +346,7 @@ public:
 
 class Car : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     return args->front();
   }
@@ -354,7 +354,7 @@ public:
 
 class Cdr : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     return std::make_shared<Expression>(next(args->begin()), args->end());
   }
@@ -388,11 +388,11 @@ std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp,
     if (typeid(*front.get()) == typeid(Function)) {
       auto func = std::dynamic_pointer_cast<Function>(front);
       exp = func->body;
-      env = std::make_shared<Environment>(func->parms, exps, func->env);
+      env = std::make_shared<Environment>(func->parms.get(), exps.get(), func->env);
     }
     else {
       auto builtin = std::dynamic_pointer_cast<Callable>(front);
-      return (*builtin)(exps);
+      return (*builtin)(exps.get());
     }
   }
 }

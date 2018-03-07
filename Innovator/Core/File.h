@@ -17,10 +17,10 @@ public:
 
 class LayoutBindingFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     this->checkNumArgs(args, 3);
-    Expression::iterator it = args->begin();
+    const_iterator it = args->begin();
     auto bindingexpr = this->getNumber(*it++);
     auto typeexpr = this->getNumber(*it++);
     auto stageexpr = this->getNumber(*it++);
@@ -36,7 +36,7 @@ public:
 
 class SamplerFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     this->checkNumArgs(args, 0);
     auto node = std::make_shared<Sampler>();
@@ -46,7 +46,7 @@ public:
 
 class TextureFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     this->checkNumArgs(args, 1);
     auto filename = this->getString(args->front());
@@ -57,7 +57,7 @@ public:
 
 class ShaderFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     this->checkNumArgs(args, 2);
     auto stage = this->getNumber(args->back());
@@ -73,10 +73,10 @@ public:
 
 class BoxFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     this->checkNumArgs(args, 2);
-    Expression::iterator it = args->begin();
+    const_iterator it = args->begin();
     auto bindingexpr = this->getNumber(*it++);
     auto locationexpr = this->getNumber(*it++);
 
@@ -90,7 +90,7 @@ public:
 
 class SeparatorFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const std::shared_ptr<Expression> & args)
+  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
   {
     auto sep = std::make_shared<Separator>();
 
