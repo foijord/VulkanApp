@@ -2,7 +2,13 @@
 
 class Node {
 public:
-  virtual ~Node() {}
+  Node() = default;
+  Node(const Node&) = delete;
+  Node(const Node&&) = delete;
+  Node & operator=(const Node&) = delete;
+  Node & operator=(const Node&&) = delete;
+
+  virtual ~Node() = default;
   virtual void traverse(class RenderAction *) {}
   virtual void traverse(class BoundingBoxAction *) {}
   virtual void traverse(class HandleEventAction *) {}

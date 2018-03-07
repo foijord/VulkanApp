@@ -69,7 +69,12 @@ namespace {
 
 class VulkanPhysicalDevice {
 public:
-  VulkanPhysicalDevice(VkPhysicalDevice device)
+  VulkanPhysicalDevice(VulkanPhysicalDevice && self) = default;
+  VulkanPhysicalDevice(const VulkanPhysicalDevice & self) = default;
+  VulkanPhysicalDevice & operator=(VulkanPhysicalDevice && self) = delete;
+  VulkanPhysicalDevice & operator=(const VulkanPhysicalDevice & self) = delete;
+
+  explicit VulkanPhysicalDevice(VkPhysicalDevice device)
     : device(device)
   {
     vkGetPhysicalDeviceFeatures(this->device, &this->features);
@@ -90,7 +95,7 @@ public:
     THROW_ON_ERROR(vkEnumerateDeviceExtensionProperties(this->device, nullptr, &count, this->extension_properties.data()));
   }
 
-  ~VulkanPhysicalDevice() {}
+  ~VulkanPhysicalDevice() = default;
 
   uint32_t getQueueIndex(VkQueueFlags required_flags, std::vector<VkBool32> filter = std::vector<VkBool32>())
   {

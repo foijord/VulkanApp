@@ -9,59 +9,55 @@
 
 class NodeExpression : public Expression {
 public:
-  NodeExpression(std::shared_ptr<Node> node)
-    : node(node)
+  explicit NodeExpression(std::shared_ptr<Node> node)
+    : node(std::move(node))
   {}
   std::shared_ptr<Node> node;
 };
 
 class LayoutBindingFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    this->checkNumArgs(args, 3);
-    const_iterator it = args->begin();
-    auto bindingexpr = this->getNumber(*it++);
-    auto typeexpr = this->getNumber(*it++);
-    auto stageexpr = this->getNumber(*it++);
+    check_num_args(args, 3);
+    const auto bindingexpr = get_number(args, 0);
+    const auto typeexpr = get_number(args, 1);
+    const auto stageexpr = get_number(args, 2);
 
-    uint32_t binding = static_cast<uint32_t>(bindingexpr->value);
-    VkDescriptorType type = static_cast<VkDescriptorType>(int(typeexpr->value));
-    VkShaderStageFlags stage = static_cast<VkShaderStageFlags>(int(stageexpr->value));
+    auto binding = static_cast<uint32_t>(bindingexpr->value);
+    auto type = static_cast<VkDescriptorType>(int(typeexpr->value));
+    auto stage = static_cast<VkShaderStageFlags>(int(stageexpr->value));
 
-    auto node = std::make_shared<LayoutBinding>(binding, type, stage);
-    return std::make_shared<NodeExpression>(node);
+    return std::make_shared<NodeExpression>(std::make_shared<LayoutBinding>(binding, type, stage));
   }
 };
 
 class SamplerFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    this->checkNumArgs(args, 0);
-    auto node = std::make_shared<Sampler>();
-    return std::make_shared<NodeExpression>(node);
+    check_num_args(args, 0);
+    return std::make_shared<NodeExpression>(std::make_shared<Sampler>());
   }
 };
 
 class TextureFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    this->checkNumArgs(args, 1);
-    auto filename = this->getString(args->front());
-    auto node = std::make_shared<Texture>(filename->value);
-    return std::make_shared<NodeExpression>(node);
+    check_num_args(args, 1);
+    const auto filename = get_string(args, 0);
+    return std::make_shared<NodeExpression>(std::make_shared<Texture>(filename->value));
   }
 };
 
 class ShaderFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    this->checkNumArgs(args, 2);
-    auto stage = this->getNumber(args->back());
-    auto filename = this->getString(args->front());
+    check_num_args(args, 2);
+    const auto stage = get_number(args, 1);
+    const auto filename = get_string(args, 0);
 
     auto node = std::make_shared<Shader>(
       filename->value, 
@@ -73,12 +69,11 @@ public:
 
 class BoxFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    this->checkNumArgs(args, 2);
-    const_iterator it = args->begin();
-    auto bindingexpr = this->getNumber(*it++);
-    auto locationexpr = this->getNumber(*it++);
+   check_num_args(args, 2);
+    const auto bindingexpr = get_number(args, 0);
+    const auto locationexpr = get_number(args, 1);
 
     auto node = std::make_shared<Box>(
       static_cast<uint32_t>(bindingexpr->value),
@@ -90,16 +85,16 @@ public:
 
 class SeparatorFunction : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     auto sep = std::make_shared<Separator>();
 
-    for (const std::shared_ptr<Expression> & exp : *args) {
-      auto nodefunc = std::dynamic_pointer_cast<NodeExpression>(exp);
+    for (auto & exp : *args) {
+      const auto nodefunc = std::dynamic_pointer_cast<NodeExpression>(exp);
       if (!nodefunc) {
         throw std::invalid_argument("separator args must be nodes");
       }
-      auto node = std::dynamic_pointer_cast<Node>(nodefunc->node);
+      const auto node = std::dynamic_pointer_cast<Node>(nodefunc->node);
       if (!node) {
         throw std::invalid_argument("separator args must be nodes");
       }
@@ -113,26 +108,26 @@ class File {
 public:
   File() 
   {
-    (*scheme.environment)["separator"] = std::make_shared<SeparatorFunction>();
-    (*scheme.environment)["shader"] = std::make_shared<ShaderFunction>();
-    (*scheme.environment)["VK_SHADER_STAGE_VERTEX_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT);
-    (*scheme.environment)["VK_SHADER_STAGE_COMPUTE_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_COMPUTE_BIT);
-    (*scheme.environment)["VK_SHADER_STAGE_FRAGMENT_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT);
+    this->scheme.environment["separator"] = std::make_shared<SeparatorFunction>();
+    this->scheme.environment["shader"] = std::make_shared<ShaderFunction>();
+    this->scheme.environment["VK_SHADER_STAGE_VERTEX_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT);
+    this->scheme.environment["VK_SHADER_STAGE_COMPUTE_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_COMPUTE_BIT);
+    this->scheme.environment["VK_SHADER_STAGE_FRAGMENT_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    (*scheme.environment)["layout-binding"] = std::make_shared<LayoutBindingFunction>();
-    (*scheme.environment)["VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER"] = std::make_shared<Number>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    this->scheme.environment["layout-binding"] = std::make_shared<LayoutBindingFunction>();
+    this->scheme.environment["VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER"] = std::make_shared<Number>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    (*scheme.environment)["texture"] = std::make_shared<TextureFunction>();
-    (*scheme.environment)["sampler"] = std::make_shared<SamplerFunction>();
-    (*scheme.environment)["box"] = std::make_shared<BoxFunction>();
+    this->scheme.environment["texture"] = std::make_shared<TextureFunction>();
+    this->scheme.environment["sampler"] = std::make_shared<SamplerFunction>();
+    this->scheme.environment["box"] = std::make_shared<BoxFunction>();
   }
 
-  std::shared_ptr<Separator> open(const std::string & filename)
+  std::shared_ptr<Separator> open(const std::string & filename) const
   {
     std::ifstream input(filename, std::ios::in);
-    std::string code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
+    const std::string code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
 
-    auto sep = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
+    const auto sep = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
     if (!sep) {
       throw std::invalid_argument("top level expression must be a Node");
     }

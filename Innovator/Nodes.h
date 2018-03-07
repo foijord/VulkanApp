@@ -9,34 +9,41 @@
 #include <vulkan/vulkan.h>
 
 #include <map>
+#include <utility>
 #include <vector>
 #include <memory>
 #include <iostream>
 
 class Group : public Node {
 public:
-  Group() {}
-  Group(std::vector<std::shared_ptr<Node>> children)
-    : children(children) {}
+  Group() = default;
+  Group(const Group&) = delete;
+  Group(const Group&&) = delete;
+  Group & operator=(const Group&) = delete;
+  Group & operator=(const Group&&) = delete;
+  
+  explicit Group(std::vector<std::shared_ptr<Node>> children)
+    : children(std::move(children)) {}
 
-  virtual ~Group() {}
-  virtual void traverse(RenderAction * action)
+  virtual ~Group() = default;
+
+  void traverse(RenderAction * action) override
   {
-    for (const std::shared_ptr<Node> & node : this->children) {
+    for (const auto& node : this->children) {
       node->traverse(action);
     }
   }
 
-  virtual void traverse(BoundingBoxAction * action)
+  void traverse(BoundingBoxAction * action) override
   {
-    for (const std::shared_ptr<Node> & node : this->children) {
+    for (const auto& node : this->children) {
       node->traverse(action);
     }
   }
 
-  virtual void traverse(HandleEventAction * action)
+  void traverse(HandleEventAction * action) override
   {
-    for (const std::shared_ptr<Node> & node : this->children) {
+    for (const auto& node : this->children) {
       node->traverse(action);
     }
   }
@@ -46,30 +53,35 @@ public:
 
 class Separator : public Group {
 public:
-  Separator() {}
-  Separator(std::vector<std::shared_ptr<Node>> children)
+  Separator() = default;
+  Separator(const Separator&) = delete;
+  Separator(const Separator&&) = delete;
+  Separator & operator=(const Separator&) = delete;
+  Separator & operator=(const Separator&&) = delete;
+
+  explicit Separator(const std::vector<std::shared_ptr<Node>> & children)
     : Group(children) {}
 
-  virtual ~Separator() {}
-  
+  virtual ~Separator() = default;
+
   static std::shared_ptr<Separator> create(std::vector<std::shared_ptr<Node>> children)
   {
     return std::make_shared<Separator>(children);
   }
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     StateScope scope(action);
     Group::traverse(action);
   }
 
-  virtual void traverse(BoundingBoxAction * action)
+  void traverse(BoundingBoxAction * action) override
   {
     StateScope scope(action);
     Group::traverse(action);
   }
 
-  virtual void traverse(HandleEventAction * action)
+  void traverse(HandleEventAction * action) override
   {
     StateScope scope(action);
     Group::traverse(action);
@@ -78,7 +90,7 @@ public:
 
 class Camera : public Node {
 public:
-  Camera()
+  explicit Camera()
     : orientation(glm::mat3(1.0)),
       aspectRatio(4.0f / 3.0f),
       fieldOfView(0.7f),
@@ -88,9 +100,9 @@ public:
       focalDistance(1.0f)
   {}
 
-  virtual ~Camera() {}
+  virtual ~Camera() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     this->aspectRatio = action->viewport.width / action->viewport.height;
     action->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
@@ -154,17 +166,17 @@ public:
 
 class Transform : public Node {
 public:
-  Transform(const glm::vec3 & translation = glm::vec3(0), const glm::vec3 & scalefactor = glm::vec3(1))
+  explicit Transform(const glm::vec3 & translation = glm::vec3(0), const glm::vec3 & scalefactor = glm::vec3(1))
     : translation(translation), scaleFactor(scalefactor) {}
 
-  virtual ~Transform() {}
+  virtual ~Transform() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     this->doAction(action);
   }
 
-  virtual void traverse(BoundingBoxAction * action)
+  void traverse(BoundingBoxAction * action) override
   {
     this->doAction(action);
   }
@@ -173,7 +185,7 @@ public:
   glm::vec3 scaleFactor;
 
 private:
-  void doAction(Action * action)
+  void doAction(Action * action) const
   {
     mat4 matrix(1.0);
     matrix = glm::translate(matrix, this->translation);
@@ -184,10 +196,10 @@ private:
 
 class IndexBuffer : public Node {
 public:
-  IndexBuffer() {}
-  virtual ~IndexBuffer() {}
+  IndexBuffer() = default;
+  virtual ~IndexBuffer() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     if (!this->gpu_buffer) {
       size_t size = sizeof(uint32_t) * this->values.size();
@@ -232,9 +244,9 @@ public:
   LayoutBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage)
     : binding(binding), type(type), stage(stage) {}
 
-  virtual ~LayoutBinding() {}
+  virtual ~LayoutBinding() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     action->state.layout_binding.type = this->type;
     action->state.layout_binding.stage = this->stage;
@@ -252,9 +264,9 @@ public:
   Buffer(VkBufferUsageFlagBits usage, VkMemoryPropertyFlags flags)
     : usage(usage), flags(flags), transfer(false)
   {}
-  virtual ~Buffer() {}
+  virtual ~Buffer() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     size_t size = sizeof(T) * this->values.size();
     if (!this->buffer) {
@@ -286,7 +298,7 @@ public:
     : location(location), binding(binding), format(format), offset(offset), input_rate(VK_VERTEX_INPUT_RATE_VERTEX) 
   {}
 
-  virtual ~VertexAttributeDescription() {}
+  virtual ~VertexAttributeDescription() = default;
 
   virtual void traverse(RenderAction * action)
   {
@@ -307,10 +319,10 @@ public:
 template <typename T>
 class VertexAttribute : public Node {
 public:
-  VertexAttribute() {}
-  virtual ~VertexAttribute() {}
+  VertexAttribute() = default;
+  virtual ~VertexAttribute() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     if (!this->gpu_buffer) {
       size_t size = sizeof(T) * this->values.size();
@@ -353,9 +365,9 @@ public:
   Shader(const std::string & filename, VkShaderStageFlagBits stage)
     : filename(filename), stage(stage) {}
 
-  virtual ~Shader() {}
+  virtual ~Shader() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     if (!this->shader) {
       std::ifstream input(filename, std::ios::binary);
@@ -376,10 +388,10 @@ public:
 
 class Sampler : public Node {
 public:
-  Sampler() {}
-  virtual ~Sampler() {}
+  Sampler() = default;
+  virtual ~Sampler() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     if (!this->sampler) {
       this->sampler = std::make_unique<VulkanSampler>(
@@ -408,15 +420,15 @@ public:
 
 class Texture : public Node {
 public:
-  Texture(const std::string & filename)
+  explicit Texture(const std::string & filename)
     : Texture(gli::load(filename)) {}
 
-  Texture(const gli::texture & texture)
+  explicit Texture(const gli::texture & texture)
     : texture(texture) {}
 
-  virtual ~Texture() {}
+  virtual ~Texture() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     if (!this->image) {
       VkComponentMapping component_mapping = {
@@ -485,12 +497,12 @@ public:
 
 class CullMode : public Node {
 public:
-  CullMode(VkCullModeFlags cullmode)
+  explicit CullMode(VkCullModeFlags cullmode)
     : cullmode(cullmode) {}
 
-  virtual ~CullMode() {}
+  virtual ~CullMode() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     action->state.rasterizationstate.cullMode = this->cullmode;
   }
@@ -503,9 +515,9 @@ public:
   RasterizationState() 
     : state(State::defaultRasterizationState()) {}
 
-  virtual ~RasterizationState() {}
+  virtual ~RasterizationState() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     action->state.rasterizationstate = this->state;
   }
@@ -523,7 +535,7 @@ public:
   ComputeCommand(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z)
     : group_count_x(group_count_x), group_count_y(group_count_y), group_count_z(group_count_z) {}
 
-  virtual ~ComputeCommand() {}
+  virtual ~ComputeCommand() = default;
 
   virtual void traverse(RenderAction * action)
   {
@@ -540,7 +552,7 @@ public:
 
 class DrawCommand : public Node {
 public:
-  DrawCommand(VkPrimitiveTopology topology, uint32_t count = 0)
+  explicit DrawCommand(VkPrimitiveTopology topology, uint32_t count = 0)
     : topology(topology),
       count(count),
       transform(std::make_shared<Buffer<mat4>>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)),
@@ -549,7 +561,7 @@ public:
     this->transform->transfer = true;
   }
 
-  virtual ~DrawCommand() {}
+  virtual ~DrawCommand() = default;
 
   virtual void traverse(RenderAction * action)
   {
@@ -565,7 +577,7 @@ public:
     action->graphic_states.push_back(action->state);
   }
 
-  virtual void traverse(BoundingBoxAction * action)
+  void traverse(BoundingBoxAction * action) override
   {
     box3 box(vec3(0), vec3(1));
     box.transform(action->state.ModelMatrix);
@@ -619,9 +631,9 @@ public:
     };
   }
 
-  virtual ~Box() {}
+  virtual ~Box() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     this->indices->traverse(action);
     this->attribute_description->traverse(action);
@@ -629,7 +641,7 @@ public:
     DrawCommand::traverse(action);
   }
 
-  virtual void traverse(BoundingBoxAction * action)
+  void traverse(BoundingBoxAction * action) override
   {
     box3 box(vec3(0), vec3(1));
     box.transform(action->state.ModelMatrix);
@@ -690,9 +702,9 @@ public:
     };
   }
 
-  virtual ~Sphere() {}
+  virtual ~Sphere() = default;
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     this->indices->traverse(action);
     this->attribute_description->traverse(action);
@@ -700,7 +712,7 @@ public:
     DrawCommand::traverse(action);
   }
 
-  virtual void traverse(BoundingBoxAction * action)
+  void traverse(BoundingBoxAction * action) override
   {
     box3 box(vec3(0), vec3(1));
     box.transform(action->state.ModelMatrix);

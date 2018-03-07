@@ -7,128 +7,110 @@
 #include <memory>
 #include <numeric>
 #include <typeinfo>
-#include <iostream>
 #include <algorithm>
 #include <functional>
 
 class Expression;
 class Environment;
 
-std::shared_ptr<class Expression> eval(std::shared_ptr<Expression> & exp,
-                                       std::shared_ptr<Environment> & env);
+std::shared_ptr<class Expression> eval(std::shared_ptr<Expression> & exp, Environment env);
 
 class Expression : public std::list<std::shared_ptr<Expression>> {
 public:
-  Expression();
-  Expression(const const_iterator & begin, const const_iterator & end);
-  virtual ~Expression();
+  Expression() = default;
+  Expression(const Expression&) = delete;
+  Expression(const Expression&&) = delete;
+  Expression & operator=(const Expression&) = delete;
+  Expression & operator=(const Expression&&) = delete;
 
-  virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env);
-  virtual std::string toString();
+  virtual ~Expression() = default;
 
-};
+  explicit Expression(const const_iterator & begin, const const_iterator & end)
+    : std::list<std::shared_ptr<Expression>>(begin, end) {}
 
-class Environment : public std::map<std::string, std::shared_ptr<Expression>> {
-public:
-  Environment();
-  Environment(const Expression * parms,
-              const Expression * args,
-              const std::shared_ptr<Environment> & outer = std::make_shared<Environment>());
-  
-  Environment * getEnv(const std::string & sym);
-  
-  std::shared_ptr<Environment> outer;
+  virtual std::shared_ptr<Expression> eval(Environment & env);
+
+  virtual std::string string()
+  {
+    std::string s = "(";
+    for (auto & it : *this) {
+      s += it->string() + ' ';
+    }
+    s.back() = ')';
+    return s;
+  }
 };
 
 class Symbol : public Expression {
 public:
-  Symbol(const std::string & token);
-  
-  virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env);
-  virtual std::string toString();
-  
+  explicit Symbol(std::string token)
+    : token(std::move(token))
+  {}
+
+  std::shared_ptr<Expression> eval(Environment & env) override;
+
+  std::string string() override
+  {
+    return this->token;
+  }
+
   std::string token;
 };
 
-
-Environment::Environment() {}
-Environment::Environment(const Expression * parms,
-                         const Expression * args,
-                         const std::shared_ptr<Environment> & outer)
-  : outer(outer)
-{
-  for (auto p = parms->begin(), a = args->begin(); p != parms->end() && a != args->end(); ++p, ++a) {
-    auto parm = std::dynamic_pointer_cast<Symbol>(*p);
-    (*this)[parm->token] = *a;
+class Environment : public std::map<std::string, std::shared_ptr<Expression>> {
+public:
+  Environment() : outer(nullptr) {}
+  Environment(const Expression * parms,
+              const Expression * args,
+              Environment * outer)
+    : outer(outer)
+  {
+    for (auto p = parms->begin(), a = args->begin(); p != parms->end() && a != args->end(); ++p, ++a) {
+      const auto parm = std::dynamic_pointer_cast<Symbol>(*p);
+      (*this)[parm->token] = *a;
+    }
   }
-}
   
-Environment *
-Environment::getEnv(const std::string & sym)
-{
-  if (this->find(sym) != this->end()) {
-    return this;
+  Environment * get_env(const std::string & sym)
+  {
+    if (this->find(sym) != this->end()) {
+      return this;
+    }
+    if (!this->outer) {
+      throw std::runtime_error("undefined symbol '" + sym + "'");
+    }
+    return this->outer->get_env(sym);
   }
-  if (!this->outer) {
-    throw std::runtime_error("undefined symbol '" + sym + "'");
-  }
-  return this->outer->getEnv(sym);
-}
-
-Expression::Expression() {}
-
-Expression::~Expression() {}
-
-Expression::Expression(const const_iterator & begin, const const_iterator & end)
-  : std::list<std::shared_ptr<Expression>>(begin, end) {}
   
-std::string
-Expression::toString()
-{
-  std::string s = "(";
-  for (auto it = this->begin(); it != this->end(); it++) {
-    s += (*it)->toString() + ' ';
-  }
-  s.back() = ')';
-  return s;
-}
-  
-std::shared_ptr<Expression>
-Expression::eval(std::shared_ptr<Environment> & env)
+  Environment * outer;
+};
+
+inline std::shared_ptr<Expression>
+Expression::eval(Environment & env)
 { 
   auto exp = std::make_shared<Expression>();
-  for (auto it = this->begin(); it != this->end(); ++it) {
-    exp->push_back(::eval(*it, env));
+  for (auto & it : *this) {
+    exp->push_back(::eval(it, env));
   }
   return exp;
 }
-  
-Symbol::Symbol(const std::string & token)
-  : token(token) 
-{}
-  
-std::string
-Symbol::toString()
-{
-  return this->token;
-}
-  
-std::shared_ptr<Expression>
-Symbol::eval(std::shared_ptr<Environment> & env)
+
+inline std::shared_ptr<Expression>
+Symbol::eval(Environment & env)
 { 
-  return (*env->getEnv(this->token))[this->token];
+  return (*env.get_env(this->token))[this->token];
 }
 
 class Number : public Expression {
 public:
-  Number(double value) 
+  explicit Number(const double value) 
     : value(value) 
   {}
 
-  Number(const std::string & token)
+  explicit Number(const std::string & token)
     : Number(stod(token)) {}
   
-  virtual std::string toString()
+  std::string string() override
   {
     return std::to_string(this->value);
   }
@@ -138,11 +120,11 @@ public:
 
 class Boolean : public Expression {
 public:
-  Boolean(bool value) 
+  explicit Boolean(const bool value) 
     : value(value) 
   {}
   
-  Boolean(const std::string & token)
+  explicit Boolean(const std::string & token)
   {
     if (token == "#t") {
       this->value = true;
@@ -155,7 +137,7 @@ public:
     }
   }
   
-  virtual std::string string()
+  std::string string() override
   {
     return this->value ? "#t" : "#f";
   }
@@ -165,7 +147,7 @@ public:
 
 class String : public Expression {
 public:
-  String(const std::string & token)
+  explicit String(const std::string & token)
   {
     if (token.front() != '"' || token.back() != '"') {
       throw std::invalid_argument("invalid string literal: " + token);
@@ -173,7 +155,7 @@ public:
     this->value = token.substr(1, token.size() - 2);
   }
 
-  virtual std::string string()
+  std::string string() override
   {
     return this->value;
   }
@@ -184,11 +166,11 @@ public:
 
 class Quote : public Expression {
 public:
-  Quote(const std::shared_ptr<Expression> & exp)
-    : exp(exp) 
+  explicit Quote(std::shared_ptr<Expression> exp)
+    : exp(std::move(exp)) 
   {}
   
-  virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
+  std::shared_ptr<Expression> eval(Environment & env) override
   {
     return this->exp;
   }
@@ -198,14 +180,14 @@ public:
 
 class Define : public Expression {
 public:
-  Define(const std::shared_ptr<Symbol> & var, 
-         const std::shared_ptr<Expression> & exp)
-    : var(var), exp(exp)
+  explicit Define(std::shared_ptr<Symbol> var, 
+                  std::shared_ptr<Expression> exp)
+    : var(std::move(var)), exp(std::move(exp))
   {}
   
-  virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
+  std::shared_ptr<Expression> eval(Environment & env) override
   {
-    (*env)[this->var->token] = ::eval(this->exp, env);
+    env[this->var->token] = ::eval(this->exp, env);
     return std::make_shared<Expression>();
   }
   
@@ -215,16 +197,16 @@ public:
 
 class If : public Expression {
 public:
-  If(const std::shared_ptr<Expression> & test,
-     const std::shared_ptr<Expression> & conseq,
-     const std::shared_ptr<Expression> & alt)
-    : test(test), conseq(conseq), alt(alt)
+  If(std::shared_ptr<Expression> test,
+     std::shared_ptr<Expression> conseq,
+     std::shared_ptr<Expression> alt)
+    : test(std::move(test)), conseq(std::move(conseq)), alt(std::move(alt))
   {}
   
-  virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
+  std::shared_ptr<Expression> eval(Environment & env) override
   {
-    auto exp = ::eval(this->test, env);
-    auto boolexp = std::dynamic_pointer_cast<Boolean>(exp);
+    const auto exp = ::eval(this->test, env);
+    const auto boolexp = std::dynamic_pointer_cast<Boolean>(exp);
     if (!boolexp) {
       throw std::invalid_argument("expression did not evaluate to a boolean");
     }
@@ -236,24 +218,24 @@ public:
 
 class Function : public Expression {
 public:
-  Function(const std::shared_ptr<Expression> & parms,
-           const std::shared_ptr<Expression> & body,
-           const std::shared_ptr<Environment> & env)
-    : parms(parms), body(body), env(env) 
+  Function(std::shared_ptr<Expression> parms,
+           std::shared_ptr<Expression> body,
+           Environment & env)
+    : parms(std::move(parms)), body(std::move(body)), env(env) 
   {}
   
-  std::shared_ptr<Environment> env;
   std::shared_ptr<Expression> parms, body;
+  Environment env;
 };
 
 class Lambda : public Expression {
 public:
-  Lambda(const std::shared_ptr<Expression> & parms, 
-         const std::shared_ptr<Expression> & body)
-    : parms(parms), body(body) 
+  Lambda(std::shared_ptr<Expression> parms, 
+         std::shared_ptr<Expression> body)
+    : parms(std::move(parms)), body(std::move(body)) 
   {}
   
-  virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env)
+  std::shared_ptr<Expression> eval(Environment & env) override
   {
     return std::make_shared<Function>(this->parms, this->body, env);
   }
@@ -265,7 +247,8 @@ class Callable : public Expression {
 public:
   virtual std::shared_ptr<Expression> operator()(const Expression * args) const = 0;
  
-  static std::vector<double> argvec(const Expression * args)
+  static std::vector<double> 
+  get_argvec(const Expression * args)
   {
     std::vector<double> dargs(args->size());
     std::transform(args->begin(), args->end(), dargs.begin(), [](auto & arg) {
@@ -274,27 +257,32 @@ public:
     return dargs;
   }
 
-  void checkNumArgs(const Expression * args, size_t num) const
+  static void 
+  check_num_args(const Expression * args, size_t num)
   {
     if (args->size() != num) {
       throw std::invalid_argument("invalid number of arguments");
     }
   }
 
-  std::shared_ptr<String> getString(const std::shared_ptr<Expression> & arg) const
+  static const String * 
+  get_string(const Expression * args, size_t n)
   {
-    auto string = std::dynamic_pointer_cast<String>(arg);
+    const auto it = std::next(args->begin(), n);
+    const auto string = dynamic_cast<const String*>(&**it);
     if (!string) {
       throw std::invalid_argument("parameter must be a string");
     }
     return string;
   }
 
-  std::shared_ptr<Number> getNumber(const std::shared_ptr<Expression> & arg) const
+  static const Number * 
+  get_number(const Expression * args, size_t n)
   {
-    auto number = std::dynamic_pointer_cast<Number>(arg);
+    const auto it = std::next(args->begin(), n);
+    const auto number = dynamic_cast<const Number*>(&**it);
     if (!number) {
-      throw std::invalid_argument("parameter must be a string");
+      throw std::invalid_argument("parameter must be a number");
     }
     return number;
   }
@@ -303,50 +291,50 @@ public:
 template <typename T>
 class Operator : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    auto dargs = Callable::argvec(args);
+    auto dargs = get_argvec(args);
     return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs[0], op));
   }
   
   T op;
 };
 
-typedef Operator<std::plus<double>> Add;
-typedef Operator<std::minus<double>> Sub;
-typedef Operator<std::divides<double>> Div;
-typedef Operator<std::multiplies<double>> Mul;
+typedef Operator<std::plus<>> Add;
+typedef Operator<std::minus<>> Sub;
+typedef Operator<std::divides<>> Div;
+typedef Operator<std::multiplies<>> Mul;
 
 class Less : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    auto dargs = Callable::argvec(args);
+    auto dargs = get_argvec(args);
     return std::make_shared<Boolean>(dargs[0] < dargs[1]);
   }
 };
 
 class More : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    auto dargs = Callable::argvec(args);
+    auto dargs = get_argvec(args);
     return std::make_shared<Boolean>(dargs[0] > dargs[1]);
   }
 };
 
 class Same: public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    auto dargs = Callable::argvec(args);
+    auto dargs = get_argvec(args);
     return std::make_shared<Boolean>(dargs[0] == dargs[1]);
   }
 };
 
 class Car : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     return args->front();
   }
@@ -354,17 +342,16 @@ public:
 
 class Cdr : public Callable {
 public:
-  virtual std::shared_ptr<Expression> operator()(const Expression * args) const
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     return std::make_shared<Expression>(next(args->begin()), args->end());
   }
 };
 
-std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp, 
-                                 std::shared_ptr<Environment> & env)
+inline std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp, Environment env)
 {
   while (true) {
-    const type_info &type = typeid(*exp.get());
+    const auto & type = typeid(*exp.get());
     if (type == typeid(Number) ||
         type == typeid(String) ||
         type == typeid(Boolean)) {
@@ -382,16 +369,16 @@ std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp,
     }
 
     auto exps = exp->eval(env);
-    auto front = exps->front();
+    const auto front = exps->front();
     exps->pop_front();
 
     if (typeid(*front.get()) == typeid(Function)) {
       auto func = std::dynamic_pointer_cast<Function>(front);
       exp = func->body;
-      env = std::make_shared<Environment>(func->parms.get(), exps.get(), func->env);
+      env = Environment(func->parms.get(), exps.get(), &func->env);
     }
     else {
-      auto builtin = std::dynamic_pointer_cast<Callable>(front);
+      const auto builtin = std::dynamic_pointer_cast<Callable>(front);
       return (*builtin)(exps.get());
     }
   }
@@ -399,7 +386,7 @@ std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp,
 
 class ParseTree : public std::vector<ParseTree> {
 public:
-  ParseTree(std::sregex_token_iterator & it)
+  explicit ParseTree(std::sregex_token_iterator & it)
   {
     if (it->str() == "(") {
       while (*(++it) != ")") {
@@ -411,7 +398,7 @@ public:
   std::string token;
 };
 
-std::shared_ptr<Expression> parse(const ParseTree & parsetree)
+inline std::shared_ptr<Expression> parse(const ParseTree & parsetree)
 {
   if (parsetree.empty()) {
     try {
@@ -471,6 +458,12 @@ std::shared_ptr<Expression> parse(const ParseTree & parsetree)
     }
   }
   
+  if (parsetree[0].token == "+") {
+    if (parsetree.size() != 3) {
+      throw std::invalid_argument("+ needs at least two arguments <");
+    }
+  }
+
   if (parsetree[0].token == "<") {
     if (parsetree.size() != 3) {
       throw std::invalid_argument("wrong number of arguments to <");
@@ -501,31 +494,28 @@ class Scheme {
 public:
   Scheme()
   {
-    this->tokenizer = std::regex("[()]|\"([^\\\"]|\\.)*\"|[a-zA-Z_-]+|[0-9]+|[+*-/<>=]");
-    this->environment = std::make_shared<Environment>();
+    this->tokenizer = std::regex(R"([()]|"([^\"]|\.)*"|[a-zA-Z_-]+|[0-9]+|[+*-/<>=])");
 
-    (*this->environment)["+"] = std::make_shared<Add>();
-    (*this->environment)["-"] = std::make_shared<Sub>();
-    (*this->environment)["/"] = std::make_shared<Div>();
-    (*this->environment)["*"] = std::make_shared<Mul>();
-    (*this->environment)["<"] = std::make_shared<Less>();
-    (*this->environment)[">"] = std::make_shared<More>();
-    (*this->environment)["="] = std::make_shared<Same>();
-    (*this->environment)["car"] = std::make_shared<Car>();
-    (*this->environment)["cdr"] = std::make_shared<Cdr>();
-    (*this->environment)["pi"] = std::make_shared<Number>(3.14159265358979323846);
+    this->environment["+"] = std::make_shared<Add>();
+    this->environment["-"] = std::make_shared<Sub>();
+    this->environment["/"] = std::make_shared<Div>();
+    this->environment["*"] = std::make_shared<Mul>();
+    this->environment["<"] = std::make_shared<Less>();
+    this->environment[">"] = std::make_shared<More>();
+    this->environment["="] = std::make_shared<Same>();
+    this->environment["car"] = std::make_shared<Car>();
+    this->environment["cdr"] = std::make_shared<Cdr>();
+    this->environment["pi"] = std::make_shared<Number>(3.14159265358979323846);
   }
 
-  ~Scheme() {}
-
-  std::shared_ptr<Expression> eval(const std::string & input)
+  std::shared_ptr<Expression> eval(const std::string & input) const
   {
     std::sregex_token_iterator tokens(input.begin(), input.end(), this->tokenizer);
-    ParseTree parsetree(tokens);
+    const ParseTree parsetree(tokens);
     auto exp = parse(parsetree);
     return ::eval(exp, this->environment);
   }
 
   std::regex tokenizer;
-  std::shared_ptr<Environment> environment;
+  Environment environment;
 };

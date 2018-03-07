@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Innovator/core/VulkanObjects.h>
+#include <Innovator/Core/VulkanObjects.h>
 #include <Viewer.h>
 #include <vector>
 
@@ -84,7 +84,7 @@ public:
 
 class VulkanApplication {
 public:
-  VulkanApplication(HINSTANCE hinstance)
+  explicit VulkanApplication(HINSTANCE hinstance)
   {
     std::vector<const char *> instance_layers {
   #ifdef _DEBUG
