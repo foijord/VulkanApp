@@ -20,7 +20,7 @@ std::shared_ptr<class Expression> eval(std::shared_ptr<Expression> & exp,
 class Expression : public std::list<std::shared_ptr<Expression>> {
 public:
   Expression();
-  Expression(Expression::iterator begin, Expression::iterator end);
+  Expression(const iterator & begin, const iterator & end);
   virtual ~Expression();
 
   virtual std::shared_ptr<Expression> eval(std::shared_ptr<Environment> & env);
@@ -79,7 +79,7 @@ Expression::Expression() {}
 
 Expression::~Expression() {}
 
-Expression::Expression(Expression::iterator begin, Expression::iterator end)
+Expression::Expression(const iterator & begin, const iterator & end)
   : std::list<std::shared_ptr<Expression>>(begin, end) {}
   
 std::string
