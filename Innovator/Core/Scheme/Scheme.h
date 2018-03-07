@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Innovator/Core/Misc/Defines.h>
+
 #include <map>
 #include <list>
 #include <regex>
@@ -19,13 +21,9 @@ typedef std::list<std::shared_ptr<Expression>> list;
 
 class Expression {
 public:
-  Expression() = default;
-  Expression(const Expression&) = delete;
-  Expression(const Expression&&) = delete;
-  Expression & operator=(const Expression&) = delete;
-  Expression & operator=(const Expression&&) = delete;
+  NO_COPY_OR_ASSIGNMENT(Expression);
 
-  virtual ~Expression() = default;
+  Expression() = default;
 
   explicit Expression(const list::const_iterator & begin, const list::const_iterator & end)
   {
@@ -49,16 +47,13 @@ public:
 
 class Symbol : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(Symbol);
+
   explicit Symbol(std::string token)
     : token(std::move(token))
   {}
 
   std::shared_ptr<Expression> eval(Environment & env) override;
-
-  std::string string() override
-  {
-    return this->token;
-  }
 
   std::string token;
 };
@@ -92,11 +87,11 @@ public:
 inline std::shared_ptr<Expression>
 Expression::eval(Environment & env)
 { 
-  auto exp = std::make_shared<Expression>();
-  for (auto& it : this->children) {
-    exp->children.push_back(::eval(it, env));
+  auto result = std::make_shared<Expression>();
+  for (auto& exp : this->children) {
+    result->children.push_back(::eval(exp, env));
   }
-  return exp;
+  return result;
 }
 
 inline std::shared_ptr<Expression>
@@ -107,6 +102,8 @@ Symbol::eval(Environment & env)
 
 class Number : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(Number);
+
   explicit Number(const double value) 
     : value(value) 
   {}
@@ -114,36 +111,24 @@ public:
   explicit Number(const std::string & token)
     : Number(stod(token)) {}
   
-  std::string string() override
-  {
-    return std::to_string(this->value);
-  }
-
   double value;
 };
 
 class Boolean : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(Boolean);
+
   explicit Boolean(const bool value) 
     : value(value) 
   {}
   
   explicit Boolean(const std::string & token)
   {
-    if (token == "#t") {
-      this->value = true;
-    }
-    else if (token == "#f") {
-      this->value = false;
-    }
-    else {
+    static std::map<std::string, bool> tokenmap = { { "#t", true }, { "#f", false } };
+    if (tokenmap.find(token) == tokenmap.end()) {
       throw std::invalid_argument("expression is not boolean");
     }
-  }
-  
-  std::string string() override
-  {
-    return this->value ? "#t" : "#f";
+    this->value = tokenmap[token];
   }
   
   bool value;
@@ -151,6 +136,8 @@ public:
 
 class String : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(String);
+
   explicit String(const std::string & token)
   {
     if (token.front() != '"' || token.back() != '"') {
@@ -159,17 +146,13 @@ public:
     this->value = token.substr(1, token.size() - 2);
   }
 
-  std::string string() override
-  {
-    return this->value;
-  }
-
   std::string value;
 };
 
-
 class Quote : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(Quote);
+
   explicit Quote(std::shared_ptr<Expression> exp)
     : exp(std::move(exp)) 
   {}
@@ -184,9 +167,12 @@ public:
 
 class Define : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(Define);
+
   explicit Define(std::shared_ptr<Symbol> var, 
                   std::shared_ptr<Expression> exp)
-    : var(std::move(var)), exp(std::move(exp))
+    : var(std::move(var)), 
+      exp(std::move(exp))
   {}
   
   std::shared_ptr<Expression> eval(Environment & env) override
@@ -201,10 +187,14 @@ public:
 
 class If : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(If);
+
   If(std::shared_ptr<Expression> test,
      std::shared_ptr<Expression> conseq,
      std::shared_ptr<Expression> alt)
-    : test(std::move(test)), conseq(std::move(conseq)), alt(std::move(alt))
+    : test(std::move(test)), 
+      conseq(std::move(conseq)), 
+      alt(std::move(alt))
   {}
   
   std::shared_ptr<Expression> eval(Environment & env) override
@@ -222,6 +212,8 @@ public:
 
 class Function : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(Function);
+
   Function(std::shared_ptr<Expression> parms,
            std::shared_ptr<Expression> body,
            Environment & env)
@@ -234,6 +226,8 @@ public:
 
 class Lambda : public Expression {
 public:
+  NO_COPY_OR_ASSIGNMENT(Lambda);
+
   Lambda(std::shared_ptr<Expression> parms, 
          std::shared_ptr<Expression> body)
     : parms(std::move(parms)), body(std::move(body)) 
@@ -295,6 +289,10 @@ public:
 template <typename T>
 class Operator : public Callable {
 public:
+  NO_COPY_OR_ASSIGNMENT(Operator);
+
+  Operator() = default;
+
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     auto dargs = get_argvec(args);
@@ -311,6 +309,10 @@ typedef Operator<std::multiplies<>> Mul;
 
 class Less : public Callable {
 public:
+  NO_COPY_OR_ASSIGNMENT(Less);
+
+  Less() = default;
+
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     auto dargs = get_argvec(args);
@@ -320,6 +322,10 @@ public:
 
 class More : public Callable {
 public:
+  NO_COPY_OR_ASSIGNMENT(More);
+
+  More() = default;
+
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     auto dargs = get_argvec(args);
@@ -329,6 +335,10 @@ public:
 
 class Same: public Callable {
 public:
+  NO_COPY_OR_ASSIGNMENT(Same);
+
+  Same() = default;
+
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     auto dargs = get_argvec(args);
@@ -338,6 +348,10 @@ public:
 
 class Car : public Callable {
 public:
+  NO_COPY_OR_ASSIGNMENT(Car);
+
+  Car() = default;
+
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     return args->children.front();
@@ -346,6 +360,10 @@ public:
 
 class Cdr : public Callable {
 public:
+  NO_COPY_OR_ASSIGNMENT(Cdr);
+
+  Cdr() = default;
+
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     return std::make_shared<Expression>(next(args->children.begin()), args->children.end());
@@ -355,7 +373,9 @@ public:
 inline std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp, Environment env)
 {
   while (true) {
-    const auto & type = typeid(*(exp.get()));
+    const auto e = exp.get();
+    const auto & type = typeid(*e);
+
     if (type == typeid(Number) ||
         type == typeid(String) ||
         type == typeid(Boolean)) {
@@ -376,7 +396,8 @@ inline std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp, Envir
     const auto front = exps->children.front();
     exps->children.pop_front();
 
-    if (typeid(*(front.get())) == typeid(Function)) {
+    const auto f = front.get();
+    if (typeid(*f) == typeid(Function)) {
       auto func = std::dynamic_pointer_cast<Function>(front);
       exp = func->body;
       env = Environment(func->parms.get(), exps.get(), &func->env);

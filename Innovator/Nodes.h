@@ -16,16 +16,12 @@
 
 class Group : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(Group);
+
   Group() = default;
-  Group(const Group&) = delete;
-  Group(const Group&&) = delete;
-  Group & operator=(const Group&) = delete;
-  Group & operator=(const Group&&) = delete;
-  
+
   explicit Group(std::vector<std::shared_ptr<Node>> children)
     : children(std::move(children)) {}
-
-  virtual ~Group() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -53,16 +49,12 @@ public:
 
 class Separator : public Group {
 public:
+  NO_COPY_OR_ASSIGNMENT(Separator);
+
   Separator() = default;
-  Separator(const Separator&) = delete;
-  Separator(const Separator&&) = delete;
-  Separator & operator=(const Separator&) = delete;
-  Separator & operator=(const Separator&&) = delete;
 
   explicit Separator(const std::vector<std::shared_ptr<Node>> & children)
     : Group(children) {}
-
-  virtual ~Separator() = default;
 
   static std::shared_ptr<Separator> create(std::vector<std::shared_ptr<Node>> children)
   {
@@ -90,17 +82,17 @@ public:
 
 class Camera : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(Camera);
+
   explicit Camera()
-    : orientation(glm::mat3(1.0)),
+    : farPlane(1000.0f),
+      nearPlane(0.1f),
       aspectRatio(4.0f / 3.0f),
       fieldOfView(0.7f),
-      nearPlane(0.1f),
-      farPlane(1000.0f),
+      focalDistance(1.0f),
       position(glm::vec3(0, 0, 1)),
-      focalDistance(1.0f)
+      orientation(glm::mat3(1.0))
   {}
-
-  virtual ~Camera() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -166,10 +158,12 @@ public:
 
 class Transform : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(Transform);
+
+  Transform() = default;
+
   explicit Transform(const glm::vec3 & translation = glm::vec3(0), const glm::vec3 & scalefactor = glm::vec3(1))
     : translation(translation), scaleFactor(scalefactor) {}
-
-  virtual ~Transform() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -196,8 +190,9 @@ private:
 
 class IndexBuffer : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(IndexBuffer);
+
   IndexBuffer() = default;
-  virtual ~IndexBuffer() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -227,10 +222,11 @@ public:
                       static_cast<uint32_t>(regions.size()),
                       regions.data());
     }
-    VulkanIndexBufferDescription indices;
-    indices.type = VK_INDEX_TYPE_UINT32;
-    indices.buffer = this->gpu_buffer->buffer->buffer;
-    indices.count = static_cast<uint32_t>(this->values.size());
+    const VulkanIndexBufferDescription indices {
+      VK_INDEX_TYPE_UINT32,                       // type
+      this->gpu_buffer->buffer->buffer,           // buffer
+      static_cast<uint32_t>(this->values.size()), // count
+    };
     action->state.indices.push_back(indices);
   }
   
@@ -241,10 +237,12 @@ public:
 
 class LayoutBinding : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(LayoutBinding);
+
+  LayoutBinding() = delete;
+
   LayoutBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage)
     : binding(binding), type(type), stage(stage) {}
-
-  virtual ~LayoutBinding() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -261,10 +259,13 @@ public:
 template <typename T>
 class Buffer : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(Buffer);
+
+  Buffer() = delete;
+
   Buffer(VkBufferUsageFlagBits usage, VkMemoryPropertyFlags flags)
-    : usage(usage), flags(flags), transfer(false)
+    : transfer(false), usage(usage), flags(flags)
   {}
-  virtual ~Buffer() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -294,11 +295,13 @@ public:
 
 class VertexAttributeDescription : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(VertexAttributeDescription);
+
+  VertexAttributeDescription() = delete;
+
   VertexAttributeDescription(uint32_t location, uint32_t binding, VkFormat format, uint32_t offset)
     : location(location), binding(binding), format(format), offset(offset), input_rate(VK_VERTEX_INPUT_RATE_VERTEX) 
   {}
-
-  virtual ~VertexAttributeDescription() = default;
 
   virtual void traverse(RenderAction * action)
   {
@@ -319,8 +322,9 @@ public:
 template <typename T>
 class VertexAttribute : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(VertexAttribute);
+
   VertexAttribute() = default;
-  virtual ~VertexAttribute() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -362,10 +366,12 @@ public:
 
 class Shader : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(Shader);
+
+  Shader() = delete;
+
   Shader(const std::string & filename, VkShaderStageFlagBits stage)
     : filename(filename), stage(stage) {}
-
-  virtual ~Shader() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -375,9 +381,10 @@ public:
       this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
     }
 
-    VulkanShaderModuleDescription shader;
-    shader.module = this->shader->module;
-    shader.stage = this->stage;
+    const VulkanShaderModuleDescription shader {
+      this->stage,          // stage
+      this->shader->module, // module
+    };
     action->state.shaders.push_back(shader);
   }
 
@@ -388,8 +395,9 @@ public:
 
 class Sampler : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(Sampler);
+
   Sampler() = default;
-  virtual ~Sampler() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -420,13 +428,15 @@ public:
 
 class Texture : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(Texture);
+
+  Texture() = delete;
+
   explicit Texture(const std::string & filename)
     : Texture(gli::load(filename)) {}
 
   explicit Texture(const gli::texture & texture)
     : texture(texture) {}
-
-  virtual ~Texture() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -497,10 +507,12 @@ public:
 
 class CullMode : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(CullMode);
+
+  CullMode() = delete;
+
   explicit CullMode(VkCullModeFlags cullmode)
     : cullmode(cullmode) {}
-
-  virtual ~CullMode() = default;
 
   void traverse(RenderAction * action) override
   {
@@ -512,10 +524,11 @@ public:
 
 class RasterizationState : public Node {
 public:
-  RasterizationState() 
-    : state(State::defaultRasterizationState()) {}
+  NO_COPY_OR_ASSIGNMENT(RasterizationState);
 
-  virtual ~RasterizationState() = default;
+  explicit RasterizationState(const VkPipelineRasterizationStateCreateInfo & rasterizationstate = State::defaultRasterizationState())
+    : state(rasterizationstate)
+  {}
 
   void traverse(RenderAction * action) override
   {
@@ -532,12 +545,14 @@ public:
 
 class ComputeCommand : public Node {
 public:
-  ComputeCommand(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z)
+  NO_COPY_OR_ASSIGNMENT(ComputeCommand);
+
+  ComputeCommand() = delete;
+
+  explicit ComputeCommand(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z)
     : group_count_x(group_count_x), group_count_y(group_count_y), group_count_z(group_count_z) {}
 
-  virtual ~ComputeCommand() = default;
-
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     action->state.compute_description.group_count_x = this->group_count_x;
     action->state.compute_description.group_count_y = this->group_count_y;
@@ -552,18 +567,20 @@ public:
 
 class DrawCommand : public Node {
 public:
+  NO_COPY_OR_ASSIGNMENT(DrawCommand);
+
+  DrawCommand() = delete;
+
   explicit DrawCommand(VkPrimitiveTopology topology, uint32_t count = 0)
-    : topology(topology),
-      count(count),
+    : count(count),
+      topology(topology),
       transform(std::make_shared<Buffer<mat4>>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)),
       transform_layout(std::make_shared<LayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS))
   {
     this->transform->transfer = true;
   }
 
-  virtual ~DrawCommand() = default;
-
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action) override
   {
     this->transform->values = {
       action->state.ViewMatrix * action->state.ModelMatrix, 
@@ -595,7 +612,11 @@ public:
 
 class Box : public DrawCommand {
 public:
-  Box(uint32_t binding, uint32_t location)
+  NO_COPY_OR_ASSIGNMENT(Box);
+
+  Box() = delete;
+
+  explicit Box(uint32_t binding, uint32_t location)
     : DrawCommand(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36),
       indices(std::make_shared<IndexBuffer>()),
       attribute_description(std::make_shared<VertexAttributeDescription>(location, binding, VK_FORMAT_R32G32B32_SFLOAT, 0)),
@@ -631,8 +652,6 @@ public:
     };
   }
 
-  virtual ~Box() = default;
-
   void traverse(RenderAction * action) override
   {
     this->indices->traverse(action);
@@ -656,7 +675,11 @@ public:
 
 class Sphere : public DrawCommand {
 public:
-  Sphere(uint32_t binding, uint32_t location)
+  NO_COPY_OR_ASSIGNMENT(Sphere);
+
+  Sphere() = delete;
+
+  explicit Sphere(uint32_t binding, uint32_t location)
     : DrawCommand(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36),
       indices(std::make_shared<IndexBuffer>()),
       attribute_description(std::make_shared<VertexAttributeDescription>(location, binding, VK_FORMAT_R32G32B32_SFLOAT, 0)),
@@ -701,8 +724,6 @@ public:
       vec3(-t,-1, 0)
     };
   }
-
-  virtual ~Sphere() = default;
 
   void traverse(RenderAction * action) override
   {

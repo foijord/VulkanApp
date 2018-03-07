@@ -12,7 +12,7 @@ int main()
     File file;
     VulkanApplication app(GetModuleHandle(nullptr));
 
-    auto scene = file.open("Scenes/crate.scene");
+    const auto scene = file.open("Scenes/crate.scene");
     app.viewer->setSceneGraph(scene);
     app.run();
   }

@@ -1,11 +1,9 @@
 #pragma once
 
+#include <Innovator/Core/Math/Box.h>
 #include <Innovator/Core/Node.h>
-#include <Innovator/core/State.h>
-#include <Innovator/core/VulkanObjects.h>
-#include <Innovator/core/Math/Box.h>
-
-#include <glm/glm.hpp>
+#include <Innovator/Core/State.h>
+#include <Innovator/Core/VulkanObjects.h>
 
 #include <memory>
 #include <vector>
@@ -31,12 +29,12 @@ public:
 template <typename NodeType> 
 static std::shared_ptr<NodeType> 
 SearchAction(const std::shared_ptr<Node> & root) {
-  std::shared_ptr<Group> group = std::dynamic_pointer_cast<Group>(root);
+  auto group = std::dynamic_pointer_cast<Group>(root);
   if (!group) {
     return std::dynamic_pointer_cast<NodeType>(root);
   }
-  for (const std::shared_ptr<Node> & node : group->children) {
-    std::shared_ptr<NodeType> result = SearchAction<NodeType>(node);
+  for (auto & node : group->children) {
+    auto result = SearchAction<NodeType>(node);
     if (result)
       return result;
   }
@@ -88,8 +86,8 @@ public:
       vkCmdSetViewport(this->command->buffer(), 0, 1, &action->viewport);
       vkCmdSetScissor(this->command->buffer(), 0, 1, &action->scissor);
 
-      if (state.indices.size()) {
-        for (const VulkanIndexBufferDescription & indexbuffer : state.indices) {
+      if (!state.indices.empty()) {
+        for (const auto& indexbuffer : state.indices) {
           vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
           vkCmdDrawIndexed(this->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
         }
@@ -99,7 +97,7 @@ public:
       }
       this->command->end();
     }
-    ~DrawCommandObject() {}
+    ~DrawCommandObject() = default;
 
     std::unique_ptr<GraphicsPipelineObject> pipeline;
     std::unique_ptr<VulkanCommandBuffers> command;
@@ -129,7 +127,7 @@ public:
       this->command->end();
     }
 
-    ~ComputeCommandObject() {}
+    ~ComputeCommandObject() = default;
 
     std::unique_ptr<ComputePipelineObject> pipeline;
     std::unique_ptr<VulkanCommandBuffers> command;

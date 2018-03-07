@@ -24,6 +24,7 @@ add_executable(${TARGET_NAME} WIN32
   Innovator/Core/File.h
   Innovator/Core/State.h
   Innovator/Core/VulkanObjects.h
+  Innovator/Core/Misc/Defines.h
   Innovator/Core/Scheme/Scheme.h
   Innovator/Core/Vulkan/Wrapper.h)
 

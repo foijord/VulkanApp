@@ -22,9 +22,9 @@ struct VulkanVertexAttributeDescription {
 };
 
 struct VulkanIndexBufferDescription {
-  uint32_t count;
-  VkBuffer buffer;
   VkIndexType type;
+  VkBuffer buffer;
+  uint32_t count;
 };
 
 struct VulkanBufferDescription {

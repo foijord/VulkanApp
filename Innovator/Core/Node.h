@@ -1,14 +1,13 @@
 #pragma once
 
+#include <Innovator/Core/Misc/Defines.h>
+
 class Node {
 public:
-  Node() = default;
-  Node(const Node&) = delete;
-  Node(const Node&&) = delete;
-  Node & operator=(const Node&) = delete;
-  Node & operator=(const Node&&) = delete;
+  NO_COPY_OR_ASSIGNMENT(Node);
 
-  virtual ~Node() = default;
+  Node() = default;
+
   virtual void traverse(class RenderAction *) {}
   virtual void traverse(class BoundingBoxAction *) {}
   virtual void traverse(class HandleEventAction *) {}
