@@ -89,7 +89,7 @@ public:
   {
     auto sep = std::make_shared<Separator>();
 
-    for (auto & exp : *args) {
+    for (auto& exp : args->children) {
       const auto nodefunc = std::dynamic_pointer_cast<NodeExpression>(exp);
       if (!nodefunc) {
         throw std::invalid_argument("separator args must be nodes");

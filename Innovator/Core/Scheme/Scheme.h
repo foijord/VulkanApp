@@ -15,7 +15,9 @@ class Environment;
 
 std::shared_ptr<class Expression> eval(std::shared_ptr<Expression> & exp, Environment env);
 
-class Expression : public std::list<std::shared_ptr<Expression>> {
+typedef std::list<std::shared_ptr<Expression>> list;
+
+class Expression {
 public:
   Expression() = default;
   Expression(const Expression&) = delete;
@@ -25,20 +27,24 @@ public:
 
   virtual ~Expression() = default;
 
-  explicit Expression(const const_iterator & begin, const const_iterator & end)
-    : std::list<std::shared_ptr<Expression>>(begin, end) {}
+  explicit Expression(const list::const_iterator & begin, const list::const_iterator & end)
+  {
+    this->children = list(begin, end);
+  }
 
   virtual std::shared_ptr<Expression> eval(Environment & env);
 
   virtual std::string string()
   {
     std::string s = "(";
-    for (auto & it : *this) {
+    for (auto& it : this->children) {
       s += it->string() + ' ';
     }
     s.back() = ')';
     return s;
   }
+
+  list children;
 };
 
 class Symbol : public Expression {
@@ -60,12 +66,10 @@ public:
 class Environment : public std::map<std::string, std::shared_ptr<Expression>> {
 public:
   Environment() : outer(nullptr) {}
-  Environment(const Expression * parms,
-              const Expression * args,
-              Environment * outer)
+  Environment(const Expression * parms, const Expression * args, Environment * outer)
     : outer(outer)
   {
-    for (auto p = parms->begin(), a = args->begin(); p != parms->end() && a != args->end(); ++p, ++a) {
+    for (auto p = parms->children.begin(), a = args->children.begin(); p != parms->children.end() && a != args->children.end(); ++p, ++a) {
       const auto parm = std::dynamic_pointer_cast<Symbol>(*p);
       (*this)[parm->token] = *a;
     }
@@ -89,8 +93,8 @@ inline std::shared_ptr<Expression>
 Expression::eval(Environment & env)
 { 
   auto exp = std::make_shared<Expression>();
-  for (auto & it : *this) {
-    exp->push_back(::eval(it, env));
+  for (auto& it : this->children) {
+    exp->children.push_back(::eval(it, env));
   }
   return exp;
 }
@@ -250,8 +254,8 @@ public:
   static std::vector<double> 
   get_argvec(const Expression * args)
   {
-    std::vector<double> dargs(args->size());
-    std::transform(args->begin(), args->end(), dargs.begin(), [](auto & arg) {
+    std::vector<double> dargs(args->children.size());
+    std::transform(args->children.begin(), args->children.end(), dargs.begin(), [](auto & arg) {
       return std::static_pointer_cast<Number>(arg)->value;
     });
     return dargs;
@@ -260,7 +264,7 @@ public:
   static void 
   check_num_args(const Expression * args, size_t num)
   {
-    if (args->size() != num) {
+    if (args->children.size() != num) {
       throw std::invalid_argument("invalid number of arguments");
     }
   }
@@ -268,7 +272,7 @@ public:
   static const String * 
   get_string(const Expression * args, size_t n)
   {
-    const auto it = std::next(args->begin(), n);
+    const auto it = std::next(args->children.begin(), n);
     const auto string = dynamic_cast<const String*>(&**it);
     if (!string) {
       throw std::invalid_argument("parameter must be a string");
@@ -279,7 +283,7 @@ public:
   static const Number * 
   get_number(const Expression * args, size_t n)
   {
-    const auto it = std::next(args->begin(), n);
+    const auto it = std::next(args->children.begin(), n);
     const auto number = dynamic_cast<const Number*>(&**it);
     if (!number) {
       throw std::invalid_argument("parameter must be a number");
@@ -336,7 +340,7 @@ class Car : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    return args->front();
+    return args->children.front();
   }
 };
 
@@ -344,14 +348,14 @@ class Cdr : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    return std::make_shared<Expression>(next(args->begin()), args->end());
+    return std::make_shared<Expression>(next(args->children.begin()), args->children.end());
   }
 };
 
 inline std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp, Environment env)
 {
   while (true) {
-    const auto & type = typeid(*exp.get());
+    const auto & type = typeid(*(exp.get()));
     if (type == typeid(Number) ||
         type == typeid(String) ||
         type == typeid(Boolean)) {
@@ -369,10 +373,10 @@ inline std::shared_ptr<Expression> eval(std::shared_ptr<Expression> & exp, Envir
     }
 
     auto exps = exp->eval(env);
-    const auto front = exps->front();
-    exps->pop_front();
+    const auto front = exps->children.front();
+    exps->children.pop_front();
 
-    if (typeid(*front.get()) == typeid(Function)) {
+    if (typeid(*(front.get())) == typeid(Function)) {
       auto func = std::dynamic_pointer_cast<Function>(front);
       exp = func->body;
       env = Environment(func->parms.get(), exps.get(), &func->env);
@@ -484,7 +488,7 @@ inline std::shared_ptr<Expression> parse(const ParseTree & parsetree)
 
   auto list = std::make_shared<Expression>();
   for (const ParseTree & pt : parsetree) {
-    list->push_back(parse(pt));
+    list->children.push_back(parse(pt));
   }
   
   return list;
