@@ -26,21 +26,9 @@ public:
   virtual ~Expression() = default;
 
   explicit Expression(const list::const_iterator & begin, const list::const_iterator & end)
-  {
-    this->children = list(begin, end);
-  }
+    : children(list(begin, end)) {}
 
   virtual std::shared_ptr<Expression> eval(Environment & env);
-
-  virtual std::string string()
-  {
-    std::string s = "(";
-    for (auto& it : this->children) {
-      s += it->string() + ' ';
-    }
-    s.back() = ')';
-    return s;
-  }
 
   list children;
 };
@@ -52,8 +40,7 @@ public:
   virtual ~Symbol() = default;
 
   explicit Symbol(std::string token)
-    : token(std::move(token))
-  {}
+    : token(std::move(token)) {}
 
   std::shared_ptr<Expression> eval(Environment & env) override;
 
@@ -109,8 +96,7 @@ public:
   virtual ~Number() = default;
 
   explicit Number(const double value) 
-    : value(value) 
-  {}
+    : value(value) {}
 
   explicit Number(const std::string & token)
     : Number(stod(token)) {}
@@ -125,8 +111,7 @@ public:
   virtual ~Boolean() = default;
 
   explicit Boolean(const bool value) 
-    : value(value) 
-  {}
+    : value(value) {}
   
   explicit Boolean(const std::string & token)
   {
@@ -164,8 +149,7 @@ public:
   virtual ~Quote() = default;
 
   explicit Quote(std::shared_ptr<Expression> exp)
-    : exp(std::move(exp)) 
-  {}
+    : exp(std::move(exp)) {}
   
   std::shared_ptr<Expression> eval(Environment & env) override
   {
@@ -184,8 +168,7 @@ public:
   explicit Define(std::shared_ptr<Symbol> var, 
                   std::shared_ptr<Expression> exp)
     : var(std::move(var)), 
-      exp(std::move(exp))
-  {}
+      exp(std::move(exp)) {}
   
   std::shared_ptr<Expression> eval(Environment & env) override
   {
@@ -208,8 +191,7 @@ public:
      std::shared_ptr<Expression> alt)
     : test(std::move(test)), 
       conseq(std::move(conseq)), 
-      alt(std::move(alt))
-  {}
+      alt(std::move(alt)) {}
   
   std::shared_ptr<Expression> eval(Environment & env) override
   {
@@ -233,8 +215,7 @@ public:
   Function(std::shared_ptr<Expression> parms,
            std::shared_ptr<Expression> body,
            Environment & env)
-    : parms(std::move(parms)), body(std::move(body)), env(env) 
-  {}
+    : parms(std::move(parms)), body(std::move(body)), env(env) {}
   
   std::shared_ptr<Expression> parms, body;
   Environment env;
@@ -248,8 +229,8 @@ public:
 
   Lambda(std::shared_ptr<Expression> parms, 
          std::shared_ptr<Expression> body)
-    : parms(std::move(parms)), body(std::move(body)) 
-  {}
+    : parms(std::move(parms)), 
+      body(std::move(body)) {}
   
   std::shared_ptr<Expression> eval(Environment & env) override
   {
@@ -525,7 +506,7 @@ inline std::shared_ptr<Expression> parse(const ParseTree & parsetree)
   }
 
   auto list = std::make_shared<Expression>();
-  for (const ParseTree & pt : parsetree) {
+  for (const auto& pt : parsetree) {
     list->children.push_back(parse(pt));
   }
   

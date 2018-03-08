@@ -3,9 +3,10 @@
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Math/Box.h>
 #include <Innovator/Core/Node.h>
-#include <Innovator/Group.h>
 #include <Innovator/Core/State.h>
 #include <Innovator/Core/VulkanObjects.h>
+#include <Innovator/Commands.h>
+#include <Innovator/Group.h>
 
 #include <map>
 #include <memory>
@@ -77,89 +78,10 @@ public:
   NO_COPY_OR_ASSIGNMENT(RenderAction);
   RenderAction() = default;
 
-  class DrawCommandObject {
-  public:
-    NO_COPY_OR_ASSIGNMENT(DrawCommandObject);
-    DrawCommandObject() = default;
-    virtual ~DrawCommandObject() = default;
-
-    DrawCommandObject(RenderAction * action, State & state)
-    {
-      this->pipeline = std::make_unique<GraphicsPipelineObject>(
-        action->device,
-        state.attributes,
-        state.shaders,
-        state.buffers,
-        state.textures,
-        state.rasterizationstate,
-        action->renderpass,
-        action->pipelinecache,
-        state.drawdescription);
-
-      this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-      this->command->begin(0, action->renderpass->renderpass, 0, action->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
-
-      this->pipeline->bind(this->command->buffer());
-
-      for (const auto& attribute : state.attributes) {
-        VkDeviceSize offsets[1] = { 0 };
-        vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
-      }
-      vkCmdSetViewport(this->command->buffer(), 0, 1, &action->viewport);
-      vkCmdSetScissor(this->command->buffer(), 0, 1, &action->scissor);
-
-      if (!state.indices.empty()) {
-        for (const auto& indexbuffer : state.indices) {
-          vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
-          vkCmdDrawIndexed(this->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
-        }
-      }
-      else {
-        vkCmdDraw(this->command->buffer(), state.drawdescription.count, 1, 0, 0);
-      }
-      this->command->end();
-    }
-
-    std::unique_ptr<GraphicsPipelineObject> pipeline;
-    std::unique_ptr<VulkanCommandBuffers> command;
-  };
-
-  class ComputeCommandObject {
-  public:
-    NO_COPY_OR_ASSIGNMENT(ComputeCommandObject);
-    ComputeCommandObject() = delete;
-    ~ComputeCommandObject() = default;
-
-    ComputeCommandObject(RenderAction * action, State & state)
-    {
-      this->pipeline = std::make_unique<ComputePipelineObject>(
-        action->device,
-        state.shaders[0],
-        state.buffers,
-        state.textures,
-        action->pipelinecache);
-
-      this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-      this->command->begin();
-
-      this->pipeline->bind(this->command->buffer());
-
-      vkCmdDispatch(this->command->buffer(), 
-        state.compute_description.group_count_x, 
-        state.compute_description.group_count_y, 
-        state.compute_description.group_count_z);
-
-      this->command->end();
-    }
-
-    std::unique_ptr<ComputePipelineObject> pipeline;
-    std::unique_ptr<VulkanCommandBuffers> command;
-  };
-
-  RenderAction(std::shared_ptr<VulkanDevice> device,
-               std::shared_ptr<VulkanRenderpass> renderpass,
-               std::shared_ptr<VulkanFramebuffer> framebuffer, 
-               VkExtent2D extent)
+  explicit RenderAction(std::shared_ptr<VulkanDevice> device,
+                        std::shared_ptr<VulkanRenderpass> renderpass,
+                        std::shared_ptr<VulkanFramebuffer> framebuffer, 
+                        VkExtent2D extent)
     : device(std::move(device)), 
       renderpass(std::move(renderpass)),
       framebuffer(std::move(framebuffer)),
@@ -175,9 +97,9 @@ public:
       this->extent          // extent
     };
 
-    this->clearvalues = { 
-      {{0.0f, 0.0f, 0.0f, 0.0f}},
-      { 1.0f, 0 } 
+    this->clearvalues = {
+      {{{0.0f, 0.0f, 0.0f, 0.0f}}},
+      {{{1.0f, 0}}}
     };
 
     this->viewport = { 
@@ -255,10 +177,12 @@ public:
   std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFramebuffer> framebuffer;
 
-  VkExtent2D extent;
-  VkRect2D scissor;
-  VkViewport viewport;
-  VkRect2D renderarea;
+  VkExtent2D extent{};
+  VkRect2D scissor{};
+
+  VkViewport viewport{};
+  VkRect2D renderarea{};
+
   std::vector<VkClearValue> clearvalues;
 
   std::vector<State> graphic_states;
@@ -271,6 +195,67 @@ public:
   std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<VulkanPipelineCache> pipelinecache;
 };
+
+inline ComputeCommandObject::ComputeCommandObject(RenderAction * action, State & state)
+{
+  this->pipeline = std::make_unique<ComputePipelineObject>(
+    action->device,
+    state.shaders[0],
+    state.buffers,
+    state.textures,
+    action->pipelinecache);
+
+  this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+  this->command->begin();
+
+  this->pipeline->bind(this->command->buffer());
+
+  vkCmdDispatch(this->command->buffer(),
+    state.compute_description.group_count_x,
+    state.compute_description.group_count_y,
+    state.compute_description.group_count_z);
+
+  this->command->end();
+}
+
+inline DrawCommandObject::DrawCommandObject(RenderAction * action, State & state)
+{
+  this->pipeline = std::make_unique<GraphicsPipelineObject>(
+    action->device,
+    state.attributes,
+    state.shaders,
+    state.buffers,
+    state.textures,
+    state.rasterizationstate,
+    action->renderpass,
+    action->pipelinecache,
+    state.drawdescription);
+
+  this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+  this->command->begin(0, action->renderpass->renderpass, 0, action->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
+
+  this->pipeline->bind(this->command->buffer());
+
+  for (const auto& attribute : state.attributes) {
+    VkDeviceSize offsets[1] = { 0 };
+    vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
+  }
+  vkCmdSetViewport(this->command->buffer(), 0, 1, &action->viewport);
+  vkCmdSetScissor(this->command->buffer(), 0, 1, &action->scissor);
+
+  if (!state.indices.empty()) {
+    for (const auto& indexbuffer : state.indices) {
+      vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
+      vkCmdDrawIndexed(this->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
+    }
+  }
+  else {
+    vkCmdDraw(this->command->buffer(), state.drawdescription.count, 1, 0, 0);
+  }
+  this->command->end();
+}
+
+
 
 class StateScope {
 public:
