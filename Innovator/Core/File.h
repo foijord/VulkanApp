@@ -108,18 +108,20 @@ class File {
 public:
   File() 
   {
-    this->scheme.environment["separator"] = std::make_shared<SeparatorFunction>();
-    this->scheme.environment["shader"] = std::make_shared<ShaderFunction>();
-    this->scheme.environment["VK_SHADER_STAGE_VERTEX_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT);
-    this->scheme.environment["VK_SHADER_STAGE_COMPUTE_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_COMPUTE_BIT);
-    this->scheme.environment["VK_SHADER_STAGE_FRAGMENT_BIT"] = std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT);
+    Environment env {
+      { "separator", std::make_shared<SeparatorFunction>() },
+      { "shader", std::make_shared<ShaderFunction>() },
+      { "VK_SHADER_STAGE_VERTEX_BIT", std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT) },
+      { "VK_SHADER_STAGE_COMPUTE_BIT", std::make_shared<Number>(VK_SHADER_STAGE_COMPUTE_BIT) },
+      { "VK_SHADER_STAGE_FRAGMENT_BIT", std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT) },
+      { "layout-binding", std::make_shared<LayoutBindingFunction>() },
+      { "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER", std::make_shared<Number>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) },
+      { "texture", std::make_shared<TextureFunction>() },
+      { "sampler", std::make_shared<SamplerFunction>() },
+      { "box", std::make_shared<BoxFunction>() },
+    };
 
-    this->scheme.environment["layout-binding"] = std::make_shared<LayoutBindingFunction>();
-    this->scheme.environment["VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER"] = std::make_shared<Number>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-    this->scheme.environment["texture"] = std::make_shared<TextureFunction>();
-    this->scheme.environment["sampler"] = std::make_shared<SamplerFunction>();
-    this->scheme.environment["box"] = std::make_shared<BoxFunction>();
+    this->scheme.environment.insert(env.begin(), env.end());
   }
 
   std::shared_ptr<Separator> open(const std::string & filename) const
