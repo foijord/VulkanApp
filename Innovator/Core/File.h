@@ -71,7 +71,7 @@ class BoxFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-   check_num_args(args, 2);
+    check_num_args(args, 2);
     const auto bindingexpr = get_number(args, 0);
     const auto locationexpr = get_number(args, 1);
 
@@ -121,7 +121,8 @@ public:
       { "box", std::make_shared<BoxFunction>() },
     };
 
-    this->scheme.environment.insert(env.begin(), env.end());
+    this->scheme.environment->outer = std::make_shared<Environment>();
+    this->scheme.environment->outer->insert(env.begin(), env.end());
   }
 
   std::shared_ptr<Separator> open(const std::string & filename) const
@@ -129,11 +130,11 @@ public:
     std::ifstream input(filename, std::ios::in);
     const std::string code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
 
-    const auto sep = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
-    if (!sep) {
+    const auto nodeexpression = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
+    if (!nodeexpression) {
       throw std::invalid_argument("top level expression must be a Node");
     }
-    auto separator = std::dynamic_pointer_cast<Separator>(sep->node);
+    auto separator = std::dynamic_pointer_cast<Separator>(nodeexpression->node);
     if (!separator) {
       throw std::invalid_argument("top level node must be a Separator");
     }

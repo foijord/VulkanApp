@@ -18,9 +18,10 @@ class Environment;
 typedef std::shared_ptr<Expression> exp_ptr;
 typedef std::shared_ptr<Environment> env_ptr;
 
-exp_ptr eval(exp_ptr & exp, Environment env);
+exp_ptr eval(exp_ptr & exp, env_ptr env);
 
-typedef std::list<exp_ptr> list;
+typedef std::list<exp_ptr> exp_list;
+typedef std::vector<exp_ptr> exp_vec;
 
 class Expression {
 public:
@@ -28,12 +29,15 @@ public:
   Expression() = default;
   virtual ~Expression() = default;
 
-  explicit Expression(const list::const_iterator & begin, const list::const_iterator & end)
-    : children(list(begin, end)) {}
+  explicit Expression(exp_list::const_iterator begin, exp_list::const_iterator end)
+    : children(exp_list(begin, end)) {}
 
-  virtual exp_ptr eval(Environment & env);
+  explicit Expression(exp_vec::const_iterator begin, exp_vec::const_iterator end)
+    : children(exp_list(begin, end)) {}
 
-  list children;
+  virtual exp_ptr eval(env_ptr env);
+
+  exp_list children;
 };
 
 class Symbol : public Expression {
@@ -45,7 +49,7 @@ public:
   explicit Symbol(std::string token)
     : token(std::move(token)) {}
 
-  exp_ptr eval(Environment & env) override;
+  exp_ptr eval(env_ptr env) override;
 
   std::string token;
 };
@@ -58,8 +62,8 @@ public:
     : std::map<std::string, exp_ptr>(il)
   {}
 
-  Environment(const Expression * parms, const Expression * args, Environment * outer)
-    : outer(outer)
+  Environment(const Expression * parms, const Expression * args, env_ptr outer)
+    : outer(std::move(outer))
   {
     for (auto p = parms->children.begin(), a = args->children.begin(); p != parms->children.end() && a != args->children.end(); ++p, ++a) {
       const auto parm = std::dynamic_pointer_cast<Symbol>(*p);
@@ -82,7 +86,7 @@ public:
 };
 
 inline exp_ptr
-Expression::eval(Environment & env)
+Expression::eval(env_ptr env)
 { 
   auto result = std::make_shared<Expression>();
   for (auto& exp : this->children) {
@@ -92,9 +96,9 @@ Expression::eval(Environment & env)
 }
 
 inline exp_ptr
-Symbol::eval(Environment & env)
+Symbol::eval(env_ptr env)
 { 
-  return (*env.get_env(this->token))[this->token];
+  return (*env->get_env(this->token))[this->token];
 }
 
 class Number : public Expression {
@@ -156,10 +160,15 @@ public:
   Quote() = delete;
   virtual ~Quote() = default;
 
-  explicit Quote(exp_ptr exp)
-    : exp(std::move(exp)) {}
+  explicit Quote(const std::vector<exp_ptr> & args)
+  {
+    if (args.size() != 2) {
+      throw std::invalid_argument("wrong number of arguments to quote");
+    }
+    this->exp = args[0];
+  }
   
-  exp_ptr eval(Environment & env) override
+  exp_ptr eval(env_ptr env) override
   {
     return this->exp;
   }
@@ -173,14 +182,22 @@ public:
   Define() = delete;
   virtual ~Define() = default;
 
-  explicit Define(std::shared_ptr<Symbol> var, 
-                  exp_ptr exp)
-    : var(std::move(var)), 
-      exp(std::move(exp)) {}
-  
-  exp_ptr eval(Environment & env) override
+  explicit Define(const std::vector<exp_ptr> & args)
   {
-    env[this->var->token] = ::eval(this->exp, env);
+    if (args.size() != 3) {
+      throw std::invalid_argument("wrong number of arguments to define");
+    }
+    this->var = std::dynamic_pointer_cast<Symbol>(args[1]);
+    this->exp = args[2];
+
+    if (!this->var) {
+      throw std::invalid_argument("variable name must be a symbol");
+    }
+  }
+  
+  exp_ptr eval(env_ptr env) override
+  {
+    (*env)[this->var->token] = ::eval(this->exp, env);
     return std::make_shared<Expression>();
   }
   
@@ -194,12 +211,18 @@ public:
   If() = delete;
   virtual ~If() = default;
 
-  If(exp_ptr test, exp_ptr conseq, exp_ptr alt)
-    : test(std::move(test)), 
-      conseq(std::move(conseq)), 
-      alt(std::move(alt)) {}
+  explicit If(const std::vector<exp_ptr> & args)
+  {
+    if (args.size() != 4) {
+      throw std::invalid_argument("wrong number of arguments to if");
+    }
+
+    this->test = args[1];
+    this->conseq = args[2];
+    this->alt = args[3];
+  }
   
-  exp_ptr eval(Environment & env) override
+  exp_ptr eval(env_ptr env) override
   {
     const auto exp = ::eval(this->test, env);
     const auto boolexp = std::dynamic_pointer_cast<Boolean>(exp);
@@ -218,13 +241,14 @@ public:
   Function() = delete;
   virtual ~Function() = default;
 
-  Function(exp_ptr parms,
-           exp_ptr body,
-           Environment & env)
-    : parms(std::move(parms)), body(std::move(body)), env(env) {}
+  Function(exp_ptr parms, exp_ptr body, env_ptr env)
+    : parms(std::move(parms)), 
+      body(std::move(body)), 
+      env(std::move(env)) 
+  {}
   
   exp_ptr parms, body;
-  Environment env;
+  env_ptr env;
 };
 
 class Lambda : public Expression {
@@ -233,11 +257,16 @@ public:
   Lambda() = delete;
   virtual ~Lambda() = default;
 
-  Lambda(exp_ptr parms, exp_ptr body)
-    : parms(std::move(parms)), 
-      body(std::move(body)) {}
+  explicit Lambda(const std::vector<exp_ptr> & args)
+  {
+    if (args.size() != 3) {
+      throw std::invalid_argument("wrong number of arguments to lambda");
+    }
+    this->parms = args[1];
+    this->body = args[2];
+  }
   
-  exp_ptr eval(Environment & env) override
+  exp_ptr eval(env_ptr env) override
   {
     return std::make_shared<Function>(this->parms, this->body, env);
   }
@@ -257,6 +286,16 @@ public:
       return std::static_pointer_cast<Number>(arg)->value;
     });
     return dargs;
+  }
+
+  static std::vector<double>
+  get_argvec(const Expression * args, size_t expected_size)
+  {
+    auto argvec = get_argvec(args);
+    if (argvec.size() != expected_size) {
+      throw std::logic_error("internal error: wrong number of arguments!");
+    }
+    return argvec;
   }
 
   static void 
@@ -300,7 +339,10 @@ public:
   exp_ptr operator()(const Expression * args) const override
   {
     auto dargs = get_argvec(args);
-    return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs[0], op));
+    if (dargs.empty()) {
+      throw std::logic_error("logic error: no arguments to function call");
+    }
+    return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs.front(), op));
   }
   
   T op;
@@ -319,7 +361,7 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    auto dargs = get_argvec(args);
+    auto dargs = get_argvec(args, 2);
     return std::make_shared<Boolean>(dargs[0] < dargs[1]);
   }
 };
@@ -332,7 +374,7 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    auto dargs = get_argvec(args);
+    auto dargs = get_argvec(args, 2);
     return std::make_shared<Boolean>(dargs[0] > dargs[1]);
   }
 };
@@ -345,7 +387,7 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    auto dargs = get_argvec(args);
+    auto dargs = get_argvec(args, 2);
     return std::make_shared<Boolean>(dargs[0] == dargs[1]);
   }
 };
@@ -358,6 +400,9 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
+    if (args->children.empty()) {
+      throw std::logic_error("internal error: 'car' performed on empty list");
+    }
     return args->children.front();
   }
 };
@@ -370,11 +415,14 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
+    if (args->children.empty()) {
+      throw std::logic_error("internal error: 'cdr' performed on empty list");
+    }
     return std::make_shared<Expression>(next(args->children.begin()), args->children.end());
   }
 };
 
-inline exp_ptr eval(exp_ptr & exp, Environment env)
+inline exp_ptr eval(exp_ptr & exp, env_ptr env)
 {
   while (true) {
     const auto e = exp.get();
@@ -404,7 +452,7 @@ inline exp_ptr eval(exp_ptr & exp, Environment env)
     if (typeid(*f) == typeid(Function)) {
       auto func = std::dynamic_pointer_cast<Function>(front);
       exp = func->body;
-      env = Environment(func->parms.get(), exps.get(), &func->env);
+      env = std::make_shared<Environment>(func->parms.get(), exps.get(), func->env);
     }
     else {
       const auto builtin = std::dynamic_pointer_cast<Callable>(front);
@@ -419,10 +467,14 @@ public:
   {
     if (it->str() == "(") {
       while (*(++it) != ")") {
+        // TODO: handle mismatched parentheses
         this->push_back(ParseTree(it));
       }
     }
     this->token = *it;
+    if (this->empty()) {
+      std::cout << this->token << std::endl;
+    }
   }
   std::string token;
 };
@@ -448,83 +500,48 @@ inline exp_ptr parse(const ParseTree & parsetree)
     }
   }
   
-  if (parsetree[0].token == "quote") {
-    if (parsetree.size() != 2) {
-      throw std::invalid_argument("invalid num args to quote");
-    }
-    return std::make_shared<Quote>(parse(parsetree[1]));
+  exp_vec exp_vec(parsetree.size());
+  std::transform(parsetree.begin(), parsetree.end(), exp_vec.begin(), parse);
+
+  const std::string token = parsetree[0].token;
+
+  if (token == "quote") {
+    return std::make_shared<Quote>(exp_vec);
+  }
+  if (token == "if") {
+    return std::make_shared<If>(exp_vec);
+  }
+  if (token == "lambda") {
+    return std::make_shared<Lambda>(exp_vec);
+  }
+  if (token == "define") {
+    return std::make_shared<Define>(exp_vec);
   }
   
-  if (parsetree[0].token == "if") {
-    if (parsetree.size() != 4) {
-      throw std::invalid_argument("invalid num args to if");
+  if (token == "+" || token == "-" || token == "*" || token == "/") {
+    if (parsetree.size() < 3) {
+      throw std::invalid_argument("too few arguments to " + token);
     }
-    return std::make_shared<If>(parse(parsetree[1]), parse(parsetree[2]), parse(parsetree[3]));
-  }
-  
-  if (parsetree[0].token == "lambda") {
+  } else if (token == "<" || token == ">" || token == "=") {
     if (parsetree.size() != 3) {
-      throw std::invalid_argument("invalid num arguments to lambda");
+      throw std::invalid_argument("wrong number of arguments to " + token);
     }
-    return std::make_shared<Lambda>(parse(parsetree[1]), parse(parsetree[2]));
-  }
-  
-  if (parsetree[0].token == "define") {
-    if (parsetree.size() != 3) {
-      throw std::invalid_argument("invalid num arguments to define");
-    }
-    auto var = std::dynamic_pointer_cast<Symbol>(parse(parsetree[1]));
-    if (!var) {
-      throw std::invalid_argument("variable name must be a symbol");
-    }
-    auto exp = parse(parsetree[2]);
-    return std::make_shared<Define>(var, exp);
-  }
-  
-  if (parsetree[0].token == "list") {
+  } else if (token == "list") {
     if (parsetree.size() < 2) {
-      throw std::invalid_argument("too few arguments to function list");
-    }
-  }
-  
-  if (parsetree[0].token == "+") {
-    if (parsetree.size() != 3) {
-      throw std::invalid_argument("+ needs at least two arguments <");
+      throw std::invalid_argument("too few arguments to list");
     }
   }
 
-  if (parsetree[0].token == "<") {
-    if (parsetree.size() != 3) {
-      throw std::invalid_argument("wrong number of arguments to <");
-    }
-  }
-  
-  if (parsetree[0].token == ">") {
-    if (parsetree.size() != 3) {
-      throw std::invalid_argument("wrong number of arguments to >");
-    }
-  }
-  
-  if (parsetree[0].token == "=") {
-    if (parsetree.size() != 3) {
-      throw std::invalid_argument("wrong number of arguments to =");
-    }
-  }
-
-  auto list = std::make_shared<Expression>();
-  for (const auto& pt : parsetree) {
-    list->children.push_back(parse(pt));
-  }
-  
-  return list;
+  return std::make_shared<Expression>(exp_vec.begin(), exp_vec.end());
 }
 
 class Scheme {
 public:
   Scheme()
-    : tokenizer(R"([()]|"([^\"]|\.)*"|[a-zA-Z_-]+|[0-9]+|[+*-/<>=])")
+    : tokenizer(R"([()]|"([^\"]|\.)*"|[a-zA-Z_-]+|[0-9]+|[+*-/<>=])"),
+      environment(std::make_shared<Environment>())
   {
-    this->environment = {
+    Environment env{
       { "+",   std::make_shared<Add>() },
       { "-",   std::make_shared<Sub>() },
       { "/",   std::make_shared<Div>() },
@@ -536,6 +553,8 @@ public:
       { "cdr", std::make_shared<Cdr>() },
       { "pi",  std::make_shared<Number>(PI) },
     };
+
+    this->environment->insert(env.begin(), env.end());
   }
 
   exp_ptr eval(const std::string & input) const
@@ -547,5 +566,5 @@ public:
   }
 
   const std::regex tokenizer;
-  Environment environment;
+  env_ptr environment;
 };
