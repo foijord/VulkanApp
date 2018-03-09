@@ -58,8 +58,12 @@ class Environment : public std::map<std::string, exp_ptr> {
 public:
   Environment() = default;
 
-  Environment(std::initializer_list<value_type> il)
+  explicit Environment(std::initializer_list<value_type> il)
     : std::map<std::string, exp_ptr>(il)
+  {}
+
+  explicit Environment(iterator begin, iterator end)
+    : std::map<std::string, exp_ptr>(begin, end)
   {}
 
   Environment(const Expression * parms, const Expression * args, env_ptr outer)
@@ -168,7 +172,7 @@ public:
     this->exp = args[0];
   }
   
-  exp_ptr eval(env_ptr env) override
+  exp_ptr eval(env_ptr) override
   {
     return this->exp;
   }
@@ -242,9 +246,7 @@ public:
   virtual ~Function() = default;
 
   Function(exp_ptr parms, exp_ptr body, env_ptr env)
-    : parms(std::move(parms)), 
-      body(std::move(body)), 
-      env(std::move(env)) 
+    : parms(std::move(parms)), body(std::move(body)), env(std::move(env)) 
   {}
   
   exp_ptr parms, body;
@@ -472,9 +474,6 @@ public:
       }
     }
     this->token = *it;
-    if (this->empty()) {
-      std::cout << this->token << std::endl;
-    }
   }
   std::string token;
 };
@@ -535,27 +534,25 @@ inline exp_ptr parse(const ParseTree & parsetree)
   return std::make_shared<Expression>(exp_vec.begin(), exp_vec.end());
 }
 
+inline Environment global_env{
+  { "+",   std::make_shared<Add>() },
+  { "-",   std::make_shared<Sub>() },
+  { "/",   std::make_shared<Div>() },
+  { "*",   std::make_shared<Mul>() },
+  { "<",   std::make_shared<Less>() },
+  { ">",   std::make_shared<More>() },
+  { "=",   std::make_shared<Same>() },
+  { "car", std::make_shared<Car>() },
+  { "cdr", std::make_shared<Cdr>() },
+  { "pi",  std::make_shared<Number>(PI) },
+};
+
 class Scheme {
 public:
   Scheme()
     : tokenizer(R"([()]|"([^\"]|\.)*"|[a-zA-Z_-]+|[0-9]+|[+*-/<>=])"),
-      environment(std::make_shared<Environment>())
-  {
-    Environment env{
-      { "+",   std::make_shared<Add>() },
-      { "-",   std::make_shared<Sub>() },
-      { "/",   std::make_shared<Div>() },
-      { "*",   std::make_shared<Mul>() },
-      { "<",   std::make_shared<Less>() },
-      { ">",   std::make_shared<More>() },
-      { "=",   std::make_shared<Same>() },
-      { "car", std::make_shared<Car>() },
-      { "cdr", std::make_shared<Cdr>() },
-      { "pi",  std::make_shared<Number>(PI) },
-    };
-
-    this->environment->insert(env.begin(), env.end());
-  }
+      environment(std::make_shared<Environment>(global_env.begin(), global_env.end()))
+  {}
 
   exp_ptr eval(const std::string & input) const
   {

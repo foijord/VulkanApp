@@ -83,23 +83,27 @@ public:
   }
 };
 
+static std::shared_ptr<Node> extract_node(const exp_ptr exp)
+{
+  const auto node_exp = std::dynamic_pointer_cast<NodeExpression>(exp);
+  if (!node_exp) {
+    throw std::invalid_argument("expression does not evaluate to a node");
+  }
+  const auto node = std::dynamic_pointer_cast<Node>(node_exp->node);
+  if (!node) {
+    throw std::logic_error("NodeExpression does not contain a node!");
+  }
+  return node;
+}
+
 class SeparatorFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    auto sep = std::make_shared<Separator>();
+    std::vector<std::shared_ptr<Node>> children(args->children.size());
+    std::transform(args->children.begin(), args->children.end(), children.begin(), extract_node);
 
-    for (auto& exp : args->children) {
-      const auto nodefunc = std::dynamic_pointer_cast<NodeExpression>(exp);
-      if (!nodefunc) {
-        throw std::invalid_argument("separator args must be nodes");
-      }
-      const auto node = std::dynamic_pointer_cast<Node>(nodefunc->node);
-      if (!node) {
-        throw std::invalid_argument("separator args must be nodes");
-      }
-      sep->children.push_back(node);
-    }
+    auto sep = std::make_shared<Separator>(children);
     return std::make_shared<NodeExpression>(sep);
   }
 };
@@ -108,7 +112,7 @@ class File {
 public:
   File() 
   {
-    Environment env {
+    Environment node_env {
       { "separator", std::make_shared<SeparatorFunction>() },
       { "shader", std::make_shared<ShaderFunction>() },
       { "VK_SHADER_STAGE_VERTEX_BIT", std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT) },
@@ -121,8 +125,7 @@ public:
       { "box", std::make_shared<BoxFunction>() },
     };
 
-    this->scheme.environment->outer = std::make_shared<Environment>();
-    this->scheme.environment->outer->insert(env.begin(), env.end());
+    this->scheme.environment->outer = std::make_shared<Environment>(node_env.begin(), node_env.end());
   }
 
   std::shared_ptr<Separator> open(const std::string & filename) const
@@ -130,11 +133,11 @@ public:
     std::ifstream input(filename, std::ios::in);
     const std::string code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
 
-    const auto nodeexpression = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
-    if (!nodeexpression) {
+    const auto node_exp = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
+    if (!node_exp) {
       throw std::invalid_argument("top level expression must be a Node");
     }
-    auto separator = std::dynamic_pointer_cast<Separator>(nodeexpression->node);
+    auto separator = std::dynamic_pointer_cast<Separator>(node_exp->node);
     if (!separator) {
       throw std::invalid_argument("top level node must be a Separator");
     }
