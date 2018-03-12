@@ -190,6 +190,7 @@ public:
                       static_cast<uint32_t>(regions.size()),
                       regions.data());
     }
+
     const VulkanIndexBufferDescription indices {
       VK_INDEX_TYPE_UINT32,                       // type
       this->gpu_buffer->buffer->buffer,           // buffer
@@ -592,20 +593,13 @@ public:
   std::unique_ptr<VulkanCommandBuffers> command;
 };
 
-class Box : public DrawCommand {
+class Box : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Box);
   Box() = delete;
   virtual ~Box() = default;
 
   explicit Box(uint32_t binding, uint32_t location)
-    : DrawCommand(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36),
-      indices(std::make_shared<IndexBuffer>()),
-      attribute_description(std::make_shared<VertexAttributeDescription>(location, 
-                                                                         binding, 
-                                                                         VK_FORMAT_R32G32B32_SFLOAT, 
-                                                                         0)),
-  vertices(std::make_shared<VertexAttribute<float>>(3))
   {
     //     5------7
     //    /|     /|
@@ -615,8 +609,8 @@ public:
     //  z x    | /
     //  |/     |/
     //  0--y---2
-
-    this->vertices->values = {
+    std::shared_ptr<VertexAttribute<float>> vertices = std::make_shared<VertexAttribute<float>>(3);
+    vertices->values = {
       0, 0, 0, // 0
       0, 0, 1, // 1
       0, 1, 0, // 2
@@ -627,7 +621,8 @@ public:
       1, 1, 1, // 7
     };
 
-    this->indices->values = {
+    std::shared_ptr<IndexBuffer> indices = std::make_shared<IndexBuffer>();
+    indices->values = {
       0, 1, 3, 3, 2, 0, // -x
       4, 6, 7, 7, 5, 4, // +x
       0, 4, 5, 5, 1, 0, // -y
@@ -635,14 +630,16 @@ public:
       0, 2, 6, 6, 4, 0, // -z
       1, 5, 7, 7, 3, 1, // +z
     };
-  }
 
-  void traverse(RenderAction * action) override
-  {
-    this->indices->traverse(action);
-    this->attribute_description->traverse(action);
-    this->vertices->traverse(action);
-    DrawCommand::traverse(action);
+    this->children = {
+      indices,
+      std::make_shared<VertexAttributeDescription>(location,
+        binding,
+        VK_FORMAT_R32G32B32_SFLOAT,
+        0),
+      vertices,
+      std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
+    };
   }
 
   void traverse(BoundingBoxAction * action) override
@@ -651,10 +648,6 @@ public:
     box.transform(action->state.ModelMatrix);
     action->extendBy(box);
   }
-
-  std::shared_ptr<IndexBuffer> indices;
-  std::shared_ptr<VertexAttributeDescription> attribute_description;
-  std::shared_ptr<VertexAttribute<float>> vertices;
 };
 
 
