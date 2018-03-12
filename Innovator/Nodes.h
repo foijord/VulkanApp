@@ -267,11 +267,18 @@ public:
   VertexAttributeDescription() = delete;
   virtual ~VertexAttributeDescription() = default;
 
-  VertexAttributeDescription(uint32_t location, uint32_t binding, VkFormat format, uint32_t offset)
-    : location(location), binding(binding), format(format), offset(offset), input_rate(VK_VERTEX_INPUT_RATE_VERTEX) 
+  VertexAttributeDescription(uint32_t location, 
+                             uint32_t binding, 
+                             VkFormat format, 
+                             uint32_t offset)
+    : location(location), 
+      binding(binding), 
+      format(format), 
+      offset(offset),
+      input_rate(VK_VERTEX_INPUT_RATE_VERTEX) 
   {}
 
-  virtual void traverse(RenderAction * action)
+  void traverse(RenderAction * action)  override
   {
     action->state.attribute_description.location = this->location;
     action->state.attribute_description.binding = this->binding;
@@ -291,7 +298,11 @@ template <typename T>
 class VertexAttribute : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(VertexAttribute);
-  VertexAttribute() = default;
+
+  explicit VertexAttribute(uint32_t stride) 
+    : stride(stride)
+  {}
+
   virtual ~VertexAttribute() = default;
 
   void traverse(RenderAction * action) override
@@ -323,11 +334,12 @@ public:
                       regions.data());
     }
     action->state.attribute_description.buffer = this->gpu_buffer->buffer->buffer;
-    action->state.attribute_description.stride = sizeof(T);
+    action->state.attribute_description.stride = sizeof(T) * this->stride;
     action->state.attributes.push_back(action->state.attribute_description);
   }
 
   std::vector<T> values;
+  uint32_t stride{};
   std::unique_ptr<VulkanBufferObject> cpu_buffer;
   std::unique_ptr<VulkanBufferObject> gpu_buffer;
 };
@@ -338,8 +350,8 @@ public:
   Shader() = delete;
   virtual ~Shader() = default;
 
-  Shader(const std::string & filename, VkShaderStageFlagBits stage)
-    : filename(filename), stage(stage) {}
+  Shader(std::string filename, VkShaderStageFlagBits stage)
+    : filename(std::move(filename)), stage(stage) {}
 
   void traverse(RenderAction * action) override
   {
@@ -589,8 +601,11 @@ public:
   explicit Box(uint32_t binding, uint32_t location)
     : DrawCommand(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36),
       indices(std::make_shared<IndexBuffer>()),
-      attribute_description(std::make_shared<VertexAttributeDescription>(location, binding, VK_FORMAT_R32G32B32_SFLOAT, 0)),
-      vertices(std::make_shared<VertexAttribute<glm::vec3>>())
+      attribute_description(std::make_shared<VertexAttributeDescription>(location, 
+                                                                         binding, 
+                                                                         VK_FORMAT_R32G32B32_SFLOAT, 
+                                                                         0)),
+  vertices(std::make_shared<VertexAttribute<float>>(3))
   {
     //     5------7
     //    /|     /|
@@ -602,14 +617,14 @@ public:
     //  0--y---2
 
     this->vertices->values = {
-      vec3(0, 0, 0), // 0
-      vec3(0, 0, 1), // 1
-      vec3(0, 1, 0), // 2
-      vec3(0, 1, 1), // 3
-      vec3(1, 0, 0), // 4
-      vec3(1, 0, 1), // 5
-      vec3(1, 1, 0), // 6
-      vec3(1, 1, 1), // 7
+      0, 0, 0, // 0
+      0, 0, 1, // 1
+      0, 1, 0, // 2
+      0, 1, 1, // 3
+      1, 0, 0, // 4
+      1, 0, 1, // 5
+      1, 1, 0, // 6
+      1, 1, 1, // 7
     };
 
     this->indices->values = {
@@ -639,7 +654,7 @@ public:
 
   std::shared_ptr<IndexBuffer> indices;
   std::shared_ptr<VertexAttributeDescription> attribute_description;
-  std::shared_ptr<VertexAttribute<glm::vec3>> vertices;
+  std::shared_ptr<VertexAttribute<float>> vertices;
 };
 
 
@@ -652,8 +667,11 @@ public:
   explicit Sphere(uint32_t binding, uint32_t location)
     : DrawCommand(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36),
       indices(std::make_shared<IndexBuffer>()),
-      attribute_description(std::make_shared<VertexAttributeDescription>(location, binding, VK_FORMAT_R32G32B32_SFLOAT, 0)),
-      vertices(std::make_shared<VertexAttribute<vec3>>())
+      attribute_description(std::make_shared<VertexAttributeDescription>(location, 
+                                                                         binding, 
+                                                                         VK_FORMAT_R32G32B32_SFLOAT, 
+                                                                         0)),
+  vertices(std::make_shared<VertexAttribute<float>>(3))
   {
     this->indices->values = {
       1,  4,  0,
@@ -680,18 +698,18 @@ public:
 
     float t = float(1 + std::pow(5, 0.5)) / 2;  // golden ratio
     this->vertices->values = {
-      vec3(-1, 0, t),
-      vec3(1, 0, t),
-      vec3(-1, 0,-t),
-      vec3(1, 0,-t),
-      vec3(0, t, 1),
-      vec3(0, t,-1),
-      vec3(0,-t, 1),
-      vec3(0,-t,-1),
-      vec3(t, 1, 0),
-      vec3(-t, 1, 0),
-      vec3(t,-1, 0),
-      vec3(-t,-1, 0)
+      -1, 0, t,
+       1, 0, t,
+      -1, 0,-t,
+       1, 0,-t,
+       0, t, 1,
+       0, t,-1,
+       0,-t, 1,
+       0,-t,-1,
+       t, 1, 0,
+      -t, 1, 0,
+       t,-1, 0,
+      -t,-1, 0
     };
   }
 
@@ -712,5 +730,5 @@ public:
 
   std::shared_ptr<IndexBuffer> indices;
   std::shared_ptr<VertexAttributeDescription> attribute_description;
-  std::shared_ptr<VertexAttribute<glm::vec3>> vertices;
+  std::shared_ptr<VertexAttribute<float>> vertices;
 };
