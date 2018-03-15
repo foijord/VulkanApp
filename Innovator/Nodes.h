@@ -156,52 +156,75 @@ private:
   }
 };
 
-class IndexBuffer : public Node {
+class GpuBuffer : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(IndexBuffer);
-  IndexBuffer() = default;
-  virtual ~IndexBuffer() = default;
+  NO_COPY_OR_ASSIGNMENT(GpuBuffer);
+  GpuBuffer() = delete;
+  virtual ~GpuBuffer() = default;
+
+  explicit GpuBuffer(VkBufferUsageFlags usage)
+    : usage(usage)
+  {}
 
   void traverse(RenderAction * action) override
   {
     if (!this->gpu_buffer) {
-      size_t size = sizeof(uint32_t) * this->values.size();
-      this->cpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
-                                                              size, 
-                                                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-                                                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+      size_t size = action->state.bufferdata.size;
+      const void * data = action->state.bufferdata.data;
 
-      this->gpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
-                                                              size, 
-                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+      this->cpu_buffer = std::make_unique<VulkanBufferObject>(
+        action->device,
+        size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-      this->cpu_buffer->memory->memcpy(this->values.data(), size);
+      this->gpu_buffer = std::make_unique<VulkanBufferObject>(
+        action->device,
+        size,
+        this->usage,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-      std::vector<VkBufferCopy> regions = {{
-        0,    // srcOffset
-        0,    // dstOffset 
-        size, // size 
-      }};
+      this->cpu_buffer->memory->memcpy(data, size);
 
-      vkCmdCopyBuffer(action->command->buffer(), 
-                      this->cpu_buffer->buffer->buffer, 
-                      this->gpu_buffer->buffer->buffer, 
-                      static_cast<uint32_t>(regions.size()),
-                      regions.data());
+      std::vector<VkBufferCopy> regions = { {
+          0,    // srcOffset
+          0,    // dstOffset 
+          size, // size 
+        } };
+
+      vkCmdCopyBuffer(action->command->buffer(),
+        this->cpu_buffer->buffer->buffer,
+        this->gpu_buffer->buffer->buffer,
+        static_cast<uint32_t>(regions.size()),
+        regions.data());
     }
-
-    const VulkanIndexBufferDescription indices {
-      VK_INDEX_TYPE_UINT32,                       // type
-      this->gpu_buffer->buffer->buffer,           // buffer
-      static_cast<uint32_t>(this->values.size()), // count
-    };
-    action->state.indices.push_back(indices);
   }
-  
-  std::vector<uint32_t> values;
+
+  VkBufferUsageFlags usage;
   std::unique_ptr<VulkanBufferObject> cpu_buffer;
   std::unique_ptr<VulkanBufferObject> gpu_buffer;
+};
+
+class IndexBuffer : public GpuBuffer {
+public:
+  NO_COPY_OR_ASSIGNMENT(IndexBuffer);
+  virtual ~IndexBuffer() = default;
+  IndexBuffer()
+    : GpuBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+  {}
+
+  void traverse(RenderAction * action) override
+  {
+    GpuBuffer::traverse(action);
+
+    const VulkanIndexBufferDescription indices{
+      VK_INDEX_TYPE_UINT32,                                   // type
+      this->gpu_buffer->buffer->buffer,                       // buffer
+      static_cast<uint32_t>(action->state.bufferdata.count),  // count
+    };
+
+    action->state.indices.push_back(indices);
+  }
 };
 
 class LayoutBinding : public Node {
@@ -226,37 +249,60 @@ public:
 };
 
 template <typename T>
+class BufferData : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(BufferData);
+  BufferData() = default;
+  virtual ~BufferData() = default;
+
+  void traverse(RenderAction * action) override
+  {
+    const VulkanBufferDataDescription bufferdata{
+      sizeof(T) * this->values.size(),
+      this->values.size(),
+      this->values.data(),
+    };
+
+    action->state.bufferdata = bufferdata;
+  }
+
+  std::vector<T> values;
+};
+
 class Buffer : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Buffer);
   Buffer() = delete;
   virtual ~Buffer() = default;
 
-  Buffer(VkBufferUsageFlagBits usage, VkMemoryPropertyFlags flags)
-    : transfer(false), usage(usage), flags(flags)
+  explicit Buffer(VkBufferUsageFlagBits usage, 
+                  VkMemoryPropertyFlags flags)
+    : usage(usage), 
+      flags(flags)
   {}
 
   void traverse(RenderAction * action) override
   {
-    size_t size = sizeof(T) * this->values.size();
     if (!this->buffer) {
-      this->buffer = std::make_unique<VulkanBufferObject>(action->device, size, this->usage, this->flags);
-      this->buffer->memory->memcpy(this->values.data(), size);
-    } else if (this->transfer) {
-      this->buffer->memory->memcpy(this->values.data(), size);
+      this->buffer = std::make_unique<VulkanBufferObject>(
+        action->device, 
+        action->state.bufferdata.size,
+        this->usage, 
+        this->flags);
     }
+
+    this->buffer->memory->memcpy(action->state.bufferdata.data, action->state.bufferdata.size);
+
     action->state.buffers.push_back({
       action->state.layout_binding.binding,             // binding 
       action->state.layout_binding.type,                // type
       action->state.layout_binding.stage,               // stage 
       this->buffer->buffer->buffer,                     // buffer 
-      size,                                             // size 
+      action->state.bufferdata.size,                    // size 
       0                                                 // offset 
     });
   }
 
-  bool transfer;
-  std::vector<T> values;
   VkBufferUsageFlagBits usage;
   VkMemoryPropertyFlags flags;
   std::unique_ptr<VulkanBufferObject> buffer;
@@ -276,7 +322,7 @@ public:
       binding(binding), 
       format(format), 
       offset(offset),
-      input_rate(VK_VERTEX_INPUT_RATE_VERTEX) 
+      inputrate(VK_VERTEX_INPUT_RATE_VERTEX) 
   {}
 
   void traverse(RenderAction * action)  override
@@ -285,64 +331,38 @@ public:
     action->state.attribute_description.binding = this->binding;
     action->state.attribute_description.format = this->format;
     action->state.attribute_description.offset = this->offset;
-    action->state.attribute_description.input_rate = this->input_rate;
+    action->state.attribute_description.inputrate = this->inputrate;
   }
 
   uint32_t location;
   uint32_t binding;
   VkFormat format;
   uint32_t offset;
-  VkVertexInputRate input_rate;
+  VkVertexInputRate inputrate;
 };
 
 template <typename T>
-class VertexAttribute : public Node {
+class VertexAttribute : public GpuBuffer {
 public:
   NO_COPY_OR_ASSIGNMENT(VertexAttribute);
-
-  explicit VertexAttribute(uint32_t stride) 
-    : stride(stride)
-  {}
-
+  VertexAttribute() = delete;
   virtual ~VertexAttribute() = default;
+
+  explicit VertexAttribute(uint32_t stride)
+    : GpuBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
+      stride(stride)
+  {}
 
   void traverse(RenderAction * action) override
   {
-    if (!this->gpu_buffer) {
-      size_t size = sizeof(T) * this->values.size();
-      this->cpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
-                                                              size, 
-                                                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    GpuBuffer::traverse(action);
 
-      this->gpu_buffer = std::make_unique<VulkanBufferObject>(action->device, 
-                                                              size, 
-                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-      this->cpu_buffer->memory->memcpy(this->values.data(), size);
-
-      std::vector<VkBufferCopy> regions = {{
-        0,    // srcOffset
-        0,    // dstOffset 
-        size, // size 
-      }};
-
-      vkCmdCopyBuffer(action->command->buffer(), 
-                      this->cpu_buffer->buffer->buffer, 
-                      this->gpu_buffer->buffer->buffer, 
-                      static_cast<uint32_t>(regions.size()),
-                      regions.data());
-    }
     action->state.attribute_description.buffer = this->gpu_buffer->buffer->buffer;
     action->state.attribute_description.stride = sizeof(T) * this->stride;
     action->state.attributes.push_back(action->state.attribute_description);
   }
 
-  std::vector<T> values;
-  uint32_t stride{};
-  std::unique_ptr<VulkanBufferObject> cpu_buffer;
-  std::unique_ptr<VulkanBufferObject> gpu_buffer;
+  uint32_t stride;
 };
 
 class Shader : public Node {
@@ -557,19 +577,22 @@ public:
   explicit DrawCommand(VkPrimitiveTopology topology, uint32_t count = 0)
     : count(count),
       topology(topology),
-      transform(std::make_shared<Buffer<mat4>>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)),
-      transform_layout(std::make_shared<LayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS))
-  {
-    this->transform->transfer = true;
-  }
+      transform_data(std::make_shared<BufferData<glm::mat4>>()),
+      transform(std::make_shared<Buffer>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)),
+      transform_layout(std::make_shared<LayoutBinding>(0, 
+                                                       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+                                                       VK_SHADER_STAGE_ALL_GRAPHICS))
+  {}
 
   void traverse(RenderAction * action) override
   {
-    this->transform->values = {
+    this->transform_data->values = {
       action->state.ViewMatrix * action->state.ModelMatrix, 
       action->state.ProjMatrix 
     };
     this->transform_layout->traverse(action);
+    this->transform_data->traverse(action);
     this->transform->traverse(action);
 
     action->state.drawdescription.count = this->count;
@@ -586,7 +609,8 @@ public:
 
   uint32_t count;
   VkPrimitiveTopology topology;
-  std::shared_ptr<Buffer<glm::mat4>> transform;
+  std::shared_ptr<BufferData<glm::mat4>> transform_data;
+  std::shared_ptr<Buffer> transform;
   std::shared_ptr<LayoutBinding> transform_layout;
   std::unique_ptr<class DescriptorSetObject> descriptor_set;
   std::unique_ptr<class GraphicsPipelineObject> pipeline;
@@ -609,7 +633,7 @@ public:
     //  z x    | /
     //  |/     |/
     //  0--y---2
-    std::shared_ptr<VertexAttribute<float>> vertices = std::make_shared<VertexAttribute<float>>(3);
+    std::shared_ptr<BufferData<float>> vertices = std::make_shared<BufferData<float>>();
     vertices->values = {
       0, 0, 0, // 0
       0, 0, 1, // 1
@@ -621,7 +645,7 @@ public:
       1, 1, 1, // 7
     };
 
-    std::shared_ptr<IndexBuffer> indices = std::make_shared<IndexBuffer>();
+    std::shared_ptr<BufferData<uint32_t>> indices = std::make_shared<BufferData<uint32_t>>();
     indices->values = {
       0, 1, 3, 3, 2, 0, // -x
       4, 6, 7, 7, 5, 4, // +x
@@ -633,11 +657,14 @@ public:
 
     this->children = {
       indices,
-      std::make_shared<VertexAttributeDescription>(location,
+      std::make_shared<IndexBuffer>(),
+      vertices,
+      std::make_shared<VertexAttributeDescription>(
+        location,
         binding,
         VK_FORMAT_R32G32B32_SFLOAT,
         0),
-      vertices,
+      std::make_shared<VertexAttribute<float>>(3),
       std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
     };
   }
@@ -666,7 +693,8 @@ public:
                                                                          0)),
   vertices(std::make_shared<VertexAttribute<float>>(3))
   {
-    this->indices->values = {
+    std::shared_ptr<BufferData<uint32_t>> indices = std::make_shared<BufferData<uint32_t>>();
+    indices->values = {
       1,  4,  0,
       4,  9,  0,
       4,  5,  9,
@@ -690,7 +718,9 @@ public:
     };
 
     float t = float(1 + std::pow(5, 0.5)) / 2;  // golden ratio
-    this->vertices->values = {
+    std::shared_ptr<BufferData<float>> vertices = std::make_shared<BufferData<float>>();
+
+    vertices->values = {
       -1, 0, t,
        1, 0, t,
       -1, 0,-t,

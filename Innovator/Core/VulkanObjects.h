@@ -315,7 +315,7 @@ public:
       binding_descriptions.push_back({
         attribute.binding,    // binding
         attribute.stride,     // stride
-        attribute.input_rate, //inputRate
+        attribute.inputrate, //inputRate
       });
     }
 

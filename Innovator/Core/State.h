@@ -17,7 +17,7 @@ struct VulkanVertexAttributeDescription {
   VkFormat format;
   uint32_t offset;
   uint32_t stride;
-  VkVertexInputRate input_rate;
+  VkVertexInputRate inputrate;
   VkBuffer buffer;
 };
 
@@ -60,6 +60,12 @@ struct VulkanComputeDescription {
   uint32_t group_count_z;
 };
 
+struct  VulkanBufferDataDescription {
+  size_t size;
+  size_t count;
+  void * data;
+};
+
 class State {
 public:
   State() 
@@ -87,6 +93,7 @@ public:
 
   VulkanLayoutBinding layout_binding;
   VulkanDrawDescription drawdescription;
+  VulkanBufferDataDescription bufferdata;
   VulkanTextureDescription texture_description;
   VulkanComputeDescription compute_description;
   VulkanVertexAttributeDescription attribute_description;
