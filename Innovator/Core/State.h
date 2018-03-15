@@ -61,6 +61,7 @@ struct VulkanComputeDescription {
 };
 
 struct  VulkanBufferDataDescription {
+  size_t elem_size;
   size_t size;
   size_t count;
   void * data;
@@ -99,9 +100,9 @@ public:
   VulkanVertexAttributeDescription attribute_description;
   VkPipelineRasterizationStateCreateInfo rasterizationstate;
 
-  std::vector<VulkanBufferDescription> buffers;
+  std::vector<VulkanBufferDescription> buffer_descriptions;
   std::vector<VulkanTextureDescription> textures;
   std::vector<VulkanIndexBufferDescription> indices;
   std::vector<VulkanShaderModuleDescription> shaders;
-  std::vector<VulkanVertexAttributeDescription> attributes;
+  std::vector<VulkanVertexAttributeDescription> attribute_descriptions;
 };

@@ -201,7 +201,7 @@ inline ComputeCommandObject::ComputeCommandObject(RenderAction * action, State &
   this->pipeline = std::make_unique<ComputePipelineObject>(
     action->device,
     state.shaders[0],
-    state.buffers,
+    state.buffer_descriptions,
     state.textures,
     action->pipelinecache);
 
@@ -222,9 +222,9 @@ inline DrawCommandObject::DrawCommandObject(RenderAction * action, State & state
 {
   this->pipeline = std::make_unique<GraphicsPipelineObject>(
     action->device,
-    state.attributes,
+    state.attribute_descriptions,
     state.shaders,
-    state.buffers,
+    state.buffer_descriptions,
     state.textures,
     state.rasterizationstate,
     action->renderpass,
@@ -236,7 +236,7 @@ inline DrawCommandObject::DrawCommandObject(RenderAction * action, State & state
 
   this->pipeline->bind(this->command->buffer());
 
-  for (const auto& attribute : state.attributes) {
+  for (const auto& attribute : state.attribute_descriptions) {
     VkDeviceSize offsets[1] = { 0 };
     vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
   }
