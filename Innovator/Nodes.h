@@ -24,27 +24,23 @@ public:
   explicit Separator(const std::vector<std::shared_ptr<Node>> & children)
     : Group(children) {}
 
-  static std::shared_ptr<Separator> create(std::vector<std::shared_ptr<Node>> children)
-  {
-    return std::make_shared<Separator>(children);
-  }
-
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     StateScope scope(action);
-    Group::traverse(action);
+    this->traverse_children(action);
   }
 
-  void traverse(BoundingBoxAction * action) override
+  void do_traverse(BoundingBoxAction * action) override
   {
     StateScope scope(action);
-    Group::traverse(action);
+    this->traverse_children(action);
   }
 
-  void traverse(HandleEventAction * action) override
+  void do_traverse(HandleEventAction * action) override
   {
     StateScope scope(action);
-    Group::traverse(action);
+    this->traverse_children(action);
   }
 };
 
@@ -61,22 +57,6 @@ public:
       position(glm::vec3(0, 0, 1)),
       orientation(glm::mat3(1.0))
   {}
-
-  void traverse(RenderAction * action) override
-  {
-    this->aspectRatio = action->viewport.width / action->viewport.height;
-    action->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
-    action->state.ViewMatrix = glm::translate(action->state.ViewMatrix, -this->position);
-    action->state.ProjMatrix = glm::perspective(this->fieldOfView, this->aspectRatio, this->nearPlane, this->farPlane);
-  }
-
-  float farPlane;
-  float nearPlane;
-  float aspectRatio;
-  float fieldOfView;
-  float focalDistance;
-  glm::vec3 position;
-  glm::mat3 orientation;
 
   void zoom(float dy)
   {
@@ -121,8 +101,24 @@ public:
     this->position = focalpoint + this->orientation[2] * this->focalDistance;
     this->lookAt(focalpoint);
   }
-};
 
+private:
+  void do_traverse(RenderAction * action) override
+  {
+    this->aspectRatio = action->viewport.width / action->viewport.height;
+    action->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
+    action->state.ViewMatrix = glm::translate(action->state.ViewMatrix, -this->position);
+    action->state.ProjMatrix = glm::perspective(this->fieldOfView, this->aspectRatio, this->nearPlane, this->farPlane);
+  }
+
+  float farPlane;
+  float nearPlane;
+  float aspectRatio;
+  float fieldOfView;
+  float focalDistance;
+  glm::vec3 position;
+  glm::mat3 orientation;
+};
 
 class Transform : public Node {
 public:
@@ -133,27 +129,27 @@ public:
   explicit Transform(const glm::vec3 & translation = glm::vec3(0), const glm::vec3 & scalefactor = glm::vec3(1))
     : translation(translation), scaleFactor(scalefactor) {}
 
-  void traverse(RenderAction * action) override
-  {
-    this->doAction(action);
-  }
-
-  void traverse(BoundingBoxAction * action) override
-  {
-    this->doAction(action);
-  }
-
-  glm::vec3 translation;
-  glm::vec3 scaleFactor;
-
 private:
-  void doAction(Action * action) const
+  void do_traverse(BoundingBoxAction * action) override
+  {
+    this->do_action(action);
+  }
+
+  void do_traverse(RenderAction * action) override
+  {
+    this->do_action(action);
+  }
+
+  void do_action(Action * action) const
   {
     mat4 matrix(1.0);
     matrix = glm::translate(matrix, this->translation);
     matrix = glm::scale(matrix, this->scaleFactor);
     action->state.ModelMatrix *= matrix;
   }
+
+  glm::vec3 translation;
+  glm::vec3 scaleFactor;
 };
 
 template <typename T>
@@ -163,19 +159,20 @@ public:
   BufferData() = default;
   virtual ~BufferData() = default;
 
-  void traverse(RenderAction * action) override
+  std::vector<T> values;
+
+private:
+  void do_traverse(RenderAction * action) override
   {
     const VulkanBufferDataDescription bufferdata{
-      sizeof(T),
       sizeof(T) * this->values.size(),
       this->values.size(),
+      sizeof(T),
       this->values.data(),
     };
 
     action->state.bufferdata = bufferdata;
   }
-
-  std::vector<T> values;
 };
 
 class DeviceMemoryBuffer : public Node {
@@ -188,7 +185,8 @@ public:
     : usage(usage)
   {}
 
-  void traverse(RenderAction * action) override
+protected:
+  void init_buffers(RenderAction * action)
   {
     if (!this->gpu_buffer) {
       this->cpu_buffer = std::make_unique<VulkanBufferObject>(
@@ -231,26 +229,28 @@ public:
   std::unique_ptr<VulkanBufferObject> gpu_buffer;
 };
 
-class IndexBuffer : public DeviceMemoryBuffer {
+class IndexBufferDescription : public DeviceMemoryBuffer {
 public:
-  NO_COPY_OR_ASSIGNMENT(IndexBuffer);
-  virtual ~IndexBuffer() = default;
-  IndexBuffer()
-    : DeviceMemoryBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+  NO_COPY_OR_ASSIGNMENT(IndexBufferDescription);
+  virtual ~IndexBufferDescription() = default;
+  explicit IndexBufferDescription(VkIndexType index_type)
+    : DeviceMemoryBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
+      index_type(index_type)
   {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
-    DeviceMemoryBuffer::traverse(action);
+    this->init_buffers(action);
 
-    const VulkanIndexBufferDescription indices{
-      VK_INDEX_TYPE_UINT32,                                   // type
+    action->state.indices.push_back({
+      this->index_type,                                       // type
       this->gpu_buffer->buffer->buffer,                       // buffer
       static_cast<uint32_t>(action->state.bufferdata.count),  // count
-    };
-
-    action->state.indices.push_back(indices);
+    });
   }
+
+  VkIndexType index_type;
 };
 
 class BufferDescription : public DeviceMemoryBuffer {
@@ -263,12 +263,9 @@ public:
     : DeviceMemoryBuffer(usage)
   {}
 
-  void traverse(RenderAction * action) override
+protected:
+  void update_state(RenderAction * action)
   {
-    DeviceMemoryBuffer::traverse(action);
-
-    this->copy_data(action);
-
     action->state.buffer_descriptions.push_back({
       action->state.layout_binding.binding,             // binding 
       action->state.layout_binding.type,                // type
@@ -278,6 +275,21 @@ public:
       0                                                 // offset 
     });
   }
+
+private:
+  void do_traverse(RenderAction * action) override
+  {
+    this->init_buffers(action);
+    this->copy_data(action);
+    this->update_state(action);
+  }
+};
+
+class UniformBuffer : public BufferDescription {
+public:
+  NO_COPY_OR_ASSIGNMENT(UniformBuffer);
+  virtual ~UniformBuffer() = default;
+  UniformBuffer() : BufferDescription(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) {}
 };
 
 class VertexAttribute : public DeviceMemoryBuffer {
@@ -301,18 +313,17 @@ public:
       inputrate(inputrate) 
   {}
 
-  void traverse(RenderAction * action)  override
+private:
+  void do_traverse(RenderAction * action) override
   {
-    DeviceMemoryBuffer::traverse(action);
-
-    uint32_t stride = static_cast<uint32_t>(action->state.bufferdata.elem_size * this->stride);
+    this->init_buffers(action);
 
     action->state.attribute_descriptions.push_back({
       this->location,
       this->binding,
       this->format,
       this->offset,
-      stride,
+      static_cast<uint32_t>(action->state.bufferdata.elem_size * this->stride),
       this->inputrate,
       this->gpu_buffer->buffer->buffer,
     });
@@ -335,7 +346,8 @@ public:
   LayoutBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage)
     : binding(binding), type(type), stage(stage) {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     action->state.layout_binding.type = this->type;
     action->state.layout_binding.stage = this->stage;
@@ -356,7 +368,8 @@ public:
   Shader(std::string filename, VkShaderStageFlagBits stage)
     : filename(std::move(filename)), stage(stage) {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     if (!this->shader) {
       std::ifstream input(filename, std::ios::binary);
@@ -382,7 +395,8 @@ public:
   Sampler() = default;
   virtual ~Sampler() = default;
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     if (!this->sampler) {
       this->sampler = std::make_unique<VulkanSampler>(
@@ -421,7 +435,8 @@ public:
   explicit Texture(const gli::texture & texture)
     : texture(texture) {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     if (!this->image) {
       VkComponentMapping component_mapping = {
@@ -497,7 +512,8 @@ public:
   explicit CullMode(VkCullModeFlags cullmode)
     : cullmode(cullmode) {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     action->state.rasterizationstate.cullMode = this->cullmode;
   }
@@ -514,7 +530,8 @@ public:
     : state(rasterizationstate)
   {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     action->state.rasterizationstate = this->state;
   }
@@ -537,7 +554,8 @@ public:
   explicit ComputeCommand(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z)
     : group_count_x(group_count_x), group_count_y(group_count_y), group_count_z(group_count_z) {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     action->state.compute_description.group_count_x = this->group_count_x;
     action->state.compute_description.group_count_y = this->group_count_y;
@@ -560,13 +578,14 @@ public:
     : count(count),
       topology(topology),
       transform_data(std::make_shared<BufferData<glm::mat4>>()),
-      transform(std::make_shared<BufferDescription>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)),
+      transform(std::make_shared<UniformBuffer>()),
       transform_layout(std::make_shared<LayoutBinding>(0, 
                                                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
                                                        VK_SHADER_STAGE_ALL_GRAPHICS))
   {}
 
-  void traverse(RenderAction * action) override
+private:
+  void do_traverse(RenderAction * action) override
   {
     this->transform_data->values = {
       action->state.ViewMatrix * action->state.ModelMatrix, 
@@ -581,7 +600,7 @@ public:
     action->graphic_states.push_back(action->state);
   }
 
-  void traverse(BoundingBoxAction * action) override
+  void do_traverse(BoundingBoxAction * action) override
   {
     box3 box(vec3(0), vec3(1));
     box.transform(action->state.ModelMatrix);
@@ -635,7 +654,7 @@ public:
 
     this->children = {
       indices,
-      std::make_shared<IndexBuffer>(),
+      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertices,
       std::make_shared<VertexAttribute>(
         location,
@@ -648,7 +667,8 @@ public:
     };
   }
 
-  void traverse(BoundingBoxAction * action) override
+private:
+  void do_traverse(BoundingBoxAction * action) override
   {
     box3 box(vec3(0), vec3(1));
     box.transform(action->state.ModelMatrix);
@@ -656,23 +676,13 @@ public:
   }
 };
 
-
-class Sphere : public DrawCommand {
+class Sphere : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Sphere);
   Sphere() = delete;
   virtual ~Sphere() = default;
 
   explicit Sphere(uint32_t binding, uint32_t location)
-    : DrawCommand(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36),
-      indices(std::make_shared<IndexBuffer>()),
-      vertex_attribute(std::make_shared<VertexAttribute>(
-        location,
-        binding, 
-        VK_FORMAT_R32G32B32_SFLOAT, 
-        0,
-        3,
-        VK_VERTEX_INPUT_RATE_VERTEX))
   {
     std::shared_ptr<BufferData<uint32_t>> indices = std::make_shared<BufferData<uint32_t>>();
     indices->values = {
@@ -715,24 +725,26 @@ public:
        t,-1, 0,
       -t,-1, 0
     };
+
+    this->children = {
+      indices,
+      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+      vertices,
+      std::make_shared<VertexAttribute>(
+        location,
+        binding,
+        VK_FORMAT_R32G32B32_SFLOAT,
+        0,
+        3,
+        VK_VERTEX_INPUT_RATE_VERTEX),
+      std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
+    };
   }
 
-  void traverse(RenderAction * action) override
-  {
-    this->indices->traverse(action);
-    this->vertex_attribute->traverse(action);
-    this->vertices->traverse(action);
-    DrawCommand::traverse(action);
-  }
-
-  void traverse(BoundingBoxAction * action) override
+  void do_traverse(BoundingBoxAction * action) override
   {
     box3 box(vec3(0), vec3(1));
     box.transform(action->state.ModelMatrix);
     action->extendBy(box);
   }
-
-  std::shared_ptr<IndexBuffer> indices;
-  std::shared_ptr<VertexAttribute> vertex_attribute;
-  std::shared_ptr<VertexAttribute> vertices;
 };

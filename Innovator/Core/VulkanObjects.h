@@ -18,7 +18,7 @@ public:
   ~VulkanBufferObject() = default;
 
   VulkanBufferObject(const std::shared_ptr<VulkanDevice> & device,
-                     size_t size,
+                     VkDeviceSize size,
                      VkBufferUsageFlags usage,
                      VkMemoryPropertyFlags memory_property_flags)
   {

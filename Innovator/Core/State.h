@@ -61,9 +61,9 @@ struct VulkanComputeDescription {
 };
 
 struct  VulkanBufferDataDescription {
-  size_t elem_size;
-  size_t size;
+  VkDeviceSize size;
   size_t count;
+  VkDeviceSize elem_size;
   void * data;
 };
 

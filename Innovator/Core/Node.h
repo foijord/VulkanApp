@@ -9,8 +9,24 @@ public:
   Node() = default;
   virtual ~Node() = default;
 
-  virtual void traverse(class RenderAction *) {}
-  virtual void traverse(class BoundingBoxAction *) {}
-  virtual void traverse(class HandleEventAction *) {}
+  void traverse(class RenderAction * action) 
+  {
+    this->do_traverse(action);
+  }
+
+  void traverse(class BoundingBoxAction * action) 
+  {
+    this->do_traverse(action);
+  }
+
+  void traverse(class HandleEventAction * action) 
+  {
+    this->do_traverse(action);
+  }
+
+private:
+  virtual void do_traverse(class RenderAction *) = 0;
+  virtual void do_traverse(class BoundingBoxAction *) {}
+  virtual void do_traverse(class HandleEventAction *) {}
 };
 
