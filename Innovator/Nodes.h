@@ -241,7 +241,7 @@ private:
   void do_traverse(RenderAction * action) override
   {
     this->init_buffers(action);
-    action->state.buffer = this->gpu_buffer->buffer->buffer;
+    action->state.bufferdata.buffer = this->gpu_buffer->buffer->buffer;
   }
 };
 
@@ -258,7 +258,7 @@ private:
   {
     action->state.indices.push_back({
       this->index_type,                                       // type
-      action->state.buffer,                                   // buffer
+      action->state.bufferdata.buffer,                        // buffer
       static_cast<uint32_t>(action->state.bufferdata.count),  // count
     });
   }
@@ -338,7 +338,7 @@ private:
       this->offset,
       static_cast<uint32_t>(action->state.bufferdata.elem_size * this->stride),
       this->inputrate,
-      action->state.buffer,
+      action->state.bufferdata.buffer,
     });
   }
 
@@ -362,7 +362,7 @@ private:
   void do_traverse(RenderAction * action) override
   {
     this->init_buffers(action);
-    action->state.buffer = this->gpu_buffer->buffer->buffer;
+    action->state.bufferdata.buffer = this->gpu_buffer->buffer->buffer;
   }
 };
 
