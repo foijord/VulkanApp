@@ -229,23 +229,36 @@ protected:
   std::unique_ptr<VulkanBufferObject> gpu_buffer;
 };
 
-class IndexBufferDescription : public DeviceMemoryBuffer {
+class IndexBuffer : public DeviceMemoryBuffer {
 public:
-  NO_COPY_OR_ASSIGNMENT(IndexBufferDescription);
-  virtual ~IndexBufferDescription() = default;
-  explicit IndexBufferDescription(VkIndexType index_type)
-    : DeviceMemoryBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
-      index_type(index_type)
+  NO_COPY_OR_ASSIGNMENT(IndexBuffer);
+  virtual ~IndexBuffer() = default;
+  IndexBuffer()
+    : DeviceMemoryBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
   {}
 
 private:
   void do_traverse(RenderAction * action) override
   {
     this->init_buffers(action);
+    action->state.buffer = this->gpu_buffer->buffer->buffer;
+  }
+};
 
+class IndexBufferDescription : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(IndexBufferDescription);
+  virtual ~IndexBufferDescription() = default;
+  explicit IndexBufferDescription(VkIndexType index_type)
+    : index_type(index_type)
+  {}
+
+private:
+  void do_traverse(RenderAction * action) override
+  {
     action->state.indices.push_back({
       this->index_type,                                       // type
-      this->gpu_buffer->buffer->buffer,                       // buffer
+      action->state.buffer,                                   // buffer
       static_cast<uint32_t>(action->state.bufferdata.count),  // count
     });
   }
@@ -670,6 +683,7 @@ public:
 
     this->children = {
       index_data,
+      std::make_shared<IndexBuffer>(),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertex_data,
       std::make_shared<VertexAttribute>(),
@@ -745,6 +759,7 @@ public:
 
     this->children = {
       indices,
+      std::make_shared<IndexBuffer>(),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertices,
       std::make_shared<VertexAttribute>(),
