@@ -19,34 +19,34 @@ public:
   std::vector<std::shared_ptr<Node>> children;
 
 protected:
-  void traverse_children(RenderAction * action)
+  void traverseChildren(RenderAction * action)
   {
     TRAVERSE_CHILDREN(this);
   }
 
-  void traverse_children(BoundingBoxAction * action)
+  void traverseChildren(BoundingBoxAction * action)
   {
     TRAVERSE_CHILDREN(this);
   }
 
-  void traverse_children(HandleEventAction * action)
+  void traverseChildren(HandleEventAction * action)
   {
     TRAVERSE_CHILDREN(this);
   }
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    this->traverse_children(action);
+    this->traverseChildren(action);
   }
 
-  void do_traverse(BoundingBoxAction * action) override
+  void doAction(BoundingBoxAction * action) override
   {
-    this->traverse_children(action);
+    this->traverseChildren(action);
   }
 
-  void do_traverse(HandleEventAction * action) override
+  void doAction(HandleEventAction * action) override
   {
-    this->traverse_children(action);
+    this->traverseChildren(action);
   }
 };

@@ -177,29 +177,29 @@ public:
 
     for (const VulkanTextureDescription & texture : textures) {
       descriptor_pool_sizes.push_back({
-        texture.type,                   // type 
-        1,                              // descriptorCount
+        texture.layout.type,                    // type 
+        1,                                      // descriptorCount
       });
       descriptor_set_layout_bindings.push_back({
-        texture.binding,                 // binding 
-        texture.type,                    // descriptorType 
-        1,                               // descriptorCount 
-        texture.stage,                   // stageFlags 
-        nullptr                          // pImmutableSamplers 
+        texture.layout.binding,                 // binding 
+        texture.layout.type,                    // descriptorType 
+        1,                                      // descriptorCount 
+        texture.layout.stage,                   // stageFlags 
+        nullptr                                 // pImmutableSamplers 
       });
     }
 
     for (const VulkanBufferDescription & buffer : buffers) {
       descriptor_pool_sizes.push_back({
-        buffer.type,                     // type
+        buffer.layout.type,              // type
         1,                               // descriptorCount
       });
 
       descriptor_set_layout_bindings.push_back({
-        buffer.binding,                    // binding
-        buffer.type,                       // descriptorType
+        buffer.layout.binding,             // binding
+        buffer.layout.type,                // descriptorType
         1,                                 // descriptorCount
-        buffer.stage,                      // stageFlags
+        buffer.layout.stage,               // stageFlags
         nullptr,                           // pImmutableSamplers
       });
     }
@@ -222,10 +222,10 @@ public:
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,   // sType
         nullptr,                                  // pNext
         this->descriptor_set->descriptor_sets[0], // dstSet
-        texture.binding,                          // dstBinding
+        texture.layout.binding,                   // dstBinding
         0,                                        // dstArrayElement
         1,                                        // descriptorCount
-        texture.type,                             // descriptorType
+        texture.layout.type,                      // descriptorType
         &image_info,                              // pImageInfo
         nullptr,                                  // pBufferInfo
         nullptr,                                  // pTexelBufferView
@@ -245,10 +245,10 @@ public:
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,   // sType
         nullptr,                                  // pNext
         this->descriptor_set->descriptor_sets[0], // dstSet
-        buffer.binding,                           // dstBinding
+        buffer.layout.binding,                    // dstBinding
         0,                                        // dstArrayElement
         1,                                        // descriptorCount
-        buffer.type,                              // descriptorType
+        buffer.layout.type,                       // descriptorType
         nullptr,                                  // pImageInfo
         &buffer_info,                             // pBufferInfo
         nullptr,                                  // pTexelBufferView

@@ -28,18 +28,14 @@ struct VulkanIndexBufferDescription {
 };
 
 struct VulkanBufferDescription {
-  uint32_t binding;
-  VkDescriptorType type;
-  VkShaderStageFlags stage;
+  VulkanLayoutBinding layout;
   VkBuffer buffer;
   VkDeviceSize size;
   VkDeviceSize offset;
 };
 
 struct VulkanTextureDescription {
-  uint32_t binding;
-  VkDescriptorType type;
-  VkShaderStageFlags stage;
+  VulkanLayoutBinding layout;
   VkImageView view;
   VkSampler sampler;
 };
@@ -75,7 +71,15 @@ public:
       ProjMatrix(glm::mat4(1)),
       ModelMatrix(glm::mat4(1)),
       rasterizationstate(defaultRasterizationState())
-  {}
+  {
+    this->bufferdata = {
+      0,
+      0,
+      0,
+      nullptr,
+      nullptr,
+    };
+  }
 
   static VkPipelineRasterizationStateCreateInfo defaultRasterizationState()
   {

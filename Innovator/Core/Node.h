@@ -11,22 +11,22 @@ public:
 
   void traverse(class RenderAction * action) 
   {
-    this->do_traverse(action);
+    this->doAction(action);
   }
 
   void traverse(class BoundingBoxAction * action) 
   {
-    this->do_traverse(action);
+    this->doAction(action);
   }
 
   void traverse(class HandleEventAction * action) 
   {
-    this->do_traverse(action);
+    this->doAction(action);
   }
 
 private:
-  virtual void do_traverse(class RenderAction *) = 0;
-  virtual void do_traverse(class BoundingBoxAction *) {}
-  virtual void do_traverse(class HandleEventAction *) {}
+  virtual void doAction(class RenderAction *) {}
+  virtual void doAction(class BoundingBoxAction *) {}
+  virtual void doAction(class HandleEventAction *) {}
 };
 

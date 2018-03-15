@@ -25,22 +25,22 @@ public:
     : Group(children) {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
     StateScope scope(action);
-    this->traverse_children(action);
+    this->traverseChildren(action);
   }
 
-  void do_traverse(BoundingBoxAction * action) override
+  void doAction(BoundingBoxAction * action) override
   {
     StateScope scope(action);
-    this->traverse_children(action);
+    this->traverseChildren(action);
   }
 
-  void do_traverse(HandleEventAction * action) override
+  void doAction(HandleEventAction * action) override
   {
     StateScope scope(action);
-    this->traverse_children(action);
+    this->traverseChildren(action);
   }
 };
 
@@ -49,20 +49,20 @@ public:
   NO_COPY_OR_ASSIGNMENT(Camera);
   virtual ~Camera() = default;
   explicit Camera()
-    : farPlane(1000.0f),
-      nearPlane(0.1f),
-      aspectRatio(4.0f / 3.0f),
-      fieldOfView(0.7f),
-      focalDistance(1.0f),
+    : farplane(1000.0f),
+      nearplane(0.1f),
+      aspectratio(4.0f / 3.0f),
+      fieldofview(0.7f),
+      focaldistance(1.0f),
       position(glm::vec3(0, 0, 1)),
       orientation(glm::mat3(1.0))
   {}
 
   void zoom(float dy)
   {
-    vec3 focalpoint = this->position - this->orientation[2] * this->focalDistance;
+    vec3 focalpoint = this->position - this->orientation[2] * this->focaldistance;
     this->position += this->orientation[2] * dy;
-    this->focalDistance = glm::length(this->position - focalpoint);
+    this->focaldistance = glm::length(this->position - focalpoint);
   }
 
   void pan(const glm::vec2 & dx)
@@ -72,12 +72,12 @@ public:
 
   void orbit(const glm::vec2 & dx)
   {
-    glm::vec3 focalpoint = this->position - this->orientation[2] * this->focalDistance;
+    glm::vec3 focalpoint = this->position - this->orientation[2] * this->focaldistance;
 
     glm::mat4 rot = glm::mat4(this->orientation);
     rot = glm::rotate(rot, dx.y, glm::vec3(1, 0, 0));
     rot = glm::rotate(rot, dx.x, glm::vec3(0, 1, 0));
-    glm::vec3 look = glm::mat3(rot) * glm::vec3(0, 0, this->focalDistance);
+    glm::vec3 look = glm::mat3(rot) * glm::vec3(0, 0, this->focaldistance);
 
     this->position = focalpoint + look;
     this->lookAt(focalpoint);
@@ -88,7 +88,7 @@ public:
     this->orientation[2] = glm::normalize(this->position - focalpoint);
     this->orientation[0] = glm::normalize(glm::cross(this->orientation[1], this->orientation[2]));
     this->orientation[1] = glm::normalize(glm::cross(this->orientation[2], this->orientation[0]));
-    this->focalDistance = glm::length(this->position - focalpoint);
+    this->focaldistance = glm::length(this->position - focalpoint);
   }
 
   void viewAll(const std::shared_ptr<Group> & root)
@@ -96,26 +96,26 @@ public:
     BoundingBoxAction action;
     root->traverse(&action);
     glm::vec3 focalpoint = action.bounding_box.center();
-    this->focalDistance = length(action.bounding_box.span());
+    this->focaldistance = length(action.bounding_box.span());
 
-    this->position = focalpoint + this->orientation[2] * this->focalDistance;
+    this->position = focalpoint + this->orientation[2] * this->focaldistance;
     this->lookAt(focalpoint);
   }
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    this->aspectRatio = action->viewport.width / action->viewport.height;
+    this->aspectratio = action->viewport.width / action->viewport.height;
     action->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
     action->state.ViewMatrix = glm::translate(action->state.ViewMatrix, -this->position);
-    action->state.ProjMatrix = glm::perspective(this->fieldOfView, this->aspectRatio, this->nearPlane, this->farPlane);
+    action->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
   }
 
-  float farPlane;
-  float nearPlane;
-  float aspectRatio;
-  float fieldOfView;
-  float focalDistance;
+  float farplane;
+  float nearplane;
+  float aspectratio;
+  float fieldofview;
+  float focaldistance;
   glm::vec3 position;
   glm::mat3 orientation;
 };
@@ -126,21 +126,23 @@ public:
   Transform() = default;
   virtual ~Transform() = default;
 
-  explicit Transform(const glm::vec3 & translation = glm::vec3(0), const glm::vec3 & scalefactor = glm::vec3(1))
-    : translation(translation), scaleFactor(scalefactor) {}
+  explicit Transform(const glm::vec3 & translation, 
+                     const glm::vec3 & scalefactor)
+    : translation(translation), 
+      scaleFactor(scalefactor) {}
 
 private:
-  void do_traverse(BoundingBoxAction * action) override
+  void doAction(BoundingBoxAction * action) override
   {
-    this->do_action(action);
+    this->doAction(action);
   }
 
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    this->do_action(action);
+    this->doAction(action);
   }
 
-  void do_action(Action * action) const
+  void doActions(Action * action) const
   {
     mat4 matrix(1.0);
     matrix = glm::translate(matrix, this->translation);
@@ -162,17 +164,38 @@ public:
   std::vector<T> values;
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    const VulkanBufferDataDescription bufferdata{
+    action->state.bufferdata = {
       sizeof(T) * this->values.size(),
       this->values.size(),
       sizeof(T),
       this->values.data(),
+      nullptr,
     };
-
-    action->state.bufferdata = bufferdata;
   }
+};
+
+class TransformBufferData : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(TransformBufferData);
+  virtual ~TransformBufferData() = default;
+
+  TransformBufferData()
+    : bufferdata(std::make_shared<BufferData<glm::mat4>>())
+  {}
+
+private:
+  void doAction(RenderAction * action) override
+  {
+    this->bufferdata->values = {
+      action->state.ViewMatrix * action->state.ModelMatrix,
+      action->state.ProjMatrix
+    };
+    this->bufferdata->traverse(action);
+  }
+
+  std::shared_ptr<BufferData<glm::mat4>> bufferdata;
 };
 
 class DeviceMemoryBuffer : public Node {
@@ -185,8 +208,8 @@ public:
     : usage(usage)
   {}
 
-protected:
-  void init_buffers(RenderAction * action)
+private:
+  void doAction(RenderAction * action) override
   {
     if (!this->gpu_buffer) {
       this->cpu_buffer = std::make_unique<VulkanBufferObject>(
@@ -201,27 +224,26 @@ protected:
         this->usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-      this->copy_data(action);
+      this->cpu_buffer->memory->memcpy(action->state.bufferdata.data, 
+                                       action->state.bufferdata.size);
+
+      std::vector<VkBufferCopy> regions = { {
+          0,                              // srcOffset
+          0,                              // dstOffset 
+          action->state.bufferdata.size,  // size 
+        } };
+
+      vkCmdCopyBuffer(action->command->buffer(),
+        this->cpu_buffer->buffer->buffer,
+        this->gpu_buffer->buffer->buffer,
+        static_cast<uint32_t>(regions.size()),
+        regions.data());
+    } 
+    else {
+      this->cpu_buffer.reset();
     }
-  }
 
-  void copy_data(RenderAction * action)
-  {
-    this->cpu_buffer->memory->memcpy(
-      action->state.bufferdata.data,
-      action->state.bufferdata.size);
-
-    std::vector<VkBufferCopy> regions = { {
-        0,                              // srcOffset
-        0,                              // dstOffset 
-        action->state.bufferdata.size,  // size 
-      } };
-
-    vkCmdCopyBuffer(action->command->buffer(),
-      this->cpu_buffer->buffer->buffer,
-      this->gpu_buffer->buffer->buffer,
-      static_cast<uint32_t>(regions.size()),
-      regions.data());
+    action->state.bufferdata.buffer = this->gpu_buffer->buffer->buffer;
   }
 
   VkBufferUsageFlags usage;
@@ -229,82 +251,80 @@ protected:
   std::unique_ptr<VulkanBufferObject> gpu_buffer;
 };
 
-class IndexBuffer : public DeviceMemoryBuffer {
+class DynamicMemoryBuffer : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(IndexBuffer);
-  virtual ~IndexBuffer() = default;
-  IndexBuffer()
-    : DeviceMemoryBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+  NO_COPY_OR_ASSIGNMENT(DynamicMemoryBuffer);
+  DynamicMemoryBuffer() = delete;
+  virtual ~DynamicMemoryBuffer() = default;
+
+  explicit DynamicMemoryBuffer(VkBufferUsageFlags usage)
+    : usage(usage)
   {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    this->init_buffers(action);
-    action->state.bufferdata.buffer = this->gpu_buffer->buffer->buffer;
+    if (!this->cpu_buffer) {
+      this->cpu_buffer = std::make_unique<VulkanBufferObject>(
+        action->device,
+        action->state.bufferdata.size,
+        this->usage,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    }
+
+    this->cpu_buffer->memory->memcpy(action->state.bufferdata.data, action->state.bufferdata.size);
+    action->state.bufferdata.buffer = this->cpu_buffer->buffer->buffer;
   }
+
+  VkBufferUsageFlags usage;
+  std::unique_ptr<VulkanBufferObject> cpu_buffer;
 };
 
 class IndexBufferDescription : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(IndexBufferDescription);
+  IndexBufferDescription() = delete;
   virtual ~IndexBufferDescription() = default;
-  explicit IndexBufferDescription(VkIndexType index_type)
-    : index_type(index_type)
+
+  explicit IndexBufferDescription(VkIndexType type)
+    : type(type)
   {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
     action->state.indices.push_back({
-      this->index_type,                                       // type
+      this->type,                                             // type
       action->state.bufferdata.buffer,                        // buffer
       static_cast<uint32_t>(action->state.bufferdata.count),  // count
     });
   }
 
-  VkIndexType index_type;
+  VkIndexType type;
 };
 
-class BufferDescription : public DeviceMemoryBuffer {
+class BufferDescription : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(BufferDescription);
   BufferDescription() = delete;
   virtual ~BufferDescription() = default;
 
-  explicit BufferDescription(VkBufferUsageFlagBits usage)
-    : DeviceMemoryBuffer(usage)
+  explicit BufferDescription(VkDeviceSize offset)
+    : offset(offset)
   {}
 
-protected:
-  void update_state(RenderAction * action)
+private:
+  void doAction(RenderAction * action) override
   {
     action->state.buffer_descriptions.push_back({
-      action->state.layout_binding.binding,             // binding 
-      action->state.layout_binding.type,                // type
-      action->state.layout_binding.stage,               // stage 
-      this->gpu_buffer->buffer->buffer,                 // buffer 
+      action->state.layout_binding,                     // layout
+      action->state.bufferdata.buffer,                  // buffer 
       action->state.bufferdata.size,                    // size 
-      0                                                 // offset 
+      this->offset,                                     // offset 
     });
   }
 
-private:
-  void do_traverse(RenderAction * action) override
-  {
-    this->init_buffers(action);
-    this->copy_data(action);
-    this->update_state(action);
-  }
-};
-
-class UniformBuffer : public BufferDescription {
-public:
-  NO_COPY_OR_ASSIGNMENT(UniformBuffer);
-  virtual ~UniformBuffer() = default;
-  UniformBuffer() 
-    : BufferDescription(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) 
-  {}
+  VkDeviceSize offset;
 };
 
 class VertexAttributeLayout : public Node {
@@ -313,13 +333,12 @@ public:
   VertexAttributeLayout() = delete;
   virtual ~VertexAttributeLayout() = default;
 
-  explicit VertexAttributeLayout(
-    uint32_t location,
-    uint32_t binding,
-    VkFormat format,
-    uint32_t offset,
-    uint32_t stride,
-    VkVertexInputRate inputrate)
+  explicit VertexAttributeLayout(uint32_t location,
+                                 uint32_t binding,
+                                 VkFormat format,
+                                 uint32_t offset,
+                                 uint32_t stride,
+                                 VkVertexInputRate inputrate)
     : location(location),
       binding(binding),
       format(format),
@@ -329,7 +348,7 @@ public:
   {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
     action->state.attribute_descriptions.push_back({
       this->location,
@@ -350,22 +369,6 @@ private:
   VkVertexInputRate inputrate;
 };
 
-class VertexAttribute : public DeviceMemoryBuffer {
-public:
-  NO_COPY_OR_ASSIGNMENT(VertexAttribute);
-  virtual ~VertexAttribute() = default;
-  VertexAttribute() 
-    : DeviceMemoryBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) 
-  {}
-
-private:
-  void do_traverse(RenderAction * action) override
-  {
-    this->init_buffers(action);
-    action->state.bufferdata.buffer = this->gpu_buffer->buffer->buffer;
-  }
-};
-
 class LayoutBinding : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(LayoutBinding);
@@ -376,11 +379,13 @@ public:
     : binding(binding), type(type), stage(stage) {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    action->state.layout_binding.type = this->type;
-    action->state.layout_binding.stage = this->stage;
-    action->state.layout_binding.binding = this->binding;
+    action->state.layout_binding = {
+      this->binding,
+      this->type,
+      this->stage,
+    };
   }
 
   uint32_t binding;
@@ -398,7 +403,7 @@ public:
     : filename(std::move(filename)), stage(stage) {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
     if (!this->shader) {
       std::ifstream input(filename, std::ios::binary);
@@ -425,7 +430,7 @@ public:
   virtual ~Sampler() = default;
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
     if (!this->sampler) {
       this->sampler = std::make_unique<VulkanSampler>(
@@ -465,7 +470,7 @@ public:
     : texture(texture) {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
     if (!this->image) {
       VkComponentMapping component_mapping = {
@@ -520,9 +525,7 @@ private:
 
       this->image->setData(action->command->buffer(), this->texture);
     }
-    action->state.texture_description.type = action->state.layout_binding.type;
-    action->state.texture_description.stage = action->state.layout_binding.stage;
-    action->state.texture_description.binding = action->state.layout_binding.binding;
+    action->state.texture_description.layout = action->state.layout_binding;
     action->state.texture_description.view = this->image->view->view;
 
     action->state.textures.push_back(action->state.texture_description);
@@ -542,7 +545,7 @@ public:
     : cullmode(cullmode) {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
     action->state.rasterizationstate.cullMode = this->cullmode;
   }
@@ -550,28 +553,27 @@ private:
   VkCullModeFlags cullmode;
 };
 
-class RasterizationState : public Node {
+class BoundingBox : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(RasterizationState);
-  virtual ~RasterizationState() = default;
+  NO_COPY_OR_ASSIGNMENT(BoundingBox);
+  BoundingBox() = delete;
+  virtual ~BoundingBox() = default;
 
-  explicit RasterizationState(const VkPipelineRasterizationStateCreateInfo & rasterizationstate = State::defaultRasterizationState())
-    : state(rasterizationstate)
+  explicit BoundingBox(vec3 min, vec3 max)
+    : min(min), 
+      max(max)
   {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(BoundingBoxAction * action) override
   {
-    action->state.rasterizationstate = this->state;
+    box3 box(this->min, this->max);
+    box.transform(action->state.ModelMatrix);
+    action->extendBy(box);
   }
 
-  VkPipelineRasterizationStateCreateInfo state;
-};
-
-class Command : public Node {
-public:
-  virtual ~Command() = default;
-  std::unique_ptr<VulkanCommandBuffers> command;
+  vec3 min;
+  vec3 max;
 };
 
 class ComputeCommand : public Node {
@@ -581,14 +583,20 @@ public:
   virtual ~ComputeCommand() = default;
 
   explicit ComputeCommand(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z)
-    : group_count_x(group_count_x), group_count_y(group_count_y), group_count_z(group_count_z) {}
+    : group_count_x(group_count_x), 
+      group_count_y(group_count_y), 
+      group_count_z(group_count_z) 
+  {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    action->state.compute_description.group_count_x = this->group_count_x;
-    action->state.compute_description.group_count_y = this->group_count_y;
-    action->state.compute_description.group_count_z = this->group_count_z;
+    action->state.compute_description = {
+      this->group_count_x,
+      this->group_count_y,
+      this->group_count_z,
+    };
+
     action->compute_states.push_back(action->state);
   }
 
@@ -603,53 +611,31 @@ public:
   DrawCommand() = delete;
   virtual ~DrawCommand() = default;
 
-  explicit DrawCommand(VkPrimitiveTopology topology, uint32_t count = 0)
+  explicit DrawCommand(VkPrimitiveTopology topology, uint32_t count)
     : count(count),
-      topology(topology),
-      transform_data(std::make_shared<BufferData<glm::mat4>>()),
-      transform(std::make_shared<UniformBuffer>()),
-      transform_layout(std::make_shared<LayoutBinding>(0, 
-                                                       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
-                                                       VK_SHADER_STAGE_ALL_GRAPHICS))
+      topology(topology)
   {}
 
 private:
-  void do_traverse(RenderAction * action) override
+  void doAction(RenderAction * action) override
   {
-    this->transform_data->values = {
-      action->state.ViewMatrix * action->state.ModelMatrix, 
-      action->state.ProjMatrix 
+    action->state.drawdescription = {
+      this->count,
+      this->topology,
     };
-    this->transform_layout->traverse(action);
-    this->transform_data->traverse(action);
-    this->transform->traverse(action);
-
-    action->state.drawdescription.count = this->count;
-    action->state.drawdescription.topology = this->topology;
     action->graphic_states.push_back(action->state);
-  }
-
-  void do_traverse(BoundingBoxAction * action) override
-  {
-    box3 box(vec3(0), vec3(1));
-    box.transform(action->state.ModelMatrix);
-    action->extendBy(box);
   }
 
   uint32_t count;
   VkPrimitiveTopology topology;
-  std::shared_ptr<BufferData<glm::mat4>> transform_data;
-  std::shared_ptr<BufferDescription> transform;
-  std::shared_ptr<LayoutBinding> transform_layout;
 };
 
 class Box : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Box);
-  Box() = delete;
   virtual ~Box() = default;
 
-  explicit Box(uint32_t binding, uint32_t location)
+  Box()
   {
     //     5------7
     //    /|     /|
@@ -683,27 +669,18 @@ public:
 
     this->children = {
       index_data,
-      std::make_shared<IndexBuffer>(),
+      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertex_data,
-      std::make_shared<VertexAttribute>(),
-      std::make_shared<VertexAttributeLayout>(
-        location,
-        binding,
-        VK_FORMAT_R32G32B32_SFLOAT,
-        0,
-        3,
-        VK_VERTEX_INPUT_RATE_VERTEX),
+      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
+      std::make_shared<VertexAttributeLayout>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
+      std::make_shared<TransformBufferData>(),
+      std::make_shared<DynamicMemoryBuffer>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT),
+      std::make_shared<LayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+      std::make_shared<BufferDescription>(0),
+      std::make_shared<BoundingBox>(vec3(0), vec3(1)),
       std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
     };
-  }
-
-private:
-  void do_traverse(BoundingBoxAction * action) override
-  {
-    box3 box(vec3(0), vec3(1));
-    box.transform(action->state.ModelMatrix);
-    action->extendBy(box);
   }
 };
 
@@ -759,10 +736,10 @@ public:
 
     this->children = {
       indices,
-      std::make_shared<IndexBuffer>(),
+      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertices,
-      std::make_shared<VertexAttribute>(),
+      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
       std::make_shared<VertexAttributeLayout>(
         location,
         binding,
@@ -774,7 +751,7 @@ public:
     };
   }
 
-  void do_traverse(BoundingBoxAction * action) override
+  void doAction(BoundingBoxAction * action) override
   {
     box3 box(vec3(0), vec3(1));
     box.transform(action->state.ModelMatrix);

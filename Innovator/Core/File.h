@@ -71,14 +71,7 @@ class BoxFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    check_num_args(args, 2);
-    const auto bindingexpr = get_number(args, 0);
-    const auto locationexpr = get_number(args, 1);
-
-    auto node = std::make_shared<Box>(
-      static_cast<uint32_t>(bindingexpr->value),
-      static_cast<uint32_t>(locationexpr->value));
-
+    auto node = std::make_shared<Box>();
     return std::make_shared<NodeExpression>(node);
   }
 };
