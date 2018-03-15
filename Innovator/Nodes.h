@@ -289,35 +289,35 @@ class UniformBuffer : public BufferDescription {
 public:
   NO_COPY_OR_ASSIGNMENT(UniformBuffer);
   virtual ~UniformBuffer() = default;
-  UniformBuffer() : BufferDescription(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) {}
+  UniformBuffer() 
+    : BufferDescription(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) 
+  {}
 };
 
-class VertexAttribute : public DeviceMemoryBuffer {
+class VertexAttributeLayout : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(VertexAttribute);
-  VertexAttribute() = delete;
-  virtual ~VertexAttribute() = default;
+  NO_COPY_OR_ASSIGNMENT(VertexAttributeLayout);
+  VertexAttributeLayout() = delete;
+  virtual ~VertexAttributeLayout() = default;
 
-  VertexAttribute(uint32_t location,
-                  uint32_t binding, 
-                  VkFormat format, 
-                  uint32_t offset,
-                  uint32_t stride,
-                  VkVertexInputRate inputrate)
-    : DeviceMemoryBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
-      location(location), 
-      binding(binding), 
-      format(format), 
+  explicit VertexAttributeLayout(
+    uint32_t location,
+    uint32_t binding,
+    VkFormat format,
+    uint32_t offset,
+    uint32_t stride,
+    VkVertexInputRate inputrate)
+    : location(location),
+      binding(binding),
+      format(format),
       offset(offset),
       stride(stride),
-      inputrate(inputrate) 
+      inputrate(inputrate)
   {}
 
 private:
   void do_traverse(RenderAction * action) override
   {
-    this->init_buffers(action);
-
     action->state.attribute_descriptions.push_back({
       this->location,
       this->binding,
@@ -325,7 +325,7 @@ private:
       this->offset,
       static_cast<uint32_t>(action->state.bufferdata.elem_size * this->stride),
       this->inputrate,
-      this->gpu_buffer->buffer->buffer,
+      action->state.buffer,
     });
   }
 
@@ -335,6 +335,22 @@ private:
   uint32_t offset;
   uint32_t stride;
   VkVertexInputRate inputrate;
+};
+
+class VertexAttribute : public DeviceMemoryBuffer {
+public:
+  NO_COPY_OR_ASSIGNMENT(VertexAttribute);
+  virtual ~VertexAttribute() = default;
+  VertexAttribute() 
+    : DeviceMemoryBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) 
+  {}
+
+private:
+  void do_traverse(RenderAction * action) override
+  {
+    this->init_buffers(action);
+    action->state.buffer = this->gpu_buffer->buffer->buffer;
+  }
 };
 
 class LayoutBinding : public Node {
@@ -630,8 +646,8 @@ public:
     //  z x    | /
     //  |/     |/
     //  0--y---2
-    std::shared_ptr<BufferData<float>> vertices = std::make_shared<BufferData<float>>();
-    vertices->values = {
+    auto vertex_data = std::make_shared<BufferData<float>>();
+    vertex_data->values = {
       0, 0, 0, // 0
       0, 0, 1, // 1
       0, 1, 0, // 2
@@ -642,8 +658,8 @@ public:
       1, 1, 1, // 7
     };
 
-    std::shared_ptr<BufferData<uint32_t>> indices = std::make_shared<BufferData<uint32_t>>();
-    indices->values = {
+    auto index_data = std::make_shared<BufferData<uint32_t>>();
+    index_data->values = {
       0, 1, 3, 3, 2, 0, // -x
       4, 6, 7, 7, 5, 4, // +x
       0, 4, 5, 5, 1, 0, // -y
@@ -653,10 +669,11 @@ public:
     };
 
     this->children = {
-      indices,
+      index_data,
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-      vertices,
-      std::make_shared<VertexAttribute>(
+      vertex_data,
+      std::make_shared<VertexAttribute>(),
+      std::make_shared<VertexAttributeLayout>(
         location,
         binding,
         VK_FORMAT_R32G32B32_SFLOAT,
@@ -684,7 +701,7 @@ public:
 
   explicit Sphere(uint32_t binding, uint32_t location)
   {
-    std::shared_ptr<BufferData<uint32_t>> indices = std::make_shared<BufferData<uint32_t>>();
+    auto indices = std::make_shared<BufferData<uint32_t>>();
     indices->values = {
       1,  4,  0,
       4,  9,  0,
@@ -709,7 +726,7 @@ public:
     };
 
     float t = float(1 + std::pow(5, 0.5)) / 2;  // golden ratio
-    std::shared_ptr<BufferData<float>> vertices = std::make_shared<BufferData<float>>();
+    auto vertices = std::make_shared<BufferData<float>>();
 
     vertices->values = {
       -1, 0, t,
@@ -730,7 +747,8 @@ public:
       indices,
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertices,
-      std::make_shared<VertexAttribute>(
+      std::make_shared<VertexAttribute>(),
+      std::make_shared<VertexAttributeLayout>(
         location,
         binding,
         VK_FORMAT_R32G32B32_SFLOAT,

@@ -60,7 +60,7 @@ struct VulkanComputeDescription {
   uint32_t group_count_z;
 };
 
-struct  VulkanBufferDataDescription {
+struct VulkanBufferDataDescription {
   VkDeviceSize size;
   size_t count;
   VkDeviceSize elem_size;
@@ -73,6 +73,7 @@ public:
     : ViewMatrix(glm::mat4(1)),
       ProjMatrix(glm::mat4(1)),
       ModelMatrix(glm::mat4(1)),
+      buffer(nullptr),
       rasterizationstate(defaultRasterizationState())
   {}
 
@@ -92,6 +93,7 @@ public:
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;
 
+  VkBuffer buffer;
   VulkanLayoutBinding layout_binding;
   VulkanDrawDescription drawdescription;
   VulkanBufferDataDescription bufferdata;
