@@ -55,7 +55,6 @@ ExternalProject_Add(
   BUILD_COMMAND ""
   INSTALL_COMMAND ""
   CONFIGURE_COMMAND ""
-  INSTALL_DIR ${CMAKE_BINARY_DIR}
   URL https://github.com/g-truc/gli/archive/0.8.2.0.tar.gz)
 
 add_dependencies(${PROJECT_NAME} glm)
