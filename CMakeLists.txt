@@ -1,4 +1,3 @@
-
 cmake_minimum_required(VERSION 3.10)
 
 project(VulkanApp)
@@ -6,18 +5,17 @@ project(VulkanApp)
 set(TARGET_NAME ${PROJECT_NAME})
 set(CMAKE_AUTOMOC ON)
 
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
+
 find_package(Vulkan REQUIRED)
 find_package(Qt5Core REQUIRED)
 find_package(Qt5Widgets REQUIRED)
-
-add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
 
 include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${Qt5Core_INCLUDE_DIRS})
 include_directories(${Qt5Widgets_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/External)
 
 add_executable(${TARGET_NAME}
   main.cpp
@@ -40,6 +38,31 @@ target_link_libraries(${TARGET_NAME} ${Vulkan_LIBRARY})
 
 set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)
+
+include(ExternalProject)
+
+ExternalProject_Add(
+  glm
+  PREFIX glm
+  BUILD_COMMAND ""
+  INSTALL_COMMAND ""
+  CONFIGURE_COMMAND ""
+  URL https://github.com/g-truc/glm/archive/0.9.8.5.tar.gz)
+
+ExternalProject_Add(
+  gli
+  PREFIX gli
+  BUILD_COMMAND ""
+  INSTALL_COMMAND ""
+  CONFIGURE_COMMAND ""
+  INSTALL_DIR ${CMAKE_BINARY_DIR}
+  URL https://github.com/g-truc/gli/archive/0.8.2.0.tar.gz)
+
+add_dependencies(${PROJECT_NAME} glm)
+add_dependencies(${PROJECT_NAME} gli)
+
+include_directories(${CMAKE_BINARY_DIR}/glm/src/glm)
+include_directories(${CMAKE_BINARY_DIR}/gli/src/gli)
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
   "Shaders/*.vert"
