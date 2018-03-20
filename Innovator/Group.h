@@ -2,10 +2,13 @@
 
 #include <Innovator/Core/Node.h>
 
-#define TRAVERSE_CHILDREN(self)             \
-  for (const auto& node : self->children) { \
-    node->traverse(action);                 \
-  }                                         \
+template <typename NodeType, typename ActionType>
+void traverse_children(NodeType * node, ActionType * action)
+{
+  for (const auto node : node->children) {
+    node->traverse(action);
+  }
+}
 
 class Group : public Node {
 public:
@@ -18,35 +21,19 @@ public:
 
   std::vector<std::shared_ptr<Node>> children;
 
-protected:
-  void traverseChildren(RenderAction * action)
-  {
-    TRAVERSE_CHILDREN(this);
-  }
-
-  void traverseChildren(BoundingBoxAction * action)
-  {
-    TRAVERSE_CHILDREN(this);
-  }
-
-  void traverseChildren(HandleEventAction * action)
-  {
-    TRAVERSE_CHILDREN(this);
-  }
-
 private:
   void doAction(RenderAction * action) override
   {
-    this->traverseChildren(action);
+    traverse_children(this, action);
   }
 
   void doAction(BoundingBoxAction * action) override
   {
-    this->traverseChildren(action);
+    traverse_children(this, action);
   }
 
   void doAction(HandleEventAction * action) override
   {
-    this->traverseChildren(action);
+    traverse_children(this, action);
   }
 };

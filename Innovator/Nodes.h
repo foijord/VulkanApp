@@ -15,32 +15,34 @@
 #include <memory>
 #include <iostream>
 
-class Separator : public Group {
+class Separator : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Separator);
   Separator() = default;
   virtual ~Separator() = default;
 
-  explicit Separator(const std::vector<std::shared_ptr<Node>> & children)
-    : Group(children) {}
+  explicit Separator(std::vector<std::shared_ptr<Node>> children)
+    : children(children) {}
+
+  std::vector<std::shared_ptr<Node>> children;
 
 private:
   void doAction(RenderAction * action) override
   {
     StateScope scope(action);
-    this->traverseChildren(action);
+    traverse_children(this, action);
   }
 
   void doAction(BoundingBoxAction * action) override
   {
     StateScope scope(action);
-    this->traverseChildren(action);
+    traverse_children(this, action);
   }
 
   void doAction(HandleEventAction * action) override
   {
     StateScope scope(action);
-    this->traverseChildren(action);
+    traverse_children(this, action);
   }
 };
 
@@ -60,7 +62,7 @@ public:
 
   void zoom(float dy)
   {
-    vec3 focalpoint = this->position - this->orientation[2] * this->focaldistance;
+    glm::vec3 focalpoint = this->position - this->orientation[2] * this->focaldistance;
     this->position += this->orientation[2] * dy;
     this->focaldistance = glm::length(this->position - focalpoint);
   }
@@ -91,12 +93,12 @@ public:
     this->focaldistance = glm::length(this->position - focalpoint);
   }
 
-  void viewAll(const std::shared_ptr<Group> & root)
+  void viewAll(const std::shared_ptr<Separator> & root)
   {
     BoundingBoxAction action;
     root->traverse(&action);
     glm::vec3 focalpoint = action.bounding_box.center();
-    this->focaldistance = length(action.bounding_box.span());
+    this->focaldistance = glm::length(action.bounding_box.span());
 
     this->position = focalpoint + this->orientation[2] * this->focaldistance;
     this->lookAt(focalpoint);
@@ -144,7 +146,7 @@ private:
 
   void doActions(Action * action) const
   {
-    mat4 matrix(1.0);
+    glm::mat4 matrix(1.0);
     matrix = glm::translate(matrix, this->translation);
     matrix = glm::scale(matrix, this->scaleFactor);
     action->state.ModelMatrix *= matrix;
@@ -559,7 +561,7 @@ public:
   BoundingBox() = delete;
   virtual ~BoundingBox() = default;
 
-  explicit BoundingBox(vec3 min, vec3 max)
+  explicit BoundingBox(glm::vec3 min, glm::vec3 max)
     : min(min), 
       max(max)
   {}
@@ -572,8 +574,8 @@ private:
     action->extendBy(box);
   }
 
-  vec3 min;
-  vec3 max;
+  glm::vec3 min;
+  glm::vec3 max;
 };
 
 class ComputeCommand : public Node {
@@ -678,7 +680,7 @@ public:
       std::make_shared<DynamicMemoryBuffer>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT),
       std::make_shared<LayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
       std::make_shared<BufferDescription>(0),
-      std::make_shared<BoundingBox>(vec3(0), vec3(1)),
+      std::make_shared<BoundingBox>(glm::vec3(0), glm::vec3(1)),
       std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
     };
   }
@@ -753,7 +755,7 @@ public:
 
   void doAction(BoundingBoxAction * action) override
   {
-    box3 box(vec3(0), vec3(1));
+    box3 box(glm::vec3(0), glm::vec3(1));
     box.transform(action->state.ModelMatrix);
     action->extendBy(box);
   }
