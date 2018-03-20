@@ -5,6 +5,9 @@
 #include <Innovator/Actions.h>
 #include <Innovator/Nodes.h>
 
+#include <QWindow>
+#include <QMouseEvent>
+
 #include <map>
 #include <string>
 #include <memory>
@@ -12,15 +15,51 @@
 #include <vector>
 #include <iostream>
 
-class VulkanViewer {
+class VulkanSurface {
+public:
+  NO_COPY_OR_ASSIGNMENT(VulkanSurface);
+  VulkanSurface() = delete;
+
+  VulkanSurface(
+    std::shared_ptr<VulkanInstance> vulkan,
+    HWND window,
+    HINSTANCE hinstance) : 
+      vulkan(std::move(vulkan))
+  {
+    VkWin32SurfaceCreateInfoKHR create_info{
+      VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, // sType 
+      nullptr,                                         // pNext
+      0,                                               // flags (reserved for future use)
+      hinstance,                                       // hinstance 
+      window,                                          // hwnd
+    };
+
+    THROW_ON_ERROR(vkCreateWin32SurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
+  }
+
+  ~VulkanSurface()
+  {
+    vkDestroySurfaceKHR(this->vulkan->instance, this->surface, nullptr);
+  }
+
+  std::shared_ptr<VulkanInstance> vulkan;
+  VkSurfaceKHR surface { nullptr };
+};
+
+class VulkanViewer : public QWindow {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanViewer);
   VulkanViewer() = delete;
 
-  VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, VkSurfaceKHR surface)
-    : vulkan(std::move(vulkan)), 
-      surface(surface)
+  VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) : 
+    QWindow(parent),
+    vulkan(std::move(vulkan))
   {
+    this->surface = std::make_shared<::VulkanSurface>(
+      this->vulkan,
+      reinterpret_cast<HWND>(this->winId()),
+      GetModuleHandle(nullptr));
+
     VkPhysicalDeviceFeatures required_device_features;
     ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
     required_device_features.geometryShader = VK_TRUE;
@@ -31,7 +70,7 @@ public:
 
     std::vector<VkBool32> presentation_filter(physical_device.queue_family_properties.size());
     for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
-      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, this->surface, &presentation_filter[i]);
+      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, this->surface->surface, &presentation_filter[i]);
     }
 
     float queue_priorities[1] = { 1.0f };
@@ -67,18 +106,18 @@ public:
     this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
 
     uint32_t format_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface, &format_count, nullptr));
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface, &format_count, nullptr));
     std::vector<VkSurfaceFormatKHR> surface_formats(format_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface, &format_count, surface_formats.data()));
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface, &format_count, surface_formats.data()));
 
     this->surface_format = surface_formats[0];
 
     this->present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
 
     uint32_t mode_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface, &mode_count, nullptr));
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &mode_count, nullptr));
     std::vector<VkPresentModeKHR> present_modes(mode_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface, &mode_count, present_modes.data()));
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &mode_count, present_modes.data()));
 
     if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
@@ -135,7 +174,7 @@ public:
       attachment_descriptions,
       subpass_descriptions);
 
-    this->resize();
+    this->rebuildSwapchain();
   }
 
   ~VulkanViewer()
@@ -178,7 +217,7 @@ public:
         image_index,
         { this->semaphore->semaphore });
 
-      VkPresentInfoKHR present_info = {
+      VkPresentInfoKHR present_info {
         VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
         nullptr,                            // pNext
         0,                                  // waitSemaphoreCount
@@ -191,21 +230,28 @@ public:
       THROW_ON_ERROR(this->vulkan->vkQueuePresent(this->device->default_queue, &present_info));
     }
     catch (VkErrorOutOfDateException &) {
-      this->resize();
+      this->rebuildSwapchain();
     }
     catch (std::exception & e) {
       std::cout << e.what() << std::endl;
     }
   }
 
-  void resize()
+  void resizeEvent(QResizeEvent * e) override
+  {
+    QWindow::resizeEvent(e);
+    this->rebuildSwapchain();
+    this->render();
+  }
+
+  void rebuildSwapchain()
   {
     // make sure all work submitted is done before we start recreating stuff
     THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
 
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(
       this->device->physical_device.device,
-      this->surface,
+      this->surface->surface,
       &this->surface_capabilities));
 
     VkExtent2D extent2d = this->surface_capabilities.currentExtent;
@@ -312,7 +358,7 @@ public:
     this->swapchain = std::make_unique<VulkanSwapchain>(
       this->device,
       this->vulkan,
-      this->surface,
+      this->surface->surface,
       3,
       this->surface_format.format,
       this->surface_format.colorSpace,
@@ -445,47 +491,47 @@ public:
     }
   }
 
-  void keyDown(uint32_t key)
+  void keyPressEvent(QKeyEvent * e) override
   {
-    std::map<uint32_t, std::string> keymap{
-      { 0x25, "LEFT_ARROW" },{ 0x26, "UP_ARROW" },{ 0x27, "RIGHT_ARROW" },{ 0x28, "DOWN_ARROW" },
-    { 0x30, "0" },{ 0x31, "1" },{ 0x32, "2" },{ 0x33, "3" },{ 0x34, "4" },{ 0x35, "5" },{ 0x36, "6" },{ 0x37, "7" },{ 0x38, "8" },{ 0x39, "9" },
-    { 0x41, "A" },{ 0x42, "B" },{ 0x43, "C" },{ 0x44, "D" },{ 0x45, "E" },{ 0x46, "F" },{ 0x47, "G" },{ 0x48, "H" },{ 0x49, "I" },{ 0x4A, "J" },
-    { 0x4B, "K" },{ 0x4C, "L" },{ 0x4D, "M" },{ 0x4E, "N" },{ 0x4F, "O" },{ 0x50, "P" },{ 0x51, "Q" },{ 0x52, "R" },{ 0x53, "S" },{ 0x54, "T" },
-    { 0x55, "U" },{ 0x56, "V" },{ 0x57, "W" },{ 0x58, "X" },{ 0x59, "Y" },{ 0x5A, "Z" },
-    };
-    this->handleeventaction->key = keymap[key];
+    //this->handleeventaction->key = e->key();
     this->handleeventaction->apply(this->root);
   }
 
-  void mousePressed(uint32_t x, uint32_t y, int button)
+  void keyReleaseEvent(QKeyEvent * e) override
   {
-    this->button = button;
-    this->mouse_pos = glm::vec2(x, y);
+    
+  }
+
+  void mousePressEvent(QMouseEvent * e) override
+  {
+    this->button = e->button();
+    this->mouse_pos = glm::vec2(e->x(), e->y());
     this->mouse_pressed = true;
   }
 
-  void mouseReleased(uint32_t x, uint32_t y, int button)
+  void mouseReleaseEvent(QMouseEvent *) override
   {
     this->mouse_pressed = false;
   }
 
-  void mouseMoved(uint32_t x, uint32_t y)
+  void mouseMoveEvent(QMouseEvent * e) override
   {
     if (this->mouse_pressed) {
-      glm::vec2 pos = glm::vec2(x, y);
+      glm::vec2 pos = glm::vec2(e->x(), e->y());
       glm::vec2 dx = this->mouse_pos - pos;
       switch (this->button) {
-      case 2: this->camera->pan(dx * .01f); break;
-      case 0: this->camera->orbit(dx * .01f); break;
-      case 1: this->camera->zoom(dx[1] * .01f); break;
+      case Qt::MiddleButton: this->camera->pan(dx * .01f); break;
+      case Qt::LeftButton: this->camera->orbit(dx * .01f); break;
+      case Qt::RightButton: this->camera->zoom(dx[1] * .01f); break;
       default: break;
       }
       this->mouse_pos = pos;
+      this->render();
     }
   }
 
   std::shared_ptr<VulkanInstance> vulkan;
+  std::shared_ptr<::VulkanSurface> surface;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanSemaphore> semaphore;
   std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
@@ -502,12 +548,11 @@ public:
   VkFormat depth_format;
   VkFormat color_format;
 
-  VkSurfaceKHR surface;
   VkPresentModeKHR present_mode;
   VkSurfaceFormatKHR surface_format;
   VkSurfaceCapabilitiesKHR surface_capabilities;
 
-  int button;
+  Qt::MouseButton button;
   bool mouse_pressed;
   glm::vec2 mouse_pos;
 };

@@ -4,20 +4,24 @@ cmake_minimum_required(VERSION 3.10)
 project(VulkanApp)
 
 set(TARGET_NAME ${PROJECT_NAME})
+set(CMAKE_AUTOMOC ON)
 
 find_package(Vulkan REQUIRED)
+find_package(Qt5Core REQUIRED)
+find_package(Qt5Widgets REQUIRED)
 
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
 
 include_directories(${Vulkan_INCLUDE_DIRS})
+include_directories(${Qt5Core_INCLUDE_DIRS})
+include_directories(${Qt5Widgets_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/External/include)
 
 add_executable(${TARGET_NAME} WIN32
   main.cpp
   Viewer.h
-  Application.h
   Innovator/Nodes.h
   Innovator/Group.h
   Innovator/Actions.h
@@ -30,6 +34,8 @@ add_executable(${TARGET_NAME} WIN32
   Innovator/Core/Scheme/Scheme.h
   Innovator/Core/Vulkan/Wrapper.h)
 
+target_link_libraries(${TARGET_NAME} Qt5::Core)
+target_link_libraries(${TARGET_NAME} Qt5::Widgets)
 target_link_libraries(${TARGET_NAME} ${Vulkan_LIBRARY})
 
 set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
