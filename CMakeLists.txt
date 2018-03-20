@@ -17,9 +17,9 @@ include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${Qt5Core_INCLUDE_DIRS})
 include_directories(${Qt5Widgets_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/External/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/External)
 
-add_executable(${TARGET_NAME} WIN32
+add_executable(${TARGET_NAME}
   main.cpp
   Viewer.h
   Innovator/Nodes.h
