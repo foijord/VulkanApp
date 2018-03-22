@@ -9,64 +9,6 @@
 #include <memory>
 #include <iostream>
 #include <algorithm>
-#include <stdexcept>
-
-class VkException: public std::exception {};
-class VkTimeoutException : public VkException {};
-class VkNotReadyException : public VkException {};
-class VkIncompleteException : public VkException {};
-class VkSuboptimalException : public VkException {};
-class VkErrorOutOfDateException : public VkException {};
-class VkErrorDeviceLostException : public VkException {};
-class VkErrorSurfaceLostException : public VkException {};
-class VkErrorInvalidShaderException : public VkException {};
-class VkErrorFragmentedPoolException : public VkException {};
-class VkErrorTooManyObjectsException : public VkException {};
-class VkErrorLayerNotPresentException : public VkException {};
-class VkErrorMemoryMapFailedException : public VkException {};
-class VkErrorOutOfHostMemoryException : public VkException {};
-class VkErrorOutOfPoolMemoryException : public VkException {};
-class VkErrorValidationFailedException : public VkException {};
-class VkErrorNativeWindowInUseException : public VkException {};
-class VkErrorFeatureNotPresentException : public VkException {};
-class VkErrorOutOfDeviceMemoryException : public VkException {};
-class VkErrorFormatNotSupportedException : public VkException {};
-class VkErrorIncompatibleDriverException : public VkException {};
-class VkErrorExtensionNotPresentException : public VkException {};
-class VkErrorIncompatibleDisplayException : public VkException {};
-class VkErrorInitializationFailedException : public VkException {};
-class VkErrorInvalidExternalHandleException : public VkException {};
-
-#define THROW_ON_ERROR(__function__) {                                                        \
-	VkResult __result__ = (__function__);                                                       \
-  switch (__result__) {                                                                       \
-    case VK_TIMEOUT: throw VkTimeoutException();                                              \
-    case VK_NOT_READY: throw VkNotReadyException();                                           \
-    case VK_INCOMPLETE: throw VkIncompleteException();                                        \
-    case VK_SUBOPTIMAL_KHR: throw VkSuboptimalException();                                    \
-    case VK_ERROR_DEVICE_LOST: throw VkErrorDeviceLostException();                            \
-    case VK_ERROR_OUT_OF_DATE_KHR: throw VkErrorOutOfDateException();                         \
-    case VK_ERROR_SURFACE_LOST_KHR: throw VkErrorSurfaceLostException();                      \
-    case VK_ERROR_FRAGMENTED_POOL: throw VkErrorFragmentedPoolException();                    \
-    case VK_ERROR_INVALID_SHADER_NV: throw VkErrorInvalidShaderException();                   \
-    case VK_ERROR_TOO_MANY_OBJECTS: throw VkErrorTooManyObjectsException();                   \
-    case VK_ERROR_MEMORY_MAP_FAILED: throw VkErrorMemoryMapFailedException();                 \
-    case VK_ERROR_LAYER_NOT_PRESENT: throw VkErrorLayerNotPresentException();                 \
-    case VK_ERROR_OUT_OF_HOST_MEMORY: throw VkErrorOutOfHostMemoryException();                \
-    case VK_ERROR_FEATURE_NOT_PRESENT: throw VkErrorFeatureNotPresentException();             \
-    case VK_ERROR_INCOMPATIBLE_DRIVER: throw VkErrorIncompatibleDriverException();            \
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY: throw VkErrorOutOfDeviceMemoryException();            \
-    case VK_ERROR_VALIDATION_FAILED_EXT: throw VkErrorValidationFailedException();            \
-    case VK_ERROR_OUT_OF_POOL_MEMORY_KHR: throw VkErrorOutOfPoolMemoryException();            \
-    case VK_ERROR_FORMAT_NOT_SUPPORTED: throw VkErrorFormatNotSupportedException();           \
-    case VK_ERROR_EXTENSION_NOT_PRESENT: throw VkErrorExtensionNotPresentException();         \
-    case VK_ERROR_INITIALIZATION_FAILED: throw VkErrorInitializationFailedException();        \
-    case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: throw VkErrorNativeWindowInUseException();        \
-    case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: throw VkErrorIncompatibleDisplayException();      \
-    case VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR: throw VkErrorInvalidExternalHandleException(); \
-    default: break;                                                                           \
-  }                                                                                           \
-}                                                                                             \
 
 class VulkanPhysicalDevice {
 public:
@@ -268,39 +210,39 @@ public:
 
   explicit VulkanInstance(const VkApplicationInfo & application_info,
                           const std::vector<const char *> & required_layers,
-                          const std::vector<const char *> & required_extensions)
-    : VulkanInstanceBase(application_info, required_layers, required_extensions)
+                          const std::vector<const char *> & required_extensions) :
+    VulkanInstanceBase(application_info, required_layers, required_extensions),
+    vkQueuePresent(getProcAddress<PFN_vkQueuePresentKHR>("vkQueuePresentKHR")),
+    vkCreateSwapchain(getProcAddress<PFN_vkCreateSwapchainKHR>("vkCreateSwapchainKHR")),
+    vkAcquireNextImage(getProcAddress<PFN_vkAcquireNextImageKHR>("vkAcquireNextImageKHR")),
+    vkDestroySwapchain(getProcAddress<PFN_vkDestroySwapchainKHR>("vkDestroySwapchainKHR")),
+    vkGetSwapchainImages(getProcAddress<PFN_vkGetSwapchainImagesKHR>("vkGetSwapchainImagesKHR")),
+    vkCreateDebugReportCallback(getProcAddress<PFN_vkCreateDebugReportCallbackEXT>("vkCreateDebugReportCallbackEXT")),
+    vkDestroyDebugReportCallback(getProcAddress<PFN_vkDestroyDebugReportCallbackEXT>("vkDestroyDebugReportCallbackEXT")),
+    vkGetPhysicalDeviceSurfaceSupport(getProcAddress<PFN_vkGetPhysicalDeviceSurfaceSupportKHR>("vkGetPhysicalDeviceSurfaceSupportKHR")),
+    vkGetPhysicalDeviceSurfaceFormats(getProcAddress<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>("vkGetPhysicalDeviceSurfaceFormatsKHR")),
+    vkGetPhysicalDeviceSurfaceCapabilities(getProcAddress<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>("vkGetPhysicalDeviceSurfaceCapabilitiesKHR")),
+    vkGetPhysicalDeviceSurfacePresentModes(getProcAddress<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>("vkGetPhysicalDeviceSurfacePresentModesKHR"))
   {
     uint32_t physical_device_count;
-    THROW_ON_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr));
+    THROW_ON_ERROR(vkEnumeratePhysicalDevices(this->instance, &physical_device_count, nullptr));
 
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
-    THROW_ON_ERROR(vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data()));
+    THROW_ON_ERROR(vkEnumeratePhysicalDevices(this->instance, &physical_device_count, physical_devices.data()));
 
     for (const VkPhysicalDevice & physical_device : physical_devices) {
       this->physical_devices.emplace_back(physical_device);
     }
-
-    auto get_proc_address = [](VkInstance instance, const std::string & name) {
-      PFN_vkVoidFunction address = vkGetInstanceProcAddr(instance, name.c_str());
-      if (!address) {
-        throw std::runtime_error("vkGetInstanceProcAddr failed for " + name);
-      }
-      return address;
-    };
-
-    this->vkQueuePresent = (PFN_vkQueuePresentKHR)get_proc_address(this->instance, "vkQueuePresentKHR");
-    this->vkCreateSwapchain = (PFN_vkCreateSwapchainKHR)get_proc_address(this->instance, "vkCreateSwapchainKHR");
-    this->vkAcquireNextImage = (PFN_vkAcquireNextImageKHR)get_proc_address(this->instance, "vkAcquireNextImageKHR");
-    this->vkDestroySwapchain = (PFN_vkDestroySwapchainKHR)get_proc_address(this->instance, "vkDestroySwapchainKHR");
-    this->vkGetSwapchainImages = (PFN_vkGetSwapchainImagesKHR)get_proc_address(this->instance, "vkGetSwapchainImagesKHR");
-    this->vkCreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)get_proc_address(this->instance, "vkCreateDebugReportCallbackEXT");
-    this->vkDestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)get_proc_address(this->instance, "vkDestroyDebugReportCallbackEXT");
-    this->vkGetPhysicalDeviceSurfaceSupport = (PFN_vkGetPhysicalDeviceSurfaceSupportKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceSupportKHR");
-    this->vkGetPhysicalDeviceSurfaceFormats = (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
-    this->vkGetPhysicalDeviceSurfaceCapabilities = (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-    this->vkGetPhysicalDeviceSurfacePresentModes = (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)get_proc_address(this->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
   }
+
+  template <typename T>
+  T getProcAddress(const std::string & name) {
+    T address = reinterpret_cast<T>(vkGetInstanceProcAddr(this->instance, name.c_str()));
+    if (!address) {
+      throw std::runtime_error("vkGetInstanceProcAddr failed for " + name);
+    }
+    return address;
+  };
 
   VulkanPhysicalDevice selectPhysicalDevice(const VkPhysicalDeviceFeatures & required_features) 
   {
@@ -340,7 +282,7 @@ public:
                       const std::vector<const char *> & required_layers,
                       const std::vector<const char *> & required_extensions,
                       const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
-    : device(nullptr), physical_device(physical_device)
+    : physical_device(physical_device)
   {
     std::for_each(required_layers.begin(), required_layers.end(), [&](const char * layer_name) {
       for (auto properties : physical_device.layer_properties)
@@ -368,6 +310,7 @@ public:
       required_extensions.data(),                           // ppEnabledExtensionNames
       &enabled_features,                                    // pEnabledFeatures
     };
+
     THROW_ON_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
   }
 
@@ -376,43 +319,110 @@ public:
     vkDestroyDevice(this->device, nullptr);
   }
 
-  VkDevice device;
+  VkDevice device{ nullptr };
   VulkanPhysicalDevice physical_device;
+};
+
+class VulkanDevice;
+
+class VulkanMemory {
+public:
+  NO_COPY_OR_ASSIGNMENT(VulkanMemory);
+
+  VulkanMemory(std::shared_ptr<VulkanDevice> device,
+               VkDeviceSize size,
+               uint32_t memory_type_index);
+
+  ~VulkanMemory();
+
+  void* map(size_t size, VkMemoryMapFlags flags = 0) const;
+  void unmap() const;
+  void memcpy(const void* src, size_t size);
+
+  std::shared_ptr<VulkanDevice> device;
+  VkDeviceMemory memory{ nullptr };
+  VkDeviceSize offset{ 0 };
+};
+
+class VulkanMemoryAllocator {
+public:
+  NO_COPY_OR_ASSIGNMENT(VulkanMemoryAllocator);
+
+  explicit VulkanMemoryAllocator(VkDevice device);
+  ~VulkanMemoryAllocator() = default;
+
+  void allocate(const VkMemoryAllocateInfo* allocate_info, VulkanMemory * memory) const;
+  void free(VulkanMemory * memory) const;
+
+  VkDevice device;
 };
 
 class VulkanDevice : public VulkanLogicalDevice {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDevice);
 
-  VulkanDevice(const VulkanPhysicalDevice & physical_device,
-               const VkPhysicalDeviceFeatures & enabled_features,
-               const std::vector<const char *> & required_layers,
-               const std::vector<const char *> & required_extensions,
-               const std::vector<VkDeviceQueueCreateInfo> & queue_create_infos)
-    : VulkanLogicalDevice(physical_device, enabled_features, required_layers, required_extensions, queue_create_infos)
- {
-    this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
-    vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
+  VulkanDevice(const VulkanPhysicalDevice& physical_device,
+               const VkPhysicalDeviceFeatures& enabled_features,
+               const std::vector<const char *>& required_layers,
+               const std::vector<const char *>& required_extensions,
+               const std::vector<VkDeviceQueueCreateInfo>& queue_create_infos);
 
-    VkCommandPoolCreateInfo create_info {
-      VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,       // sType
-      nullptr,                                          // pNext 
-      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,  // flags
-      this->default_queue_index,                        // queueFamilyIndex 
-    };
-
-    THROW_ON_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->default_pool));
-  }
-
-  ~VulkanDevice() 
-  {
-    vkDestroyCommandPool(this->device, this->default_pool, nullptr);
-  }
+  ~VulkanDevice();
 
   VkQueue default_queue = nullptr;
   VkCommandPool default_pool = nullptr;
   uint32_t default_queue_index = 0;
+  std::unique_ptr<VulkanMemoryAllocator> memory_allocator;
 };
+
+inline 
+VulkanDevice::VulkanDevice(const VulkanPhysicalDevice& physical_device,
+                           const VkPhysicalDeviceFeatures& enabled_features,
+                           const std::vector<const char*>& required_layers,
+                           const std::vector<const char*>& required_extensions,
+                           const std::vector<VkDeviceQueueCreateInfo>& queue_create_infos)
+: VulkanLogicalDevice(physical_device, enabled_features, required_layers, required_extensions, queue_create_infos),
+  memory_allocator(std::make_unique<VulkanMemoryAllocator>(this->device))
+{
+  this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
+  vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
+
+  VkCommandPoolCreateInfo create_info{
+    VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, // sType
+    nullptr, // pNext 
+    VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, // flags
+    this->default_queue_index, // queueFamilyIndex 
+  };
+
+  THROW_ON_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->default_pool));
+}
+
+inline 
+VulkanDevice::~VulkanDevice()
+{
+  vkDestroyCommandPool(this->device, this->default_pool, nullptr);
+}
+
+inline 
+VulkanMemoryAllocator::VulkanMemoryAllocator(VkDevice device)
+  : device(device)
+{}
+
+inline void 
+VulkanMemoryAllocator::allocate(const VkMemoryAllocateInfo* allocate_info, VulkanMemory * memory) const
+{
+  memory->offset = 0;
+  const VkAllocationCallbacks* allocator = nullptr;
+  THROW_ON_ERROR(vkAllocateMemory(this->device, allocate_info, allocator, &memory->memory));
+}
+
+inline void 
+VulkanMemoryAllocator::free(VulkanMemory * memory) const
+{
+  const VkAllocationCallbacks* pAllocator = nullptr;
+  vkFreeMemory(this->device, memory->memory, pAllocator);
+}
+
 
 class VulkanDebugCallback {
 public:
@@ -865,118 +875,60 @@ public:
   VkBuffer buffer{ nullptr };
 };
 
-class VulkanMemory {
-public:
-  NO_COPY_OR_ASSIGNMENT(VulkanMemory);
-  
-  VulkanMemory(std::shared_ptr<VulkanDevice> device, 
-               VkMemoryRequirements requirements, 
-               VkMemoryPropertyFlags flags)
-    : device(std::move(device))
-  {
-    VkAllocationCallbacks allocation_callbacks {
-      nullptr,                     // pUserData  
-      &VulkanMemory::allocate,     // pfnAllocation
-      &VulkanMemory::reallocate,   // pfnReallocation
-      &VulkanMemory::free,         // pfnFree
-      nullptr,                     // pfnInternalAllocation
-      nullptr,                     // pfnInternalFree
-    };
-
-    VkMemoryAllocateInfo allocate_info {
-      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,                                 // sType 
-      nullptr,                                                                // pNext 
-      requirements.size,                                                      // allocationSize 
-      this->device->physical_device.getMemoryTypeIndex(requirements, flags),  // memoryTypeIndex 
-    };
-
-    THROW_ON_ERROR(vkAllocateMemory(this->device->device, &allocate_info, &allocation_callbacks, &this->memory));
-  }
-
-  ~VulkanMemory()
-  {
-    vkFreeMemory(this->device->device, this->memory, nullptr);
-  }
-
-  static void * allocate(void * userdata, size_t size, size_t alignment, VkSystemAllocationScope scope)
-  {
-    return _aligned_malloc(size, alignment);
-  }
-
-  static void free(void * userdata, void * block)
-  {
-    _aligned_free(block);
-  }
-
-  static void * reallocate(void * userdata, void * block, size_t size, size_t alignment, VkSystemAllocationScope scope)
-  {
-    return _aligned_realloc(block, size, alignment);
-  }
-
-  void * map(size_t size)
-  {
-    void * data;
-    THROW_ON_ERROR(vkMapMemory(this->device->device, this->memory, 0, size, 0, &data));
-    return data;
-  }
-
-  void unmap()
-  {
-    vkUnmapMemory(this->device->device, this->memory);
-  }
-
-  class MemoryCopy {
-  public:
-    NO_COPY_OR_ASSIGNMENT(MemoryCopy);
-
-    MemoryCopy(VulkanMemory * memory, const void * src, size_t size)
-      : memory(memory) {
-      ::memcpy(this->memory->map(size), src, size);
-    }
-    ~MemoryCopy() {
-      this->memory->unmap();
-    }
-    VulkanMemory * memory{ nullptr };
+inline 
+VulkanMemory::VulkanMemory(std::shared_ptr<VulkanDevice> device, VkDeviceSize size, uint32_t memory_type_index)
+  : device(std::move(device))
+{
+  VkMemoryAllocateInfo allocate_info{
+    VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, // sType 
+    nullptr,                                // pNext 
+    size,                                   // allocationSize 
+    memory_type_index,                      // memoryTypeIndex 
   };
 
-  void memcpy(const void * src, size_t size)
-  {
-    MemoryCopy copy(this, src, size);
-  }
+  this->device->memory_allocator->allocate(&allocate_info, this);
+}
 
-  std::shared_ptr<VulkanDevice> device;
-  VkDeviceMemory memory{ nullptr };
-};
+inline 
+VulkanMemory::~VulkanMemory()
+{
+  this->device->memory_allocator->free(this);
+}
 
-class VulkanImageMemory : public VulkanMemory {
+inline void* 
+VulkanMemory::map(size_t size, VkMemoryMapFlags flags) const
+{
+  void* data;
+  THROW_ON_ERROR(vkMapMemory(this->device->device, this->memory, this->offset, size, flags, &data));
+  return data;
+}
+
+inline void 
+VulkanMemory::unmap() const
+{
+  vkUnmapMemory(this->device->device, this->memory);
+}
+
+class MemoryCopy {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanImageMemory);
+  NO_COPY_OR_ASSIGNMENT(MemoryCopy);
 
-  VulkanImageMemory(const std::shared_ptr<VulkanImage> & image, 
-                    const VkMemoryRequirements & memory_requirements, 
-                    VkMemoryPropertyFlags flags)
-    : VulkanMemory(image->device, memory_requirements, flags)
+  MemoryCopy(VulkanMemory * memory, const void * src, size_t size)
+    : memory(memory)
   {
-    THROW_ON_ERROR(vkBindImageMemory(image->device->device, image->image, this->memory, 0));
+    ::memcpy(this->memory->map(size), src, size);
   }
-
-  ~VulkanImageMemory() = default;
+  ~MemoryCopy() {
+    this->memory->unmap();
+  }
+  VulkanMemory * memory{ nullptr };
 };
 
-class VulkanBufferMemory : public VulkanMemory {
-public:
-  NO_COPY_OR_ASSIGNMENT(VulkanBufferMemory);
-
-  VulkanBufferMemory(const std::shared_ptr<VulkanBuffer> & buffer, 
-                     const VkMemoryRequirements & memory_requirements,
-                     VkMemoryPropertyFlags flags)
-    : VulkanMemory(buffer->device, memory_requirements, flags)
-  {
-    THROW_ON_ERROR(vkBindBufferMemory(buffer->device->device, buffer->buffer, this->memory, 0));
-  }
-
-  ~VulkanBufferMemory() = default;
-};
+inline void 
+VulkanMemory::memcpy(const void* src, size_t size)
+{
+  MemoryCopy copy(this, src, size);
+}
 
 class VulkanImageView {
 public:

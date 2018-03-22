@@ -214,13 +214,13 @@ private:
   void doAction(RenderAction * action) override
   {
     if (!this->gpu_buffer) {
-      this->cpu_buffer = std::make_unique<VulkanBufferObject>(
+      this->cpu_buffer = std::make_unique<BufferObject>(
         action->device,
         action->state.bufferdata.size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-      this->gpu_buffer = std::make_unique<VulkanBufferObject>(
+      this->gpu_buffer = std::make_unique<BufferObject>(
         action->device,
         action->state.bufferdata.size,
         this->usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -249,8 +249,8 @@ private:
   }
 
   VkBufferUsageFlags usage;
-  std::unique_ptr<VulkanBufferObject> cpu_buffer;
-  std::unique_ptr<VulkanBufferObject> gpu_buffer;
+  std::unique_ptr<BufferObject> cpu_buffer;
+  std::unique_ptr<BufferObject> gpu_buffer;
 };
 
 class DynamicMemoryBuffer : public Node {
@@ -267,7 +267,7 @@ private:
   void doAction(RenderAction * action) override
   {
     if (!this->cpu_buffer) {
-      this->cpu_buffer = std::make_unique<VulkanBufferObject>(
+      this->cpu_buffer = std::make_unique<BufferObject>(
         action->device,
         action->state.bufferdata.size,
         this->usage,
@@ -279,7 +279,7 @@ private:
   }
 
   VkBufferUsageFlags usage;
-  std::unique_ptr<VulkanBufferObject> cpu_buffer;
+  std::unique_ptr<BufferObject> cpu_buffer;
 };
 
 class IndexBufferDescription : public Node {
