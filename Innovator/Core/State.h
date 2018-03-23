@@ -3,6 +3,8 @@
 #include <Innovator/Core/Vulkan/Wrapper.h>
 
 #include <glm/mat4x4.hpp>
+#include <gli/load.hpp>
+
 #include <vector>
 
 struct VulkanLayoutBinding {
@@ -57,29 +59,28 @@ struct VulkanComputeDescription {
 };
 
 struct VulkanBufferDataDescription {
-  VkDeviceSize size;
-  size_t count;
-  VkDeviceSize elem_size;
-  void * data;
-  VkBuffer buffer;
+  VkDeviceSize size{ 0 };
+  size_t count{ 0 };
+  VkDeviceSize elem_size{ 0 };
+  VkBufferUsageFlags usage_flags{ 0 };
+  VkMemoryPropertyFlags memory_property_flags{ 0 };
+  void * data{ nullptr };
+  VkBuffer buffer{ nullptr };
+};
+
+struct VulkanImageData {
+  gli::texture * texture{ nullptr };
+  VkBuffer buffer{ nullptr };
 };
 
 class State {
 public:
-  State() 
-    : ViewMatrix(glm::mat4(1)),
-      ProjMatrix(glm::mat4(1)),
-      ModelMatrix(glm::mat4(1)),
-      rasterizationstate(defaultRasterizationState())
-  {
-    this->bufferdata = {
-      0,
-      0,
-      0,
-      nullptr,
-      nullptr,
-    };
-  }
+  State() : 
+    ViewMatrix(glm::mat4(1)),
+    ProjMatrix(glm::mat4(1)),
+    ModelMatrix(glm::mat4(1)),
+    rasterizationstate(defaultRasterizationState())
+  {}
 
   static VkPipelineRasterizationStateCreateInfo defaultRasterizationState()
   {
@@ -97,6 +98,7 @@ public:
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;
 
+  VulkanImageData imagedata;
   VulkanLayoutBinding layout_binding;
   VulkanDrawDescription drawdescription;
   VulkanBufferDataDescription bufferdata;
@@ -105,9 +107,10 @@ public:
   VulkanVertexAttributeDescription attribute_description;
   VkPipelineRasterizationStateCreateInfo rasterizationstate;
 
-  std::vector<VulkanBufferDescription> buffer_descriptions;
   std::vector<VulkanTextureDescription> textures;
   std::vector<VulkanIndexBufferDescription> indices;
   std::vector<VulkanShaderModuleDescription> shaders;
+  std::vector<VulkanBufferDescription> buffer_descriptions;
+  std::vector<VulkanBufferDataDescription> bufferdata_descriptions;
   std::vector<VulkanVertexAttributeDescription> attribute_descriptions;
 };

@@ -5,8 +5,6 @@
 #include <Innovator/Core/State.h>
 
 #include <vulkan/vulkan.h>
-#include <glm/glm.hpp>
-#include <gli/texture.hpp>
 
 #include <vector>
 #include <memory>
@@ -19,13 +17,13 @@ public:
   
   BufferObject(const std::shared_ptr<VulkanDevice> & device,
                VkDeviceSize size,
-               VkBufferUsageFlags usage,
+               VkBufferUsageFlags buffer_usage_flags,
                VkMemoryPropertyFlags memory_property_flags)
   {
     this->buffer = std::make_shared<VulkanBuffer>(device, 
                                                   0, 
                                                   size, 
-                                                  usage, 
+                                                  buffer_usage_flags,
                                                   VK_SHARING_MODE_EXCLUSIVE);
     
     VkMemoryRequirements memory_requirements;
@@ -35,18 +33,20 @@ public:
                                                                             memory_property_flags);
 
     this->memory = std::make_unique<VulkanMemory>(device,
-                                                  memory_requirements.size, 
+                                                  memory_requirements.size,
                                                   memory_type_index);
+
+    const VkDeviceSize offset = 0;
 
     THROW_ON_ERROR(vkBindBufferMemory(device->device, 
                                       this->buffer->buffer, 
                                       this->memory->memory, 
-                                      this->memory->offset));
+                                      offset));
   }
 
 
   std::shared_ptr<VulkanBuffer> buffer;
-  std::unique_ptr<VulkanMemory> memory;
+  std::shared_ptr<VulkanMemory> memory;
 };
 
 class ImageObject {
@@ -67,13 +67,9 @@ public:
               VkMemoryPropertyFlags memory_property_flags,
               VkImageSubresourceRange subresource_range,
               VkComponentMapping component_mapping)
-    : device(std::move(device)),
-      extent(extent), 
-      layout(layout), 
-      subresource_range(subresource_range)
   {
     this->image = std::make_shared<VulkanImage>(
-      this->device,
+      device,
       0,
       image_type,
       format,
@@ -88,21 +84,23 @@ public:
       layout);
 
     VkMemoryRequirements memory_requirements;
-    vkGetImageMemoryRequirements(this->device->device, 
+    vkGetImageMemoryRequirements(device->device, 
                                  this->image->image, 
                                  &memory_requirements);
 
-    uint32_t memory_type_index = this->device->physical_device.getMemoryTypeIndex(memory_requirements, 
+    uint32_t memory_type_index = device->physical_device.getMemoryTypeIndex(memory_requirements, 
                                                                                   memory_property_flags);
 
-    this->memory = std::make_unique<VulkanMemory>(this->device,
+    this->memory = std::make_unique<VulkanMemory>(device,
                                                   memory_requirements.size,
                                                   memory_type_index);
 
-    THROW_ON_ERROR(vkBindImageMemory(this->device->device, 
+    const VkDeviceSize offset = 0;
+
+    THROW_ON_ERROR(vkBindImageMemory(device->device, 
                                      this->image->image, 
                                      this->memory->memory, 
-                                     this->memory->offset));
+                                     offset));
 
     this->view = std::make_unique<VulkanImageView>(
       this->image,
@@ -112,73 +110,9 @@ public:
       subresource_range);
   }
 
-  void setData(VkCommandBuffer command, const gli::texture & texture)
-  {
-    VkImageMemoryBarrier memory_barrier {
-      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
-      nullptr,                                                       // pNext
-      0,                                                             // srcAccessMask
-      VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
-      VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
-      this->device->default_queue_index,                             // srcQueueFamilyIndex
-      this->device->default_queue_index,                             // dstQueueFamilyIndex
-      this->image->image,                                            // image
-      this->subresource_range,                                       // subresourceRange
-    };
-
-    vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &memory_barrier);
-
-    this->cpu_buffer = std::make_unique<BufferObject>(this->device, 
-                                                      texture.size(), 
-                                                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-                                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-    this->cpu_buffer->memory->memcpy(texture.data(), texture.size());
-
-    VkDeviceSize buffer_offset = 0;
-    for (uint32_t mip_level = 0; mip_level < texture.levels(); mip_level++) {
-      VkExtent3D image_extent {
-        static_cast<uint32_t>(texture.extent(mip_level).x),
-        static_cast<uint32_t>(texture.extent(mip_level).y),
-        static_cast<uint32_t>(texture.extent(mip_level).z)
-      };
-
-      VkOffset3D image_offset = {
-        0, 0, 0
-      };
-
-      VkImageSubresourceLayers subresource_layers {
-        this->subresource_range.aspectMask,     // aspectMask
-        mip_level,                              // mipLevel
-        this->subresource_range.baseArrayLayer, // baseArrayLayer
-        this->subresource_range.layerCount      // layerCount
-      };
-
-      VkBufferImageCopy buffer_image_copy {
-        buffer_offset,                             // bufferOffset 
-        0,                                         // bufferRowLength
-        0,                                         // bufferImageHeight
-        subresource_layers,                        // imageSubresource
-        image_offset,                              // imageOffset
-        image_extent                               // imageExtent
-      };
-
-      vkCmdCopyBufferToImage(command, this->cpu_buffer->buffer->buffer, this->image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy);
-      buffer_offset += texture.size(mip_level);
-    }
-  }
-
-  std::shared_ptr<VulkanDevice> device;
-  VkExtent3D extent;
-  VkImageLayout layout;
-  VkImageSubresourceRange subresource_range;
-
   std::shared_ptr<VulkanImage> image;
   std::unique_ptr<VulkanMemory> memory;
   std::unique_ptr<VulkanImageView> view;
-
-  std::unique_ptr<BufferObject> cpu_buffer;
 };
 
 class DescriptorSetObject {

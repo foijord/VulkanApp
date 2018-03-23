@@ -155,7 +155,6 @@ public:
   explicit VulkanInstanceBase(const VkApplicationInfo & application_info,
                               const std::vector<const char *> & required_layers,
                               const std::vector<const char *> & required_extensions)
-    : instance(nullptr)
   {
     uint32_t layer_count;
     THROW_ON_ERROR(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
@@ -200,7 +199,7 @@ public:
     vkDestroyInstance(this->instance, nullptr);
   }
 
-  VkInstance instance;
+  VkInstance instance{ nullptr };
 };
 
 class VulkanInstance : public VulkanInstanceBase {
@@ -314,7 +313,7 @@ public:
     THROW_ON_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
   }
 
-  ~VulkanLogicalDevice()
+  virtual ~VulkanLogicalDevice()
   {
     vkDestroyDevice(this->device, nullptr);
   }
@@ -329,32 +328,18 @@ class VulkanMemory {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanMemory);
 
-  VulkanMemory(std::shared_ptr<VulkanDevice> device,
-               VkDeviceSize size,
-               uint32_t memory_type_index);
+  explicit VulkanMemory(std::shared_ptr<VulkanDevice> device,
+                        VkDeviceSize size,
+                        uint32_t memory_type_index);
 
   ~VulkanMemory();
 
-  void* map(size_t size, VkMemoryMapFlags flags = 0) const;
+  void* map(VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags = 0) const;
   void unmap() const;
-  void memcpy(const void* src, size_t size);
+  void memcpy(const void* src, VkDeviceSize size, VkDeviceSize offset);
 
   std::shared_ptr<VulkanDevice> device;
   VkDeviceMemory memory{ nullptr };
-  VkDeviceSize offset{ 0 };
-};
-
-class VulkanMemoryAllocator {
-public:
-  NO_COPY_OR_ASSIGNMENT(VulkanMemoryAllocator);
-
-  explicit VulkanMemoryAllocator(VkDevice device);
-  ~VulkanMemoryAllocator() = default;
-
-  void allocate(const VkMemoryAllocateInfo* allocate_info, VulkanMemory * memory) const;
-  void free(VulkanMemory * memory) const;
-
-  VkDevice device;
 };
 
 class VulkanDevice : public VulkanLogicalDevice {
@@ -367,12 +352,11 @@ public:
                const std::vector<const char *>& required_extensions,
                const std::vector<VkDeviceQueueCreateInfo>& queue_create_infos);
 
-  ~VulkanDevice();
+  virtual ~VulkanDevice();
 
-  VkQueue default_queue = nullptr;
-  VkCommandPool default_pool = nullptr;
-  uint32_t default_queue_index = 0;
-  std::unique_ptr<VulkanMemoryAllocator> memory_allocator;
+  VkQueue default_queue{ nullptr };
+  uint32_t default_queue_index{ 0 };
+  VkCommandPool default_pool{ nullptr };
 };
 
 inline 
@@ -381,17 +365,16 @@ VulkanDevice::VulkanDevice(const VulkanPhysicalDevice& physical_device,
                            const std::vector<const char*>& required_layers,
                            const std::vector<const char*>& required_extensions,
                            const std::vector<VkDeviceQueueCreateInfo>& queue_create_infos)
-: VulkanLogicalDevice(physical_device, enabled_features, required_layers, required_extensions, queue_create_infos),
-  memory_allocator(std::make_unique<VulkanMemoryAllocator>(this->device))
+: VulkanLogicalDevice(physical_device, enabled_features, required_layers, required_extensions, queue_create_infos)
 {
   this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
   vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
 
   VkCommandPoolCreateInfo create_info{
-    VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, // sType
-    nullptr, // pNext 
-    VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, // flags
-    this->default_queue_index, // queueFamilyIndex 
+    VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,       // sType
+    nullptr,                                          // pNext 
+    VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,  // flags
+    this->default_queue_index,                        // queueFamilyIndex 
   };
 
   THROW_ON_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->default_pool));
@@ -403,26 +386,86 @@ VulkanDevice::~VulkanDevice()
   vkDestroyCommandPool(this->device, this->default_pool, nullptr);
 }
 
-inline 
-VulkanMemoryAllocator::VulkanMemoryAllocator(VkDevice device)
-  : device(device)
-{}
-
-inline void 
-VulkanMemoryAllocator::allocate(const VkMemoryAllocateInfo* allocate_info, VulkanMemory * memory) const
-{
-  memory->offset = 0;
-  const VkAllocationCallbacks* allocator = nullptr;
-  THROW_ON_ERROR(vkAllocateMemory(this->device, allocate_info, allocator, &memory->memory));
-}
-
-inline void 
-VulkanMemoryAllocator::free(VulkanMemory * memory) const
-{
-  const VkAllocationCallbacks* pAllocator = nullptr;
-  vkFreeMemory(this->device, memory->memory, pAllocator);
-}
-
+//class VulkanMemoryBlock {
+//public:
+//  bool free{ true };
+//  VkDeviceSize size{ 0 };
+//  VkDeviceSize offset{ 0 };
+//};
+//
+//class VulkanMemoryChunk {
+//public:
+//  NO_COPY_OR_ASSIGNMENT(VulkanMemoryChunk);
+//
+//  explicit VulkanMemoryChunk(VkDevice device, 
+//                             VkDeviceSize size, 
+//                             uint32_t memory_type_index) :
+//    device(device),
+//    size(size),
+//    memory_type_index(memory_type_index)
+//  {
+//    VkMemoryAllocateInfo allocate_info{
+//      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, // sType 
+//      nullptr,                                // pNext 
+//      size,                                   // allocationSize 
+//      this->memory_type_index,                // memoryTypeIndex 
+//    };
+//
+//    THROW_ON_ERROR(vkAllocateMemory(this->device, &allocate_info, nullptr, &this->memory));
+//  }
+//
+//  ~VulkanMemoryChunk()
+//  {
+//    vkFreeMemory(this->device, this->memory, nullptr);
+//  }
+//
+//  VkDevice device;
+//  VkDeviceSize size;
+//  uint32_t memory_type_index;
+//  VkDeviceMemory memory{ nullptr };
+//  std::vector<VulkanMemoryBlock> blocks;
+//};
+//
+//class VulkanMemoryAllocator {
+//public:
+//  NO_COPY_OR_ASSIGNMENT(VulkanMemoryAllocator);
+//
+//  explicit VulkanMemoryAllocator(VulkanDevice * device)
+//    : device(device)
+//  {}
+//
+//  ~VulkanMemoryAllocator() = default;
+//
+//  void allocate(const VkMemoryRequirements & memory_requirements,
+//                uint32_t memory_type_index,
+//                VulkanMemory * memory)
+//  {
+//    const VkPhysicalDeviceProperties device_properties = this->device->physical_device.properties;
+//    const VkPhysicalDeviceLimits device_limits = device_properties.limits;
+//
+//    const VkDeviceSize granularity = device_limits.bufferImageGranularity;
+//    const VkDeviceSize size = memory_requirements.size + granularity;
+//
+//    const VkPhysicalDeviceMemoryProperties memory_properties = this->device->physical_device.memory_properties;
+//    uint32_t heap_index = memory_properties.memoryTypes[memory_type_index].heapIndex;
+//    VkMemoryHeap heap = memory_properties.memoryHeaps[heap_index];
+//
+//    memory->chunk = std::make_shared<VulkanMemoryChunk>(this->device->device,
+//                                                        size,
+//                                                        memory_type_index);
+//    this->chunks.push_back(memory->chunk);
+//
+//    memory->offset = 0;
+//    memory->memory = memory->chunk->memory;
+//  }
+//
+//  void free(VulkanMemory * memory)
+//  {
+//  }
+//
+//  VulkanDevice * device;
+//  std::vector<std::shared_ptr<VulkanMemoryChunk>> chunks;
+//};
 
 class VulkanDebugCallback {
 public:
@@ -431,7 +474,7 @@ public:
   explicit VulkanDebugCallback(std::shared_ptr<VulkanInstance> vulkan,
                                VkDebugReportFlagsEXT flags,
                                PFN_vkDebugReportCallbackEXT callback,
-                               void * pUserData = nullptr)
+                               void * userdata = nullptr)
     : vulkan(std::move(vulkan))
   {
     VkDebugReportCallbackCreateInfoEXT create_info {
@@ -439,7 +482,7 @@ public:
       nullptr,                                        // pNext  
       flags,                                          // flags  
       callback,                                       // pfnCallback  
-      nullptr,                                        // pUserData 
+      userdata,                                       // pUserData 
     };
 
     THROW_ON_ERROR(this->vulkan->vkCreateDebugReportCallback(this->vulkan->instance, &create_info, nullptr, &this->callback));
@@ -458,7 +501,7 @@ class VulkanSemaphore {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanSemaphore);
 
-  VulkanSemaphore(std::shared_ptr<VulkanDevice> device)
+  explicit VulkanSemaphore(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device))
   {
     VkSemaphoreCreateInfo create_info {
@@ -474,7 +517,7 @@ public:
     vkDestroySemaphore(this->device->device, this->semaphore, nullptr);
   }
 
-  VkSemaphore semaphore;
+  VkSemaphore semaphore{ nullptr };
   std::shared_ptr<VulkanDevice> device;
 };
 
@@ -542,10 +585,14 @@ public:
   uint32_t getNextImageIndex(const std::shared_ptr<VulkanSemaphore> & semaphore) const
   {
     uint32_t index;
-    THROW_ON_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, this->swapchain, UINT64_MAX, semaphore->semaphore, nullptr, &index));
+    THROW_ON_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, 
+                                                    this->swapchain, 
+                                                    UINT64_MAX, 
+                                                    semaphore->semaphore, 
+                                                    nullptr, 
+                                                    &index));
     return index;
   };
-
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
@@ -556,8 +603,8 @@ class VulkanDescriptorPool {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDescriptorPool);
 
-  VulkanDescriptorPool(std::shared_ptr<VulkanDevice> device, 
-                       std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
+  explicit VulkanDescriptorPool(std::shared_ptr<VulkanDevice> device, 
+                                std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
     : device(std::move(device))
   {
     VkDescriptorPoolCreateInfo create_info {
@@ -876,7 +923,9 @@ public:
 };
 
 inline 
-VulkanMemory::VulkanMemory(std::shared_ptr<VulkanDevice> device, VkDeviceSize size, uint32_t memory_type_index)
+VulkanMemory::VulkanMemory(std::shared_ptr<VulkanDevice> device, 
+                           VkDeviceSize size,
+                           uint32_t memory_type_index)
   : device(std::move(device))
 {
   VkMemoryAllocateInfo allocate_info{
@@ -886,20 +935,20 @@ VulkanMemory::VulkanMemory(std::shared_ptr<VulkanDevice> device, VkDeviceSize si
     memory_type_index,                      // memoryTypeIndex 
   };
 
-  this->device->memory_allocator->allocate(&allocate_info, this);
+  THROW_ON_ERROR(vkAllocateMemory(this->device->device, &allocate_info, nullptr, &this->memory));
 }
 
 inline 
 VulkanMemory::~VulkanMemory()
 {
-  this->device->memory_allocator->free(this);
+  vkFreeMemory(this->device->device, this->memory, nullptr);
 }
 
 inline void* 
-VulkanMemory::map(size_t size, VkMemoryMapFlags flags) const
+VulkanMemory::map(VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags) const
 {
   void* data;
-  THROW_ON_ERROR(vkMapMemory(this->device->device, this->memory, this->offset, size, flags, &data));
+  THROW_ON_ERROR(vkMapMemory(this->device->device, this->memory, offset, size, flags, &data));
   return data;
 }
 
@@ -913,10 +962,10 @@ class MemoryCopy {
 public:
   NO_COPY_OR_ASSIGNMENT(MemoryCopy);
 
-  MemoryCopy(VulkanMemory * memory, const void * src, size_t size)
+  MemoryCopy(VulkanMemory * memory, const void * src, VkDeviceSize size, VkDeviceSize offset)
     : memory(memory)
   {
-    ::memcpy(this->memory->map(size), src, size);
+    ::memcpy(this->memory->map(size, offset), src, size);
   }
   ~MemoryCopy() {
     this->memory->unmap();
@@ -925,9 +974,9 @@ public:
 };
 
 inline void 
-VulkanMemory::memcpy(const void* src, size_t size)
+VulkanMemory::memcpy(const void* src, VkDeviceSize size, VkDeviceSize offset)
 {
-  MemoryCopy copy(this, src, size);
+  MemoryCopy copy(this, src, size, offset);
 }
 
 class VulkanImageView {

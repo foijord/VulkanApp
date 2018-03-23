@@ -15,9 +15,9 @@
 #include <iostream>
 
 template <typename NodeType, typename ActionType>
-void traverse_children(NodeType * node, ActionType * action)
+void traverse_children(NodeType * group, ActionType * action)
 {
-  for (const auto node : node->children) {
+  for (const auto node : group->children) {
     node->traverse(action);
   }
 }
@@ -207,6 +207,8 @@ private:
       sizeof(T) * this->values.size(),
       this->values.size(),
       sizeof(T),
+      0,
+      0,
       this->values.data(),
       nullptr,
     };
@@ -235,57 +237,95 @@ private:
   std::shared_ptr<BufferData<glm::mat4>> bufferdata;
 };
 
-class DeviceMemoryBuffer : public Node {
+class CpuMemoryBuffer : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(DeviceMemoryBuffer);
-  DeviceMemoryBuffer() = delete;
-  virtual ~DeviceMemoryBuffer() = default;
+  NO_COPY_OR_ASSIGNMENT(CpuMemoryBuffer);
+  CpuMemoryBuffer() = delete;
+  virtual ~CpuMemoryBuffer() = default;
 
-  explicit DeviceMemoryBuffer(VkBufferUsageFlags usage)
-    : usage(usage)
+  explicit CpuMemoryBuffer(VkBufferUsageFlags buffer_usage_flags) :
+    buffer_usage_flags(buffer_usage_flags),
+    memory_property_flags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+  {}
+
+  void memcpy(RenderAction * action) const
+  {
+    this->buffer->memory->memcpy(action->state.bufferdata.data,
+                                 action->state.bufferdata.size,
+                                 0);
+  }
+
+private:
+  void doAction(RenderAction * action) override
+  {
+    if (!this->buffer) {
+      this->buffer = std::make_unique<BufferObject>(
+        action->device,
+        action->state.bufferdata.size,
+        this->buffer_usage_flags,
+        this->memory_property_flags);
+
+      this->memcpy(action);
+    }
+
+    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    action->state.bufferdata.usage_flags = this->buffer_usage_flags;
+    action->state.bufferdata.memory_property_flags = this->memory_property_flags;
+
+    action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
+  }
+
+  VkBufferUsageFlags buffer_usage_flags;
+  VkMemoryPropertyFlags memory_property_flags;
+  std::unique_ptr<BufferObject> buffer;
+};
+
+
+class GpuMemoryBuffer : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(GpuMemoryBuffer);
+  GpuMemoryBuffer() = delete;
+  virtual ~GpuMemoryBuffer() = default;
+
+  explicit GpuMemoryBuffer(VkBufferUsageFlags buffer_usage_flags) : 
+    buffer_usage_flags(buffer_usage_flags),
+    memory_property_flags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
   {}
 
 private:
   void doAction(RenderAction * action) override
   {
-    if (!this->gpu_buffer) {
-      this->cpu_buffer = std::make_unique<BufferObject>(
+    if (!this->buffer) {
+      this->buffer = std::make_unique<BufferObject>(
         action->device,
         action->state.bufferdata.size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-      this->gpu_buffer = std::make_unique<BufferObject>(
-        action->device,
-        action->state.bufferdata.size,
-        this->usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-      this->cpu_buffer->memory->memcpy(action->state.bufferdata.data, 
-                                       action->state.bufferdata.size);
+        this->buffer_usage_flags,
+        this->memory_property_flags);
 
       std::vector<VkBufferCopy> regions = { {
           0,                              // srcOffset
           0,                              // dstOffset 
           action->state.bufferdata.size,  // size 
-        } };
+      } };
 
       vkCmdCopyBuffer(action->command->buffer(),
-        this->cpu_buffer->buffer->buffer,
-        this->gpu_buffer->buffer->buffer,
-        static_cast<uint32_t>(regions.size()),
-        regions.data());
+                      action->state.bufferdata.buffer,
+                      this->buffer->buffer->buffer,
+                      static_cast<uint32_t>(regions.size()),
+                      regions.data());
     } 
-    else {
-      this->cpu_buffer.reset();
-    }
+    
+    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    action->state.bufferdata.usage_flags = this->buffer_usage_flags;
+    action->state.bufferdata.memory_property_flags = this->memory_property_flags;
 
-    action->state.bufferdata.buffer = this->gpu_buffer->buffer->buffer;
+    action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
   }
 
-  VkBufferUsageFlags usage;
-  std::unique_ptr<BufferObject> cpu_buffer;
-  std::unique_ptr<BufferObject> gpu_buffer;
+  VkBufferUsageFlags buffer_usage_flags;
+  VkMemoryPropertyFlags memory_property_flags;
+
+  std::unique_ptr<BufferObject> buffer;
 };
 
 class DynamicMemoryBuffer : public Node {
@@ -294,27 +334,18 @@ public:
   DynamicMemoryBuffer() = delete;
   virtual ~DynamicMemoryBuffer() = default;
 
-  explicit DynamicMemoryBuffer(VkBufferUsageFlags usage)
-    : usage(usage)
+  explicit DynamicMemoryBuffer(VkBufferUsageFlags buffer_usage_flags) : 
+    buffer(std::make_unique<CpuMemoryBuffer>(buffer_usage_flags))
   {}
 
 private:
   void doAction(RenderAction * action) override
   {
-    if (!this->cpu_buffer) {
-      this->cpu_buffer = std::make_unique<BufferObject>(
-        action->device,
-        action->state.bufferdata.size,
-        this->usage,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-    }
-
-    this->cpu_buffer->memory->memcpy(action->state.bufferdata.data, action->state.bufferdata.size);
-    action->state.bufferdata.buffer = this->cpu_buffer->buffer->buffer;
+    this->buffer->traverse(action);
+    this->buffer->memcpy(action);
   }
 
-  VkBufferUsageFlags usage;
-  std::unique_ptr<BufferObject> cpu_buffer;
+  std::unique_ptr<CpuMemoryBuffer> buffer;
 };
 
 class IndexBufferDescription : public Node {
@@ -375,13 +406,13 @@ public:
                                  VkFormat format,
                                  uint32_t offset,
                                  uint32_t stride,
-                                 VkVertexInputRate inputrate)
-    : location(location),
-      binding(binding),
-      format(format),
-      offset(offset),
-      stride(stride),
-      inputrate(inputrate)
+                                 VkVertexInputRate inputrate) : 
+    location(location),
+    binding(binding),
+    format(format),
+    offset(offset),
+    stride(stride),
+    inputrate(inputrate)
   {}
 
 private:
@@ -494,21 +525,54 @@ private:
   std::unique_ptr<VulkanSampler> sampler;
 };
 
+class ImageData : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ImageData);
+  ImageData() = delete;
+  virtual ~ImageData() = default;
+
+  explicit ImageData(const std::string & filename)
+    : ImageData(gli::load(filename)) {}
+
+  explicit ImageData(const gli::texture & texture)
+    : texture(texture) {}
+
+private:
+  void doAction(RenderAction * action) override
+  {
+    action->state.imagedata.texture = &this->texture;
+
+    action->state.bufferdata = {
+      this->texture.size(),
+      0,
+      0,
+      0,
+      0,
+      this->texture.data(),
+      nullptr,
+    };
+  }
+
+  gli::texture texture;
+};
+
 class Texture : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Texture);
   Texture() = delete;
   virtual ~Texture() = default;
 
-  explicit Texture(const std::string & filename)
-    : Texture(gli::load(filename)) {}
-
-  explicit Texture(const gli::texture & texture)
-    : texture(texture) {}
+  explicit Texture(const std::string & filename) : 
+    imagedata(std::make_unique<ImageData>(gli::load(filename))),
+    buffer(std::make_unique<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
+  {}
 
 private:
   void doAction(RenderAction * action) override
   {
+    this->imagedata->traverse(action);
+    this->buffer->traverse(action);
+
     if (!this->image) {
       VkComponentMapping component_mapping = {
         VK_COMPONENT_SWIZZLE_R, // r
@@ -517,18 +581,20 @@ private:
         VK_COMPONENT_SWIZZLE_A  // a
       };
 
+      gli::texture * texture = action->state.imagedata.texture;
+
       VkImageSubresourceRange subresource_range = {
         VK_IMAGE_ASPECT_COLOR_BIT,                   // aspectMask 
-        static_cast<uint32_t>(texture.base_level()), // baseMipLevel 
-        static_cast<uint32_t>(texture.levels()),     // levelCount 
-        static_cast<uint32_t>(texture.base_layer()), // baseArrayLayer 
-        static_cast<uint32_t>(texture.layers())      // layerCount 
+        static_cast<uint32_t>(texture->base_level()), // baseMipLevel 
+        static_cast<uint32_t>(texture->levels()),     // levelCount 
+        static_cast<uint32_t>(texture->base_layer()), // baseArrayLayer 
+        static_cast<uint32_t>(texture->layers())      // layerCount 
       };
 
       VkExtent3D extent = {
-        static_cast<uint32_t>(this->texture.extent().x),
-        static_cast<uint32_t>(this->texture.extent().y),
-        static_cast<uint32_t>(this->texture.extent().z)
+        static_cast<uint32_t>(texture->extent().x),
+        static_cast<uint32_t>(texture->extent().y),
+        static_cast<uint32_t>(texture->extent().z)
       };
 
       std::map<gli::target, VkImageType> vulkan_image_type {
@@ -548,19 +614,74 @@ private:
 
       this->image = std::make_unique<ImageObject>(
         action->device,
-        vulkan_format[this->texture.format()],
+        vulkan_format[texture->format()],
         extent,
         VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
         VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-        vulkan_image_type[this->texture.target()],
-        vulkan_image_view_type[this->texture.target()],
+        vulkan_image_type[texture->target()],
+        vulkan_image_view_type[texture->target()],
         VK_SAMPLE_COUNT_1_BIT,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         subresource_range,
         component_mapping);
 
-      this->image->setData(action->command->buffer(), this->texture);
+      VkImageMemoryBarrier memory_barrier{
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        0,                                                             // srcAccessMask
+        VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
+        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
+        action->device->default_queue_index,                           // srcQueueFamilyIndex
+        action->device->default_queue_index,                           // dstQueueFamilyIndex
+        this->image->image->image,                                     // image
+        subresource_range,                                             // subresourceRange
+      };
+
+      vkCmdPipelineBarrier(action->command->buffer(), 
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                           0, 0, nullptr, 0, nullptr, 1, 
+                           &memory_barrier);
+
+      VkDeviceSize buffer_offset = 0;
+      for (uint32_t mip_level = 0; mip_level < texture->levels(); mip_level++) {
+        VkExtent3D image_extent{
+          static_cast<uint32_t>(texture->extent(mip_level).x),
+          static_cast<uint32_t>(texture->extent(mip_level).y),
+          static_cast<uint32_t>(texture->extent(mip_level).z)
+        };
+
+        VkOffset3D image_offset = {
+          0, 0, 0
+        };
+
+        VkImageSubresourceLayers subresource_layers{
+          subresource_range.aspectMask,     // aspectMask
+          mip_level,                        // mipLevel
+          subresource_range.baseArrayLayer, // baseArrayLayer
+          subresource_range.layerCount      // layerCount
+        };
+
+        VkBufferImageCopy buffer_image_copy{
+          buffer_offset,                             // bufferOffset 
+          0,                                         // bufferRowLength
+          0,                                         // bufferImageHeight
+          subresource_layers,                        // imageSubresource
+          image_offset,                              // imageOffset
+          image_extent                               // imageExtent
+        };
+
+        vkCmdCopyBufferToImage(action->command->buffer(), 
+                               action->state.bufferdata.buffer, 
+                               this->image->image->image, 
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                               1, 
+                               &buffer_image_copy);
+
+        buffer_offset += texture->size(mip_level);
+      }
     }
     action->state.texture_description.layout = action->state.layout_binding;
     action->state.texture_description.view = this->image->view->view;
@@ -568,8 +689,9 @@ private:
     action->state.textures.push_back(action->state.texture_description);
   }
   
-  gli::texture texture;
   std::unique_ptr<ImageObject> image;
+  std::unique_ptr<ImageData> imagedata;
+  std::unique_ptr<CpuMemoryBuffer> buffer;
 };
 
 class CullMode : public Node {
@@ -682,6 +804,16 @@ public:
     //  z x    | /
     //  |/     |/
     //  0--y---2
+    auto index_data = std::make_shared<BufferData<uint32_t>>();
+    index_data->values = {
+      0, 1, 3, 3, 2, 0, // -x
+      4, 6, 7, 7, 5, 4, // +x
+      0, 4, 5, 5, 1, 0, // -y
+      6, 2, 3, 3, 7, 6, // +y
+      0, 2, 6, 6, 4, 0, // -z
+      1, 5, 7, 7, 3, 1, // +z
+    };
+
     auto vertex_data = std::make_shared<BufferData<float>>();
     vertex_data->values = {
       0, 0, 0, // 0
@@ -694,22 +826,14 @@ public:
       1, 1, 1, // 7
     };
 
-    auto index_data = std::make_shared<BufferData<uint32_t>>();
-    index_data->values = {
-      0, 1, 3, 3, 2, 0, // -x
-      4, 6, 7, 7, 5, 4, // +x
-      0, 4, 5, 5, 1, 0, // -y
-      6, 2, 3, 3, 7, 6, // +y
-      0, 2, 6, 6, 4, 0, // -z
-      1, 5, 7, 7, 3, 1, // +z
-    };
-
     this->children = {
       index_data,
-      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertex_data,
-      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<VertexAttributeLayout>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
       std::make_shared<TransformBufferData>(),
       std::make_shared<DynamicMemoryBuffer>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT),
@@ -773,10 +897,10 @@ public:
 
     this->children = {
       indices,
-      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
       vertices,
-      std::make_shared<DeviceMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
       std::make_shared<VertexAttributeLayout>(
         location,
         binding,

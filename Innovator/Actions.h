@@ -127,6 +127,29 @@ public:
     this->command->begin();
     root->traverse(this);
 
+    //for (State & state : this->graphic_states) {
+    //  for (auto & bufferdata : state.bufferdata_descriptions) {
+    //    if (this->memory_map.find(bufferdata.buffer) == this->memory_map.end()) {
+    //      VkMemoryRequirements memory_requirements;
+    //      vkGetBufferMemoryRequirements(this->device->device, bufferdata.buffer, &memory_requirements);
+
+    //      uint32_t memory_type_index = device->physical_device.getMemoryTypeIndex(memory_requirements,
+    //                                                                              bufferdata.memory_property_flags);
+
+    //      this->memory_map[bufferdata.buffer] = std::make_shared<VulkanMemory>(device,
+    //                                                                           memory_requirements.size,
+    //                                                                           memory_type_index);
+
+    //      const VkDeviceSize offset = 0;
+
+    //      THROW_ON_ERROR(vkBindBufferMemory(this->device->device,
+    //                                        bufferdata.buffer,
+    //                                        this->memory_map[bufferdata.buffer]->memory,
+    //                                        offset));
+    //    }
+    //  }
+    //}
+
     for (State & state : this->compute_states) {
       if (this->compute_commands.find(&state.compute_description) == this->compute_commands.end()) {
         this->compute_commands[&state.compute_description] = std::make_unique<ComputeCommandObject>(this, state);
@@ -189,6 +212,7 @@ public:
 
   std::map<VulkanDrawDescription *, std::unique_ptr<DrawCommandObject>> draw_commands;
   std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
+  std::map <VkBuffer, std::shared_ptr<VulkanMemory>> memory_map;
 
   std::unique_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;

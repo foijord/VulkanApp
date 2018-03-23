@@ -40,6 +40,22 @@ static VkBool32 DebugCallback(
   return VK_FALSE;
 }
 
+class VulkanApplication : public QApplication {
+public:
+  VulkanApplication(int argc, char* argv[]) 
+    : QApplication(argc, argv) 
+  {}
+  
+  bool notify(QObject * receiver, QEvent * event) override {
+    try {
+      return QApplication::notify(receiver, event);
+    } 
+    catch (std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
+    return false;
+  }
+};
 
 int main(int argc, char *argv[])
 {
@@ -80,7 +96,7 @@ int main(int argc, char *argv[])
       DebugCallback);
 #endif
 
-    QApplication app(argc, argv);
+    VulkanApplication app(argc, argv);
 
     File file;
     const auto scene = file.open("Scenes/crate.scene");
@@ -93,7 +109,7 @@ int main(int argc, char *argv[])
     return QApplication::exec();
   }
   catch (std::exception & e) {
-    std::cout << e.what() << std::endl;
+    std::cerr << e.what() << std::endl;
   }
   return 1;
 }
