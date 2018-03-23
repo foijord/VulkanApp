@@ -21,7 +21,6 @@ add_executable(${TARGET_NAME}
   main.cpp
   Viewer.h
   Innovator/Nodes.h
-  Innovator/Group.h
   Innovator/Actions.h
   Innovator/Commands.h
   Innovator/Core/Node.h

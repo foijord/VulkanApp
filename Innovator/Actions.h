@@ -6,7 +6,6 @@
 #include <Innovator/Core/State.h>
 #include <Innovator/Core/VulkanObjects.h>
 #include <Innovator/Commands.h>
-#include <Innovator/Group.h>
 
 #include <map>
 #include <memory>
