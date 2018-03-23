@@ -68,9 +68,11 @@ struct VulkanBufferDataDescription {
   VkBuffer buffer{ nullptr };
 };
 
-struct VulkanImageData {
+struct VulkanImageDataDescription {
+  VkImageUsageFlags usage_flags{ 0 };
+  VkMemoryPropertyFlags memory_property_flags{ 0 };
   gli::texture * texture{ nullptr };
-  VkBuffer buffer{ nullptr };
+  VkImage image{ nullptr };
 };
 
 class State {
@@ -98,9 +100,9 @@ public:
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;
 
-  VulkanImageData imagedata;
   VulkanLayoutBinding layout_binding;
   VulkanDrawDescription drawdescription;
+  VulkanImageDataDescription imagedata;
   VulkanBufferDataDescription bufferdata;
   VulkanTextureDescription texture_description;
   VulkanComputeDescription compute_description;
@@ -111,6 +113,7 @@ public:
   std::vector<VulkanIndexBufferDescription> indices;
   std::vector<VulkanShaderModuleDescription> shaders;
   std::vector<VulkanBufferDescription> buffer_descriptions;
+  std::vector<VulkanImageDataDescription> image_descriptions;
   std::vector<VulkanBufferDataDescription> bufferdata_descriptions;
   std::vector<VulkanVertexAttributeDescription> attribute_descriptions;
 };

@@ -6,6 +6,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include <utility>
 #include <vector>
 #include <memory>
 
@@ -15,37 +16,27 @@ public:
   BufferObject() = delete;
   ~BufferObject() = default;
   
-  BufferObject(const std::shared_ptr<VulkanDevice> & device,
-               VkDeviceSize size,
-               VkBufferUsageFlags buffer_usage_flags,
+  BufferObject(std::shared_ptr<VulkanBuffer> buffer,
                VkMemoryPropertyFlags memory_property_flags)
   {
-    this->buffer = std::make_shared<VulkanBuffer>(device, 
-                                                  0, 
-                                                  size, 
-                                                  buffer_usage_flags,
-                                                  VK_SHARING_MODE_EXCLUSIVE);
-    
     VkMemoryRequirements memory_requirements;
-    vkGetBufferMemoryRequirements(device->device, this->buffer->buffer, &memory_requirements);
+    vkGetBufferMemoryRequirements(buffer->device->device, buffer->buffer, &memory_requirements);
 
-    uint32_t memory_type_index = device->physical_device.getMemoryTypeIndex(memory_requirements, 
-                                                                            memory_property_flags);
+    uint32_t memory_type_index = buffer->device->physical_device.getMemoryTypeIndex(memory_requirements,
+                                                                                    memory_property_flags);
 
-    this->memory = std::make_unique<VulkanMemory>(device,
+    this->memory = std::make_unique<VulkanMemory>(buffer->device,
                                                   memory_requirements.size,
                                                   memory_type_index);
 
     const VkDeviceSize offset = 0;
 
-    THROW_ON_ERROR(vkBindBufferMemory(device->device, 
-                                      this->buffer->buffer, 
+    THROW_ON_ERROR(vkBindBufferMemory(buffer->device->device,
+                                      buffer->buffer, 
                                       this->memory->memory, 
                                       offset));
   }
 
-
-  std::shared_ptr<VulkanBuffer> buffer;
   std::shared_ptr<VulkanMemory> memory;
 };
 
@@ -55,64 +46,34 @@ public:
   ImageObject() = delete;
   ~ImageObject() = default;
 
-  ImageObject(std::shared_ptr<VulkanDevice> device,
-              VkFormat format,
-              VkExtent3D extent,
-              VkImageLayout layout,
-              VkImageTiling tiling,
-              VkImageType image_type, 
-              VkImageViewType view_type,
-              VkSampleCountFlagBits samples,
-              VkImageUsageFlags usage,
-              VkMemoryPropertyFlags memory_property_flags,
-              VkImageSubresourceRange subresource_range,
-              VkComponentMapping component_mapping)
+  ImageObject(std::shared_ptr<VulkanImage> image,
+              VkMemoryPropertyFlags memory_property_flags)
   {
-    this->image = std::make_shared<VulkanImage>(
-      device,
-      0,
-      image_type,
-      format,
-      extent,
-      subresource_range.levelCount,
-      subresource_range.layerCount,
-      samples,
-      tiling,
-      usage,
-      VK_SHARING_MODE_EXCLUSIVE,
-      std::vector<uint32_t>(),
-      layout);
-
     VkMemoryRequirements memory_requirements;
-    vkGetImageMemoryRequirements(device->device, 
-                                 this->image->image, 
-                                 &memory_requirements);
+    vkGetImageMemoryRequirements(
+      image->device->device,
+      image->image,
+      &memory_requirements);
 
-    uint32_t memory_type_index = device->physical_device.getMemoryTypeIndex(memory_requirements, 
-                                                                                  memory_property_flags);
+    uint32_t memory_type_index = image->device->physical_device.getMemoryTypeIndex(
+      memory_requirements,
+      memory_property_flags);
 
-    this->memory = std::make_unique<VulkanMemory>(device,
-                                                  memory_requirements.size,
-                                                  memory_type_index);
+    this->memory = std::make_unique<VulkanMemory>(
+      image->device,
+      memory_requirements.size,
+      memory_type_index);
 
     const VkDeviceSize offset = 0;
 
-    THROW_ON_ERROR(vkBindImageMemory(device->device, 
-                                     this->image->image, 
-                                     this->memory->memory, 
-                                     offset));
-
-    this->view = std::make_unique<VulkanImageView>(
-      this->image,
-      format,
-      view_type,
-      component_mapping,
-      subresource_range);
+    THROW_ON_ERROR(vkBindImageMemory(
+      image->device->device,
+      image->image,
+      this->memory->memory,
+      offset));
   }
 
-  std::shared_ptr<VulkanImage> image;
   std::unique_ptr<VulkanMemory> memory;
-  std::unique_ptr<VulkanImageView> view;
 };
 
 class DescriptorSetObject {

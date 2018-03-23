@@ -12,7 +12,6 @@
 #include <utility>
 #include <vector>
 #include <memory>
-#include <iostream>
 
 template <typename NodeType, typename ActionType>
 void traverse_children(NodeType * group, ActionType * action)
@@ -250,25 +249,30 @@ public:
 
   void memcpy(RenderAction * action) const
   {
-    this->buffer->memory->memcpy(action->state.bufferdata.data,
-                                 action->state.bufferdata.size,
-                                 0);
+    this->buffer_object->memory->memcpy(action->state.bufferdata.data,
+                                        action->state.bufferdata.size,
+                                        0);
   }
 
 private:
   void doAction(RenderAction * action) override
   {
     if (!this->buffer) {
-      this->buffer = std::make_unique<BufferObject>(
+      this->buffer = std::make_shared<VulkanBuffer>(
         action->device,
+        0,
         action->state.bufferdata.size,
         this->buffer_usage_flags,
+        VK_SHARING_MODE_EXCLUSIVE);
+
+      this->buffer_object = std::make_unique<BufferObject>(
+        this->buffer,
         this->memory_property_flags);
 
       this->memcpy(action);
     }
 
-    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    action->state.bufferdata.buffer = this->buffer->buffer;
     action->state.bufferdata.usage_flags = this->buffer_usage_flags;
     action->state.bufferdata.memory_property_flags = this->memory_property_flags;
 
@@ -277,7 +281,8 @@ private:
 
   VkBufferUsageFlags buffer_usage_flags;
   VkMemoryPropertyFlags memory_property_flags;
-  std::unique_ptr<BufferObject> buffer;
+  std::shared_ptr<VulkanBuffer> buffer;
+  std::unique_ptr<BufferObject> buffer_object;
 };
 
 
@@ -296,10 +301,15 @@ private:
   void doAction(RenderAction * action) override
   {
     if (!this->buffer) {
-      this->buffer = std::make_unique<BufferObject>(
+      this->buffer = std::make_shared<VulkanBuffer>(
         action->device,
+        0,
         action->state.bufferdata.size,
         this->buffer_usage_flags,
+        VK_SHARING_MODE_EXCLUSIVE);
+
+      this->buffer_object = std::make_unique<BufferObject>(
+        this->buffer,
         this->memory_property_flags);
 
       std::vector<VkBufferCopy> regions = { {
@@ -310,12 +320,12 @@ private:
 
       vkCmdCopyBuffer(action->command->buffer(),
                       action->state.bufferdata.buffer,
-                      this->buffer->buffer->buffer,
+                      this->buffer->buffer,
                       static_cast<uint32_t>(regions.size()),
                       regions.data());
     } 
     
-    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    action->state.bufferdata.buffer = this->buffer->buffer;
     action->state.bufferdata.usage_flags = this->buffer_usage_flags;
     action->state.bufferdata.memory_property_flags = this->memory_property_flags;
 
@@ -325,7 +335,8 @@ private:
   VkBufferUsageFlags buffer_usage_flags;
   VkMemoryPropertyFlags memory_property_flags;
 
-  std::unique_ptr<BufferObject> buffer;
+  std::shared_ptr<VulkanBuffer> buffer;
+  std::unique_ptr<BufferObject> buffer_object;
 };
 
 class DynamicMemoryBuffer : public Node {
@@ -479,11 +490,10 @@ private:
       this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
     }
 
-    const VulkanShaderModuleDescription shader {
-      this->stage,          // stage
-      this->shader->module, // module
-    };
-    action->state.shaders.push_back(shader);
+    action->state.shaders.push_back({
+      this->stage,                                  // stage
+      this->shader->module,                         // module
+    });
   }
 
   std::string filename;
@@ -540,41 +550,35 @@ public:
 private:
   void doAction(RenderAction * action) override
   {
-    action->state.imagedata.texture = &this->texture;
-
-    action->state.bufferdata = {
-      this->texture.size(),
+    action->state.imagedata = {
       0,
       0,
-      0,
-      0,
-      this->texture.data(),
+      &this->texture,
       nullptr,
     };
+
+    action->state.bufferdata.size = this->texture.size();
+    action->state.bufferdata.data = this->texture.data();
   }
 
   gli::texture texture;
 };
 
-class Texture : public Node {
+class Image : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Texture);
-  Texture() = delete;
-  virtual ~Texture() = default;
+  NO_COPY_OR_ASSIGNMENT(Image);
+  virtual ~Image() = default;
 
-  explicit Texture(const std::string & filename) : 
-    imagedata(std::make_unique<ImageData>(gli::load(filename))),
-    buffer(std::make_unique<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
+  Image() :
+    usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
+    memory_property_flags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)    
   {}
 
 private:
   void doAction(RenderAction * action) override
   {
-    this->imagedata->traverse(action);
-    this->buffer->traverse(action);
-
     if (!this->image) {
-      VkComponentMapping component_mapping = {
+      VkComponentMapping component_mapping{
         VK_COMPONENT_SWIZZLE_R, // r
         VK_COMPONENT_SWIZZLE_G, // g
         VK_COMPONENT_SWIZZLE_B, // b
@@ -584,7 +588,7 @@ private:
       gli::texture * texture = action->state.imagedata.texture;
 
       VkImageSubresourceRange subresource_range = {
-        VK_IMAGE_ASPECT_COLOR_BIT,                   // aspectMask 
+        VK_IMAGE_ASPECT_COLOR_BIT,                    // aspectMask 
         static_cast<uint32_t>(texture->base_level()), // baseMipLevel 
         static_cast<uint32_t>(texture->levels()),     // levelCount 
         static_cast<uint32_t>(texture->base_layer()), // baseArrayLayer 
@@ -597,12 +601,12 @@ private:
         static_cast<uint32_t>(texture->extent().z)
       };
 
-      std::map<gli::target, VkImageType> vulkan_image_type {
+      std::map<gli::target, VkImageType> vulkan_image_type{
         { gli::target::TARGET_2D, VkImageType::VK_IMAGE_TYPE_2D },
         { gli::target::TARGET_3D, VkImageType::VK_IMAGE_TYPE_3D },
       };
 
-      std::map<gli::target, VkImageViewType> vulkan_image_view_type {
+      std::map<gli::target, VkImageViewType> vulkan_image_view_type{
         { gli::target::TARGET_2D, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D },
         { gli::target::TARGET_3D, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D },
       };
@@ -612,19 +616,31 @@ private:
         { gli::format::FORMAT_RGBA_DXT5_UNORM_BLOCK16, VkFormat::VK_FORMAT_BC3_UNORM_BLOCK },
       };
 
-      this->image = std::make_unique<ImageObject>(
+      this->image = std::make_shared<VulkanImage>(
         action->device,
+        0,
+        vulkan_image_type[texture->target()],
         vulkan_format[texture->format()],
         extent,
-        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-        vulkan_image_type[texture->target()],
-        vulkan_image_view_type[texture->target()],
+        subresource_range.levelCount,
+        subresource_range.layerCount,
         VK_SAMPLE_COUNT_1_BIT,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        subresource_range,
-        component_mapping);
+        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+        this->usage_flags,
+        VK_SHARING_MODE_EXCLUSIVE,
+        std::vector<uint32_t>(),
+        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED);
+
+      this->image_object = std::make_unique<ImageObject>(
+        this->image,
+        this->memory_property_flags);
+
+      this->view = std::make_unique<VulkanImageView>(
+        this->image,
+        vulkan_format[texture->format()],
+        vulkan_image_view_type[texture->target()],
+        component_mapping,
+        subresource_range);
 
       VkImageMemoryBarrier memory_barrier{
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
@@ -635,14 +651,14 @@ private:
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
         action->device->default_queue_index,                           // srcQueueFamilyIndex
         action->device->default_queue_index,                           // dstQueueFamilyIndex
-        this->image->image->image,                                     // image
+        this->image->image,                                            // image
         subresource_range,                                             // subresourceRange
       };
 
-      vkCmdPipelineBarrier(action->command->buffer(), 
-                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-                           0, 0, nullptr, 0, nullptr, 1, 
+      vkCmdPipelineBarrier(action->command->buffer(),
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr, 1,
                            &memory_barrier);
 
       VkDeviceSize buffer_offset = 0;
@@ -658,10 +674,10 @@ private:
         };
 
         VkImageSubresourceLayers subresource_layers{
-          subresource_range.aspectMask,     // aspectMask
-          mip_level,                        // mipLevel
-          subresource_range.baseArrayLayer, // baseArrayLayer
-          subresource_range.layerCount      // layerCount
+          subresource_range.aspectMask,               // aspectMask
+          mip_level,                                  // mipLevel
+          subresource_range.baseArrayLayer,           // baseArrayLayer
+          subresource_range.layerCount                // layerCount
         };
 
         VkBufferImageCopy buffer_image_copy{
@@ -673,25 +689,57 @@ private:
           image_extent                               // imageExtent
         };
 
-        vkCmdCopyBufferToImage(action->command->buffer(), 
-                               action->state.bufferdata.buffer, 
-                               this->image->image->image, 
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-                               1, 
+        vkCmdCopyBufferToImage(action->command->buffer(),
+                               action->state.bufferdata.buffer,
+                               this->image->image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               1,
                                &buffer_image_copy);
 
         buffer_offset += texture->size(mip_level);
       }
     }
+
+    action->state.imagedata.usage_flags = this->usage_flags;
+    action->state.imagedata.memory_property_flags = this->memory_property_flags;
+    action->state.imagedata.image = this->image->image;
+
     action->state.texture_description.layout = action->state.layout_binding;
-    action->state.texture_description.view = this->image->view->view;
+    action->state.texture_description.view = this->view->view;
 
     action->state.textures.push_back(action->state.texture_description);
   }
-  
-  std::unique_ptr<ImageObject> image;
+
+  VkImageUsageFlags usage_flags;
+  VkMemoryPropertyFlags memory_property_flags;
+  std::shared_ptr<VulkanImage> image;
+  std::unique_ptr<ImageObject> image_object;
+  std::unique_ptr<VulkanImageView> view;
+};
+
+class Texture : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(Texture);
+  Texture() = delete;
+  virtual ~Texture() = default;
+
+  explicit Texture(const std::string & filename) : 
+    imagedata(std::make_unique<ImageData>(gli::load(filename))),
+    buffer(std::make_unique<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT)),
+    image(std::make_unique<Image>())
+  {}
+
+private:
+  void doAction(RenderAction * action) override
+  {
+    this->imagedata->traverse(action);
+    this->buffer->traverse(action);
+    this->image->traverse(action);
+  }
+
   std::unique_ptr<ImageData> imagedata;
   std::unique_ptr<CpuMemoryBuffer> buffer;
+  std::unique_ptr<Image> image;
 };
 
 class CullMode : public Node {
