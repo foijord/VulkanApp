@@ -20,21 +20,27 @@ public:
                VkMemoryPropertyFlags memory_property_flags)
   {
     VkMemoryRequirements memory_requirements;
-    vkGetBufferMemoryRequirements(buffer->device->device, buffer->buffer, &memory_requirements);
+    vkGetBufferMemoryRequirements(
+      buffer->device->device, 
+      buffer->buffer, 
+      &memory_requirements);
 
-    uint32_t memory_type_index = buffer->device->physical_device.getMemoryTypeIndex(memory_requirements,
-                                                                                    memory_property_flags);
+    uint32_t memory_type_index = buffer->device->physical_device.getMemoryTypeIndex(
+      memory_requirements,
+      memory_property_flags);
 
-    this->memory = std::make_unique<VulkanMemory>(buffer->device,
-                                                  memory_requirements.size,
-                                                  memory_type_index);
+    this->memory = std::make_unique<VulkanMemory>(
+      buffer->device,
+      memory_requirements.size,
+      memory_type_index);
 
     const VkDeviceSize offset = 0;
 
-    THROW_ON_ERROR(vkBindBufferMemory(buffer->device->device,
-                                      buffer->buffer, 
-                                      this->memory->memory, 
-                                      offset));
+    THROW_ON_ERROR(vkBindBufferMemory(
+      buffer->device->device,
+      buffer->buffer, 
+      this->memory->memory, 
+      offset));
   }
 
   std::shared_ptr<VulkanMemory> memory;
