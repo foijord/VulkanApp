@@ -14,10 +14,18 @@
 #include <memory>
 
 template <typename NodeType, typename ActionType>
-void traverse_children(NodeType * group, ActionType * action)
+void render_children(NodeType * group, ActionType * action)
 {
-  for (const auto node : group->children) {
-    node->traverse(action);
+  for (const auto& node : group->children) {
+    node->render(action);
+  }
+}
+
+template <typename NodeType, typename ActionType>
+void stage_children(NodeType * group, ActionType * action)
+{
+  for (const auto& node : group->children) {
+    node->staging(action);
   }
 }
 
@@ -33,19 +41,24 @@ public:
   std::vector<std::shared_ptr<Node>> children;
 
 private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
   {
-    traverse_children(this, action);
+    stage_children(this, action);
   }
 
-  void doAction(BoundingBoxAction * action) override
+  void doRender(RenderAction * action) override
   {
-    traverse_children(this, action);
+    render_children(this, action);
   }
 
-  void doAction(HandleEventAction * action) override
+  void doRender(BoundingBoxAction * action) override
   {
-    traverse_children(this, action);
+    render_children(this, action);
+  }
+
+  void doRender(HandleEventAction * action) override
+  {
+    render_children(this, action);
   }
 };
 
@@ -61,22 +74,28 @@ public:
   std::vector<std::shared_ptr<Node>> children;
 
 private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
   {
     StateScope scope(action);
-    traverse_children(this, action);
+    stage_children(this, action);
   }
 
-  void doAction(BoundingBoxAction * action) override
+  void doRender(RenderAction * action) override
   {
     StateScope scope(action);
-    traverse_children(this, action);
+    render_children(this, action);
   }
 
-  void doAction(HandleEventAction * action) override
+  void doRender(BoundingBoxAction * action) override
   {
     StateScope scope(action);
-    traverse_children(this, action);
+    render_children(this, action);
+  }
+
+  void doRender(HandleEventAction * action) override
+  {
+    StateScope scope(action);
+    render_children(this, action);
   }
 };
 
@@ -130,7 +149,7 @@ public:
   void viewAll(const std::shared_ptr<Separator> & root)
   {
     BoundingBoxAction action;
-    root->traverse(&action);
+    root->render(&action);
     glm::vec3 focalpoint = action.bounding_box.center();
     this->focaldistance = glm::length(action.bounding_box.span());
 
@@ -139,7 +158,7 @@ public:
   }
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     this->aspectratio = action->viewport.width / action->viewport.height;
     action->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
@@ -168,14 +187,14 @@ public:
       scaleFactor(scalefactor) {}
 
 private:
-  void doAction(BoundingBoxAction * action) override
+  void doRender(BoundingBoxAction * action) override
   {
-    this->doAction(action);
+    this->doActions(action);
   }
 
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
-    this->doAction(action);
+    this->doActions(action);
   }
 
   void doActions(Action * action) const
@@ -200,7 +219,7 @@ public:
   std::vector<T> values;
 
 private:
-  void doAction(RenderAction * action) override
+  void doAction(RenderAction * action)
   {
     action->state.bufferdata = {
       sizeof(T) * this->values.size(),
@@ -211,6 +230,16 @@ private:
       this->values.data(),
       nullptr,
     };
+  }
+    
+  void doStaging(RenderAction * action) override
+  {
+    this->doAction(action);
+  }
+
+  void doRender(RenderAction * action) override
+  {
+    this->doAction(action);
   }
 };
 
@@ -224,13 +253,13 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     this->bufferdata->values = {
       action->state.ViewMatrix * action->state.ModelMatrix,
       action->state.ProjMatrix
     };
-    this->bufferdata->traverse(action);
+    this->bufferdata->render(action);
   }
 
   std::shared_ptr<BufferData<glm::mat4>> bufferdata;
@@ -254,24 +283,26 @@ public:
                                         0);
   }
 
-private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
   {
-    if (!this->buffer) {
-      this->buffer = std::make_shared<VulkanBuffer>(
-        action->device,
-        0,
-        action->state.bufferdata.size,
-        this->buffer_usage_flags,
-        VK_SHARING_MODE_EXCLUSIVE);
+    this->buffer = std::make_shared<VulkanBuffer>(
+      action->device,
+      0,
+      action->state.bufferdata.size,
+      this->buffer_usage_flags,
+      VK_SHARING_MODE_EXCLUSIVE);
 
-      this->buffer_object = std::make_unique<BufferObject>(
-        this->buffer,
-        this->memory_property_flags);
+    this->buffer_object = std::make_unique<BufferObject>(
+      this->buffer,
+      this->memory_property_flags);
 
-      this->memcpy(action);
-    }
+    this->memcpy(action);
 
+    action->state.bufferdata.buffer = this->buffer->buffer;
+  }
+
+  void doRender(RenderAction * action) override
+  {
     action->state.bufferdata.buffer = this->buffer->buffer;
     action->state.bufferdata.usage_flags = this->buffer_usage_flags;
     action->state.bufferdata.memory_property_flags = this->memory_property_flags;
@@ -298,33 +329,34 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
   {
-    if (!this->buffer) {
-      this->buffer = std::make_shared<VulkanBuffer>(
-        action->device,
-        0,
-        action->state.bufferdata.size,
-        this->buffer_usage_flags,
-        VK_SHARING_MODE_EXCLUSIVE);
+    this->buffer = std::make_shared<VulkanBuffer>(
+      action->device,
+      0,
+      action->state.bufferdata.size,
+      this->buffer_usage_flags,
+      VK_SHARING_MODE_EXCLUSIVE);
 
-      this->buffer_object = std::make_unique<BufferObject>(
-        this->buffer,
-        this->memory_property_flags);
+    this->buffer_object = std::make_unique<BufferObject>(
+      this->buffer,
+      this->memory_property_flags);
 
-      std::vector<VkBufferCopy> regions = { {
-          0,                              // srcOffset
-          0,                              // dstOffset 
-          action->state.bufferdata.size,  // size 
+    std::vector<VkBufferCopy> regions = { {
+        0,                              // srcOffset
+        0,                              // dstOffset 
+        action->state.bufferdata.size,  // size 
       } };
 
-      vkCmdCopyBuffer(action->command->buffer(),
-                      action->state.bufferdata.buffer,
-                      this->buffer->buffer,
-                      static_cast<uint32_t>(regions.size()),
-                      regions.data());
-    } 
-    
+    vkCmdCopyBuffer(action->command->buffer(),
+      action->state.bufferdata.buffer,
+      this->buffer->buffer,
+      static_cast<uint32_t>(regions.size()),
+      regions.data());
+  }
+
+  void doRender(RenderAction * action) override
+  {
     action->state.bufferdata.buffer = this->buffer->buffer;
     action->state.bufferdata.usage_flags = this->buffer_usage_flags;
     action->state.bufferdata.memory_property_flags = this->memory_property_flags;
@@ -350,9 +382,14 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
   {
-    this->buffer->traverse(action);
+    this->buffer->staging(action);
+  }
+
+  void doRender(RenderAction * action) override
+  {
+    this->buffer->render(action);
     this->buffer->memcpy(action);
   }
 
@@ -370,7 +407,7 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     action->state.indices.push_back({
       this->type,                                             // type
@@ -393,7 +430,7 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     action->state.buffer_descriptions.push_back({
       action->state.layout_binding,                     // layout
@@ -427,7 +464,7 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     action->state.attribute_descriptions.push_back({
       this->location,
@@ -458,7 +495,7 @@ public:
     : binding(binding), type(type), stage(stage) {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     action->state.layout_binding = {
       this->binding,
@@ -482,14 +519,15 @@ public:
     : filename(std::move(filename)), stage(stage) {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
   {
-    if (!this->shader) {
-      std::ifstream input(filename, std::ios::binary);
-      std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
-      this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
-    }
+    std::ifstream input(filename, std::ios::binary);
+    std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
+    this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
+  }
 
+  void doRender(RenderAction * action) override
+  {
     action->state.shaders.push_back({
       this->stage,                                  // stage
       this->shader->module,                         // module
@@ -508,30 +546,32 @@ public:
   virtual ~Sampler() = default;
 
 private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
   {
-    if (!this->sampler) {
-      this->sampler = std::make_unique<VulkanSampler>(
-        action->device,
-        VkFilter::VK_FILTER_LINEAR,
-        VkFilter::VK_FILTER_LINEAR,
-        VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        0.f,
-        VK_FALSE,
-        1.f,
-        VK_FALSE,
-        VkCompareOp::VK_COMPARE_OP_NEVER,
-        0.f,
-        0.f,
-        VkBorderColor::VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
-        VK_FALSE);
-    }
+    this->sampler = std::make_unique<VulkanSampler>(
+      action->device,
+      VkFilter::VK_FILTER_LINEAR,
+      VkFilter::VK_FILTER_LINEAR,
+      VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      0.f,
+      VK_FALSE,
+      1.f,
+      VK_FALSE,
+      VkCompareOp::VK_COMPARE_OP_NEVER,
+      0.f,
+      0.f,
+      VkBorderColor::VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+      VK_FALSE);
+  }
 
+  void doRender(RenderAction * action) override
+  {
     action->state.texture_description.sampler = this->sampler->sampler;
   }
+
   std::unique_ptr<VulkanSampler> sampler;
 };
 
@@ -548,7 +588,20 @@ public:
     : texture(texture) {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doStaging(RenderAction * action) override
+  {
+    action->state.imagedata = {
+      0,
+      0,
+      &this->texture,
+      nullptr,
+    };
+
+    action->state.bufferdata.size = this->texture.size();
+    action->state.bufferdata.data = this->texture.data();
+  }
+
+  void doRender(RenderAction * action) override
   {
     action->state.imagedata = {
       0,
@@ -575,7 +628,7 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     if (!this->image) {
       VkComponentMapping component_mapping{
@@ -663,17 +716,17 @@ private:
 
       VkDeviceSize buffer_offset = 0;
       for (uint32_t mip_level = 0; mip_level < texture->levels(); mip_level++) {
-        VkExtent3D image_extent{
+        const VkExtent3D image_extent{
           static_cast<uint32_t>(texture->extent(mip_level).x),
           static_cast<uint32_t>(texture->extent(mip_level).y),
           static_cast<uint32_t>(texture->extent(mip_level).z)
         };
 
-        VkOffset3D image_offset = {
+        const VkOffset3D image_offset = {
           0, 0, 0
         };
 
-        VkImageSubresourceLayers subresource_layers{
+        const VkImageSubresourceLayers subresource_layers{
           subresource_range.aspectMask,               // aspectMask
           mip_level,                                  // mipLevel
           subresource_range.baseArrayLayer,           // baseArrayLayer
@@ -717,29 +770,20 @@ private:
   std::unique_ptr<VulkanImageView> view;
 };
 
-class Texture : public Node {
+class Texture : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(Texture);
   Texture() = delete;
   virtual ~Texture() = default;
 
-  explicit Texture(const std::string & filename) : 
-    imagedata(std::make_unique<ImageData>(gli::load(filename))),
-    buffer(std::make_unique<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT)),
-    image(std::make_unique<Image>())
-  {}
-
-private:
-  void doAction(RenderAction * action) override
+  explicit Texture(const std::string & filename)
   {
-    this->imagedata->traverse(action);
-    this->buffer->traverse(action);
-    this->image->traverse(action);
+    this->children = {
+      std::make_shared<ImageData>(gli::load(filename)),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<Image>(),
+    };
   }
-
-  std::unique_ptr<ImageData> imagedata;
-  std::unique_ptr<CpuMemoryBuffer> buffer;
-  std::unique_ptr<Image> image;
 };
 
 class CullMode : public Node {
@@ -752,7 +796,7 @@ public:
     : cullmode(cullmode) {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     action->state.rasterizationstate.cullMode = this->cullmode;
   }
@@ -766,13 +810,12 @@ public:
   BoundingBox() = delete;
   virtual ~BoundingBox() = default;
 
-  explicit BoundingBox(glm::vec3 min, glm::vec3 max)
-    : min(min), 
-      max(max)
+  explicit BoundingBox(glm::vec3 min, glm::vec3 max) : 
+    min(min), max(max)
   {}
 
 private:
-  void doAction(BoundingBoxAction * action) override
+  void doRender(BoundingBoxAction * action) override
   {
     box3 box(this->min, this->max);
     box.transform(action->state.ModelMatrix);
@@ -796,7 +839,7 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     action->state.compute_description = {
       this->group_count_x,
@@ -824,7 +867,7 @@ public:
   {}
 
 private:
-  void doAction(RenderAction * action) override
+  void doRender(RenderAction * action) override
   {
     action->state.drawdescription = {
       this->count,
@@ -960,7 +1003,7 @@ public:
     };
   }
 
-  void doAction(BoundingBoxAction * action) override
+  void doRender(BoundingBoxAction * action) override
   {
     box3 box(glm::vec3(0), glm::vec3(1));
     box.transform(action->state.ModelMatrix);

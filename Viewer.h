@@ -190,8 +190,6 @@ public:
 
   void setSceneGraph(std::shared_ptr<class Node> scene)
   {
-    this->renderaction->clearCache();
-
     this->root = std::make_shared<Separator>();
     this->camera = SearchAction<Camera>(scene);
 
@@ -203,12 +201,15 @@ public:
     else {
       this->root->children = { scene };
     }
+
+    this->renderaction->clearCache();
+    this->renderaction->staging(this->root);
   }
 
   void render()
   {
     try {
-      this->renderaction->apply(this->root);
+      this->renderaction->render(this->root);
 
       uint32_t image_index = this->swapchain->getNextImageIndex(this->semaphore);
 

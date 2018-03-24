@@ -32,7 +32,7 @@ public:
 
   void apply(const std::shared_ptr<Node> & root)
   {
-    root->traverse(this);
+    root->render(this);
   }
 
   std::string key;
@@ -61,7 +61,7 @@ public:
 
   void apply(const std::shared_ptr<Node> & root)
   {
-    root->traverse(this);
+    root->render(this);
   }
 
   void extendBy(const box3 & box)
@@ -120,35 +120,38 @@ public:
     }
   }
 
-  void apply(const std::shared_ptr<Node> & root)
+  void staging(const std::shared_ptr<Node> & root)
   {
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
 
     this->command->begin();
-    root->traverse(this);
 
-    //for (State & state : this->graphic_states) {
-    //  for (auto & bufferdata : state.bufferdata_descriptions) {
-    //    if (this->memory_map.find(bufferdata.buffer) == this->memory_map.end()) {
-    //      VkMemoryRequirements memory_requirements;
-    //      vkGetBufferMemoryRequirements(this->device->device, bufferdata.buffer, &memory_requirements);
+    root->staging(this);
 
-    //      uint32_t memory_type_index = device->physical_device.getMemoryTypeIndex(memory_requirements,
-    //                                                                              bufferdata.memory_property_flags);
+    this->command->end();
 
-    //      this->memory_map[bufferdata.buffer] = std::make_shared<VulkanMemory>(device,
-    //                                                                           memory_requirements.size,
-    //                                                                           memory_type_index);
+    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
 
-    //      const VkDeviceSize offset = 0;
+    this->command->submit(
+      this->device->default_queue, 
+      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+      {}, 
+      {}, 
+      this->fence->fence);
 
-    //      THROW_ON_ERROR(vkBindBufferMemory(this->device->device,
-    //                                        bufferdata.buffer,
-    //                                        this->memory_map[bufferdata.buffer]->memory,
-    //                                        offset));
-    //    }
-    //  }
-    //}
+    this->graphic_states.clear();
+    this->compute_states.clear();
+
+    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
+  }
+
+  void render(const std::shared_ptr<Node> & root)
+  {
+    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+
+    this->command->begin();
+
+    root->render(this);
 
     for (State & state : this->compute_states) {
       if (this->compute_commands.find(&state.compute_description) == this->compute_commands.end()) {
@@ -277,8 +280,6 @@ inline DrawCommandObject::DrawCommandObject(RenderAction * action, State & state
   }
   this->command->end();
 }
-
-
 
 class StateScope {
 public:

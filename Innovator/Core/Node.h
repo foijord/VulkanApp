@@ -9,24 +9,30 @@ public:
   Node() = default;
   virtual ~Node() = default;
 
-  void traverse(class RenderAction * action) 
+  void render(class RenderAction * action) 
   {
-    this->doAction(action);
+    this->doRender(action);
   }
 
-  void traverse(class BoundingBoxAction * action) 
+  void staging(class RenderAction * action)
   {
-    this->doAction(action);
+    this->doStaging(action);
   }
 
-  void traverse(class HandleEventAction * action) 
+  void render(class BoundingBoxAction * action) 
   {
-    this->doAction(action);
+    this->doRender(action);
+  }
+
+  void render(class HandleEventAction * action) 
+  {
+    this->doRender(action);
   }
 
 private:
-  virtual void doAction(class RenderAction *) {}
-  virtual void doAction(class BoundingBoxAction *) {}
-  virtual void doAction(class HandleEventAction *) {}
+  virtual void doStaging(class RenderAction *) {}
+  virtual void doRender(class RenderAction *) {}
+  virtual void doRender(class BoundingBoxAction *) {}
+  virtual void doRender(class HandleEventAction *) {}
 };
 
