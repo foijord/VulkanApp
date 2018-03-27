@@ -365,8 +365,8 @@ private:
   void doInit(RenderAction * action) override
   {
     this->buffer_object = std::make_shared<BufferObject>(
-      0,
       action->state.bufferdata.size,
+      this->buffer_create_flags,
       this->buffer_usage_flags,
       this->sharing_mode,
       this->memory_property_flags);
@@ -396,6 +396,7 @@ private:
   }
 
   VkBufferUsageFlags buffer_usage_flags;
+  VkBufferCreateFlags buffer_create_flags{ 0 };
   VkSharingMode sharing_mode{ VK_SHARING_MODE_EXCLUSIVE };
   VkMemoryPropertyFlags memory_property_flags{ VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT };
   std::shared_ptr<BufferObject> buffer_object{ nullptr };
@@ -415,8 +416,8 @@ private:
   void doInit(RenderAction * action) override
   {
     this->buffer_object = std::make_shared<BufferObject>(
-      0,
       action->state.bufferdata.size,
+      this->buffer_create_flags,
       this->buffer_usage_flags,
       this->sharing_mode,
       this->memory_property_flags);
@@ -450,6 +451,7 @@ private:
   }
 
   VkBufferUsageFlags buffer_usage_flags{ 0 };
+  VkBufferCreateFlags buffer_create_flags{ 0 };
   VkSharingMode sharing_mode{ VK_SHARING_MODE_EXCLUSIVE };
   VkMemoryPropertyFlags memory_property_flags{ VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
   std::shared_ptr<BufferObject> buffer_object{ nullptr };
@@ -483,8 +485,8 @@ public:
   IndexBufferDescription() = delete;
   virtual ~IndexBufferDescription() = default;
 
-  explicit IndexBufferDescription(VkIndexType type)
-    : type(type)
+  explicit IndexBufferDescription(VkIndexType type) : 
+    type(type)
   {}
 
 private:
@@ -660,12 +662,8 @@ private:
 class Image : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Image);
+  Image() = default;
   virtual ~Image() = default;
-
-  Image() :
-    usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
-    memory_property_flags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)    
-  {}
 
 private:
   void doInit(RenderAction * action) override
@@ -798,11 +796,11 @@ private:
     action->state.textures.push_back(action->state.texture_description);
   }
 
-  VkImageUsageFlags usage_flags;
-  VkMemoryPropertyFlags memory_property_flags;
   std::shared_ptr<VulkanImage> image;
   std::shared_ptr<ImageObject> image_object;
   std::unique_ptr<VulkanImageView> view;
+  VkImageUsageFlags usage_flags{ VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT };
+  VkMemoryPropertyFlags memory_property_flags{ VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
 
   inline static std::map<gli::format, VkFormat> vulkan_format{
     { gli::format::FORMAT_R8_UNORM_PACK8, VkFormat::VK_FORMAT_R8_UNORM },
@@ -883,10 +881,12 @@ public:
   ComputeCommand() = delete;
   virtual ~ComputeCommand() = default;
 
-  explicit ComputeCommand(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z)
-    : group_count_x(group_count_x), 
-      group_count_y(group_count_y), 
-      group_count_z(group_count_z) 
+  explicit ComputeCommand(uint32_t group_count_x, 
+                          uint32_t group_count_y, 
+                          uint32_t group_count_z) : 
+    group_count_x(group_count_x), 
+    group_count_y(group_count_y), 
+    group_count_z(group_count_z) 
   {}
 
 private:
@@ -925,6 +925,7 @@ private:
       this->count,
       this->topology,
     };
+
     action->graphic_states.push_back(action->state);
   }
 
@@ -957,6 +958,30 @@ public:
       1, 5, 7, 7, 3, 1, // +z
     };
 
+    //std::vector<uint32_t> indices{
+    //  1,  4,  0,
+    //  4,  9,  0,
+    //  4,  5,  9,
+    //  8,  5,  4,
+    //  1,  8,  4,
+    //  1, 10,  8,
+    //  10,  3, 8,
+    //  8,  3,  5,
+    //  3,  2,  5,
+    //  3,  7,  2,
+    //  3, 10,  7,
+    //  10,  6, 7,
+    //  6, 11,  7,
+    //  6,  0, 11,
+    //  6,  1,  0,
+    //  10,  1, 6,
+    //  11,  0, 9,
+    //  2, 11,  9,
+    //  5,  2,  9,
+    //  11,  2, 7
+    //};
+
+
     std::vector<float> vertices {
       0, 0, 0, // 0
       0, 0, 1, // 1
@@ -967,6 +992,22 @@ public:
       1, 1, 0, // 6
       1, 1, 1, // 7
     };
+
+    //const float t = float(1 + std::pow(5, 0.5)) / 2;  // golden ratio
+    //std::vector<float> vertices{
+    //  -1,  0,  t,
+    //   1,  0,  t,
+    //  -1,  0, -t,
+    //   1,  0, -t,
+    //   0,  t,  1,
+    //   0,  t, -1,
+    //   0, -t,  1,
+    //   0, -t, -1,
+    //   t,  1,  0,
+    //  -t,  1,  0,
+    //   t, -1,  0,
+    //  -t, -1,  0
+    //};
 
     this->children = {
       std::make_shared<BufferData<uint32_t>>(indices),
@@ -984,80 +1025,5 @@ public:
       std::make_shared<BoundingBox>(glm::vec3(0), glm::vec3(1)),
       std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
     };
-  }
-};
-
-class Sphere : public Separator {
-public:
-  NO_COPY_OR_ASSIGNMENT(Sphere);
-  Sphere() = delete;
-  virtual ~Sphere() = default;
-
-  explicit Sphere(uint32_t binding, uint32_t location)
-  {
-    auto indices = std::make_shared<BufferData<uint32_t>>(60);
-    indices->values = {
-      1,  4,  0,
-      4,  9,  0,
-      4,  5,  9,
-      8,  5,  4,
-      1,  8,  4,
-      1, 10,  8,
-      10,  3, 8,
-      8,  3,  5,
-      3,  2,  5,
-      3,  7,  2,
-      3, 10,  7,
-      10,  6, 7,
-      6, 11,  7,
-      6,  0, 11,
-      6,  1,  0,
-      10,  1, 6,
-      11,  0, 9,
-      2, 11,  9,
-      5,  2,  9,
-      11,  2, 7
-    };
-
-    const float t = float(1 + std::pow(5, 0.5)) / 2;  // golden ratio
-    auto vertices = std::make_shared<BufferData<float>>(36);
-
-    vertices->values = {
-      -1, 0, t,
-       1, 0, t,
-      -1, 0,-t,
-       1, 0,-t,
-       0, t, 1,
-       0, t,-1,
-       0,-t, 1,
-       0,-t,-1,
-       t, 1, 0,
-      -t, 1, 0,
-       t,-1, 0,
-      -t,-1, 0
-    };
-
-    this->children = {
-      indices,
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
-      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-      vertices,
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
-      std::make_shared<VertexAttributeLayout>(
-        location,
-        binding,
-        VK_FORMAT_R32G32B32_SFLOAT,
-        0,
-        3,
-        VK_VERTEX_INPUT_RATE_VERTEX),
-      std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
-    };
-  }
-
-  void doRender(BoundingBoxAction * action) override
-  {
-    box3 box(glm::vec3(0), glm::vec3(1));
-    box.transform(action->state.ModelMatrix);
-    action->extendBy(box);
   }
 };

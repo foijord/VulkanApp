@@ -16,8 +16,8 @@ public:
   BufferObject() = delete;
   ~BufferObject() = default;
   
-  BufferObject(VkBufferCreateFlags flags,
-               VkDeviceSize size,
+  BufferObject(VkDeviceSize size,
+               VkBufferCreateFlags flags,
                VkBufferUsageFlags usage,
                VkSharingMode sharingMode,
                VkMemoryPropertyFlags memory_property_flags) :
