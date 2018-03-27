@@ -203,6 +203,7 @@ public:
     }
 
     this->renderaction->clearCache();
+    this->renderaction->init(this->root);
     this->renderaction->staging(this->root);
   }
 
@@ -290,6 +291,8 @@ public:
         this->color_buffer,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
+      this->color_buffer_object->bind();
+
       this->color_buffer_view = std::make_unique<VulkanImageView>(
         this->color_buffer,
         this->color_format,
@@ -341,6 +344,8 @@ public:
       this->depth_buffer_object = std::make_unique<ImageObject>(
         this->depth_buffer,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      this->depth_buffer_object->bind();
 
       this->depth_buffer_view = std::make_unique<VulkanImageView>(
         this->depth_buffer,

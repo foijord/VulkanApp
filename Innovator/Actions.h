@@ -120,6 +120,45 @@ public:
     }
   }
 
+  void init(const std::shared_ptr<Node> & root)
+  {
+    root->init(this);
+
+    for (auto & image : this->imageobjects) {
+      image->bind();
+    }
+
+    for (auto & buffer_object : this->bufferobjects) {
+
+      const auto buffer = std::make_shared<VulkanBuffer>(
+        this->device,
+        buffer_object->flags,
+        buffer_object->size,
+        buffer_object->usage,
+        buffer_object->sharingMode);
+
+      VkMemoryRequirements memory_requirements;
+      vkGetBufferMemoryRequirements(
+        buffer->device->device,
+        buffer->buffer,
+        &memory_requirements);
+
+      uint32_t memory_type_index = this->device->physical_device.getMemoryTypeIndex(
+        memory_requirements,
+        buffer_object->memory_property_flags);
+
+      const auto memory = std::make_shared<VulkanMemory>(
+        this->device,
+        memory_requirements.size,
+        memory_type_index);
+
+      const VkDeviceSize memory_offset = 0;
+      const VkDeviceSize buffer_offset = 0;
+
+      buffer_object->bind(buffer, memory, buffer_offset, memory_offset);
+    }
+  }
+
   void staging(const std::shared_ptr<Node> & root)
   {
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
@@ -138,9 +177,6 @@ public:
       {}, 
       {}, 
       this->fence->fence);
-
-    this->graphic_states.clear();
-    this->compute_states.clear();
 
     THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
   }
@@ -215,7 +251,9 @@ public:
 
   std::map<VulkanDrawDescription *, std::unique_ptr<DrawCommandObject>> draw_commands;
   std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
-  std::map <VkBuffer, std::shared_ptr<VulkanMemory>> memory_map;
+
+  std::vector<std::shared_ptr<ImageObject>> imageobjects;
+  std::vector<std::shared_ptr<BufferObject>> bufferobjects;
 
   std::unique_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;

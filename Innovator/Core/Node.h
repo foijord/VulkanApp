@@ -9,14 +9,19 @@ public:
   Node() = default;
   virtual ~Node() = default;
 
-  void render(class RenderAction * action) 
+  void init(class RenderAction * action)
   {
-    this->doRender(action);
+    this->doInit(action);
   }
 
   void staging(class RenderAction * action)
   {
     this->doStaging(action);
+  }
+
+  void render(class RenderAction * action) 
+  {
+    this->doRender(action);
   }
 
   void render(class BoundingBoxAction * action) 
@@ -30,6 +35,7 @@ public:
   }
 
 private:
+  virtual void doInit(class RenderAction *) {}
   virtual void doStaging(class RenderAction *) {}
   virtual void doRender(class RenderAction *) {}
   virtual void doRender(class BoundingBoxAction *) {}

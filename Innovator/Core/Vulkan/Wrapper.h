@@ -386,87 +386,6 @@ VulkanDevice::~VulkanDevice()
   vkDestroyCommandPool(this->device, this->default_pool, nullptr);
 }
 
-//class VulkanMemoryBlock {
-//public:
-//  bool free{ true };
-//  VkDeviceSize size{ 0 };
-//  VkDeviceSize offset{ 0 };
-//};
-//
-//class VulkanMemoryChunk {
-//public:
-//  NO_COPY_OR_ASSIGNMENT(VulkanMemoryChunk);
-//
-//  explicit VulkanMemoryChunk(VkDevice device, 
-//                             VkDeviceSize size, 
-//                             uint32_t memory_type_index) :
-//    device(device),
-//    size(size),
-//    memory_type_index(memory_type_index)
-//  {
-//    VkMemoryAllocateInfo allocate_info{
-//      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, // sType 
-//      nullptr,                                // pNext 
-//      size,                                   // allocationSize 
-//      this->memory_type_index,                // memoryTypeIndex 
-//    };
-//
-//    THROW_ON_ERROR(vkAllocateMemory(this->device, &allocate_info, nullptr, &this->memory));
-//  }
-//
-//  ~VulkanMemoryChunk()
-//  {
-//    vkFreeMemory(this->device, this->memory, nullptr);
-//  }
-//
-//  VkDevice device;
-//  VkDeviceSize size;
-//  uint32_t memory_type_index;
-//  VkDeviceMemory memory{ nullptr };
-//  std::vector<VulkanMemoryBlock> blocks;
-//};
-//
-//class VulkanMemoryAllocator {
-//public:
-//  NO_COPY_OR_ASSIGNMENT(VulkanMemoryAllocator);
-//
-//  explicit VulkanMemoryAllocator(VulkanDevice * device)
-//    : device(device)
-//  {}
-//
-//  ~VulkanMemoryAllocator() = default;
-//
-//  void allocate(const VkMemoryRequirements & memory_requirements,
-//                uint32_t memory_type_index,
-//                VulkanMemory * memory)
-//  {
-//    const VkPhysicalDeviceProperties device_properties = this->device->physical_device.properties;
-//    const VkPhysicalDeviceLimits device_limits = device_properties.limits;
-//
-//    const VkDeviceSize granularity = device_limits.bufferImageGranularity;
-//    const VkDeviceSize size = memory_requirements.size + granularity;
-//
-//    const VkPhysicalDeviceMemoryProperties memory_properties = this->device->physical_device.memory_properties;
-//    uint32_t heap_index = memory_properties.memoryTypes[memory_type_index].heapIndex;
-//    VkMemoryHeap heap = memory_properties.memoryHeaps[heap_index];
-//
-//    memory->chunk = std::make_shared<VulkanMemoryChunk>(this->device->device,
-//                                                        size,
-//                                                        memory_type_index);
-//    this->chunks.push_back(memory->chunk);
-//
-//    memory->offset = 0;
-//    memory->memory = memory->chunk->memory;
-//  }
-//
-//  void free(VulkanMemory * memory)
-//  {
-//  }
-//
-//  VulkanDevice * device;
-//  std::vector<std::shared_ptr<VulkanMemoryChunk>> chunks;
-//};
-
 class VulkanDebugCallback {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDebugCallback);
@@ -896,8 +815,7 @@ public:
                VkBufferUsageFlags usage,
                VkSharingMode sharingMode,
                const std::vector<uint32_t> & queueFamilyIndices = std::vector<uint32_t>())
-    : device(std::move(device)),
-      buffer(nullptr)
+    : device(std::move(device))
   {
     VkBufferCreateInfo create_info {
       VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,             // sType  

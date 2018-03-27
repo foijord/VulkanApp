@@ -60,6 +60,7 @@ struct VulkanComputeDescription {
 
 struct VulkanBufferDataDescription {
   VkDeviceSize size{ 0 };
+  VkDeviceSize offset{ 0 };
   size_t count{ 0 };
   VkDeviceSize elem_size{ 0 };
   VkBufferUsageFlags usage_flags{ 0 };
