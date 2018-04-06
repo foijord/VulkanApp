@@ -37,6 +37,58 @@ SearchAction(const std::shared_ptr<Node> & root) {
   return std::shared_ptr<NodeType>();
 }
 
+class MemoryAllocator {
+public:
+  NO_COPY_OR_ASSIGNMENT(MemoryAllocator);
+  ~MemoryAllocator() = default;
+
+  explicit MemoryAllocator(std::shared_ptr<VulkanDevice> device,
+                           const std::shared_ptr<Node> & root) :
+    device(std::move(device))
+  {
+    root->alloc(this);
+
+    for (auto & image : this->imageobjects) {
+      image->bind();
+    }
+
+    for (auto & buffer_object : this->bufferobjects) {
+
+      const auto buffer = std::make_shared<VulkanBuffer>(
+        this->device,
+        buffer_object->flags,
+        buffer_object->size,
+        buffer_object->usage,
+        buffer_object->sharingMode);
+
+      VkMemoryRequirements memory_requirements;
+      vkGetBufferMemoryRequirements(
+        buffer->device->device,
+        buffer->buffer,
+        &memory_requirements);
+
+      auto memory_type_index = this->device->physical_device.getMemoryTypeIndex(
+        memory_requirements,
+        buffer_object->memory_property_flags);
+
+      const auto memory = std::make_shared<VulkanMemory>(
+        this->device,
+        memory_requirements.size,
+        memory_type_index);
+
+      const VkDeviceSize memory_offset = 0;
+      const VkDeviceSize buffer_offset = 0;
+
+      buffer_object->bind(buffer, memory, buffer_offset, memory_offset);
+    }
+  }
+
+  State state;
+  std::shared_ptr<VulkanDevice> device;
+  std::vector<std::shared_ptr<ImageObject>> imageobjects;
+  std::vector<std::shared_ptr<BufferObject>> bufferobjects;
+};
+
 class RenderAction : public Action {
 public:
   NO_COPY_OR_ASSIGNMENT(RenderAction);
@@ -87,41 +139,7 @@ public:
 
   void alloc(const std::shared_ptr<Node> & root)
   {
-    root->alloc(this);
-
-    for (auto & image : this->imageobjects) {
-      image->bind();
-    }
-
-    for (auto & buffer_object : this->bufferobjects) {
-
-      const auto buffer = std::make_shared<VulkanBuffer>(
-        this->device,
-        buffer_object->flags,
-        buffer_object->size,
-        buffer_object->usage,
-        buffer_object->sharingMode);
-
-      VkMemoryRequirements memory_requirements;
-      vkGetBufferMemoryRequirements(
-        buffer->device->device,
-        buffer->buffer,
-        &memory_requirements);
-
-      uint32_t memory_type_index = this->device->physical_device.getMemoryTypeIndex(
-        memory_requirements,
-        buffer_object->memory_property_flags);
-
-      const auto memory = std::make_shared<VulkanMemory>(
-        this->device,
-        memory_requirements.size,
-        memory_type_index);
-
-      const VkDeviceSize memory_offset = 0;
-      const VkDeviceSize buffer_offset = 0;
-
-      buffer_object->bind(buffer, memory, buffer_offset, memory_offset);
-    }
+    MemoryAllocator allocator(this->device, root);
   }
 
   void stage(const std::shared_ptr<Node> & root)
@@ -225,9 +243,6 @@ public:
 
   std::map<VulkanDrawDescription *, std::unique_ptr<DrawCommandObject>> draw_commands;
   std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
-
-  std::vector<std::shared_ptr<ImageObject>> imageobjects;
-  std::vector<std::shared_ptr<BufferObject>> bufferobjects;
 
   std::unique_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;

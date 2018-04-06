@@ -9,9 +9,9 @@ public:
   Node() = default;
   virtual ~Node() = default;
 
-  void alloc(class RenderAction * action)
+  void alloc(class MemoryAllocator * allocator)
   {
-    this->doAlloc(action);
+    this->doAlloc(allocator);
   }
 
   void stage(class RenderAction * action)
@@ -30,10 +30,9 @@ public:
   }
 
 private:
-  virtual void doAlloc(class RenderAction *) {}
+  virtual void doAlloc(class MemoryAllocator *) {}
   virtual void doStage(class RenderAction *) {}
   virtual void doRecord(class RenderAction *) {}
   virtual void doRender(class RenderState &) {}
-  virtual void doRender(class HandleEventAction *) {}
 };
 

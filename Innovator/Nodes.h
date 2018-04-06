@@ -26,10 +26,10 @@ public:
   std::vector<std::shared_ptr<Node>> children;
 
 protected:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
     for (const auto& node : this->children) {
-      node->alloc(action);
+      node->alloc(allocator);
     }
   }
 
@@ -65,10 +65,11 @@ public:
     : Group(std::move(children)) {}
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
-    StateScope scope(action);
-    Group::doAlloc(action);
+    State s = allocator->state;
+    Group::doAlloc(allocator);
+    allocator->state = s;
   }
 
   void doStage(RenderAction * action) override
@@ -214,27 +215,12 @@ public:
   std::vector<T> values;
 
 private:
-  void doAlloc(RenderAction * action) override
+  VulkanBufferDataDescription get_buffer_data_description()
   {
-    this->doAction(action);
-  }
-
-  void doStage(RenderAction * action) override
-  {
-    this->doAction(action);
-  }
-
-  void doRecord(RenderAction * action) override
-  {
-    this->doAction(action);
-  }
-
-  void doAction(RenderAction * action)
-  {
-    const size_t num = this->values.empty() ? 
+    const size_t num = this->values.empty() ?
       this->num : this->values.size();
 
-    action->state.bufferdata = {
+    return {
       sizeof(T) * num,                  // size
       0,                                // offset
       num,                              // count
@@ -244,6 +230,21 @@ private:
       this->values.data(),              // data
       nullptr,                          // buffer
     };
+  }
+
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    allocator->state.bufferdata = this->get_buffer_data_description();
+  }
+
+  void doStage(RenderAction * action) override
+  {
+    action->state.bufferdata = this->get_buffer_data_description();
+  }
+
+  void doRecord(RenderAction * action) override
+  {
+    action->state.bufferdata = this->get_buffer_data_description();
   }
 
   size_t num{ 0 };
@@ -262,9 +263,17 @@ public:
     : texture(texture) {}
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
-    this->doAction(action);
+    allocator->state.imagedata = {
+      0,                      // usage_flags
+      0,                      // memory_property_flags
+      &this->texture,         // texture
+      nullptr,                // image
+    };
+
+    allocator->state.bufferdata.size = this->texture.size();
+    allocator->state.bufferdata.data = this->texture.data();
   }
 
   void doStage(RenderAction * action) override
@@ -304,16 +313,16 @@ public:
   {}
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      action->state.bufferdata.size,
+      allocator->state.bufferdata.size,
       0,
       this->buffer_usage_flags,
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    action->bufferobjects.push_back(this->buffer);
+    allocator->bufferobjects.push_back(this->buffer);
   }
 
   void doStage(RenderAction * action) override
@@ -349,16 +358,16 @@ public:
   {}
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      action->state.bufferdata.size,
+      allocator->state.bufferdata.size,
       0,
       this->buffer_usage_flags,
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    action->bufferobjects.push_back(this->buffer);
+    allocator->bufferobjects.push_back(this->buffer);
   }
 
   void doStage(RenderAction * action) override
@@ -397,7 +406,7 @@ public:
   virtual ~TransformBuffer() = default;
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
       sizeof(glm::mat4) * 2,
@@ -406,7 +415,7 @@ private:
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    action->bufferobjects.push_back(this->buffer);
+    allocator->bufferobjects.push_back(this->buffer);
   }
 
   void doRecord(RenderAction * action) override
@@ -556,11 +565,11 @@ public:
   {}
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
     std::ifstream input(filename, std::ios::binary);
     std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
-    this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
+    this->shader = std::make_unique<VulkanShaderModule>(allocator->device, code);
   }
 
   void doRecord(RenderAction * action) override
@@ -583,10 +592,10 @@ public:
   virtual ~Sampler() = default;
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
     this->sampler = std::make_unique<VulkanSampler>(
-      action->device,
+      allocator->device,
       VkFilter::VK_FILTER_LINEAR,
       VkFilter::VK_FILTER_LINEAR,
       VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -619,9 +628,9 @@ public:
   virtual ~Image() = default;
 
 private:
-  void doAlloc(RenderAction * action) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
-    gli::texture * texture = action->state.imagedata.texture;
+    gli::texture * texture = allocator->state.imagedata.texture;
 
     VkExtent3D extent = {
       static_cast<uint32_t>(texture->extent().x),
@@ -630,7 +639,7 @@ private:
     };
 
     this->image = std::make_shared<VulkanImage>(
-      action->device,
+      allocator->device,
       0,
       vulkan_image_type[texture->target()],
       vulkan_format[texture->format()],
@@ -648,9 +657,9 @@ private:
       this->image,
       this->memory_property_flags);
 
-    action->imageobjects.push_back(this->image_object);
+    allocator->imageobjects.push_back(this->image_object);
 
-    action->state.imagedata.image = this->image->image;
+    allocator->state.imagedata.image = this->image->image;
   }
 
   void doStage(RenderAction * action) override
