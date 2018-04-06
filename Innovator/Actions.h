@@ -120,9 +120,9 @@ public:
     }
   }
 
-  void init(const std::shared_ptr<Node> & root)
+  void alloc(const std::shared_ptr<Node> & root)
   {
-    root->init(this);
+    root->alloc(this);
 
     for (auto & image : this->imageobjects) {
       image->bind();
@@ -159,13 +159,13 @@ public:
     }
   }
 
-  void staging(const std::shared_ptr<Node> & root)
+  void stage(const std::shared_ptr<Node> & root)
   {
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
 
     this->command->begin();
 
-    root->staging(this);
+    root->stage(this);
 
     this->command->end();
 
@@ -177,17 +177,15 @@ public:
       {}, 
       {}, 
       this->fence->fence);
-
-    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
   }
 
-  void render(const std::shared_ptr<Node> & root)
+  void record(const std::shared_ptr<Node> & root)
   {
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
 
-    this->command->begin();
+    root->record(this);
 
-    root->render(this);
+    this->command->begin();
 
     for (State & state : this->compute_states) {
       if (this->compute_commands.find(&state.compute_description) == this->compute_commands.end()) {
@@ -197,7 +195,7 @@ public:
       vkCmdExecuteCommands(this->command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
     }
 
-    VkRenderPassBeginInfo begin_info {
+    VkRenderPassBeginInfo begin_info{
       VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
       nullptr,                                         // pNext
       this->renderpass->renderpass,                    // renderPass
@@ -220,6 +218,18 @@ public:
     vkCmdEndRenderPass(this->command->buffer());
     this->command->end();
 
+    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+    this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, {}, this->fence->fence);
+
+    this->graphic_states.clear();
+    this->compute_states.clear();
+  }
+
+  void render(const std::shared_ptr<Node> & root)
+  {
+    root->render(this);
+
+    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
     THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
     this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, {}, this->fence->fence);
 

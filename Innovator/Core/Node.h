@@ -9,17 +9,22 @@ public:
   Node() = default;
   virtual ~Node() = default;
 
-  void init(class RenderAction * action)
+  void alloc(class RenderAction * action)
   {
-    this->doInit(action);
+    this->doAlloc(action);
   }
 
-  void staging(class RenderAction * action)
+  void stage(class RenderAction * action)
   {
-    this->doStaging(action);
+    this->doStage(action);
   }
 
-  void render(class RenderAction * action) 
+  void record(class RenderAction * action)
+  {
+    this->doRecord(action);
+  }
+
+  void render(class RenderAction * action)
   {
     this->doRender(action);
   }
@@ -35,8 +40,9 @@ public:
   }
 
 private:
-  virtual void doInit(class RenderAction *) {}
-  virtual void doStaging(class RenderAction *) {}
+  virtual void doAlloc(class RenderAction *) {}
+  virtual void doStage(class RenderAction *) {}
+  virtual void doRecord(class RenderAction *) {}
   virtual void doRender(class RenderAction *) {}
   virtual void doRender(class BoundingBoxAction *) {}
   virtual void doRender(class HandleEventAction *) {}

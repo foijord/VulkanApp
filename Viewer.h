@@ -203,15 +203,14 @@ public:
     }
 
     this->renderaction->clearCache();
-    this->renderaction->init(this->root);
-    this->renderaction->staging(this->root);
+    this->renderaction->alloc(this->root);
+    this->renderaction->stage(this->root);
+    this->renderaction->record(this->root);
   }
 
-  void render()
+  void swapBuffers()
   {
     try {
-      this->renderaction->render(this->root);
-
       uint32_t image_index = this->swapchain->getNextImageIndex(this->semaphore);
 
       this->swap_buffers_command->submit(this->device->default_queue,
@@ -243,7 +242,9 @@ public:
   {
     QWindow::resizeEvent(e);
     this->rebuildSwapchain();
-    this->render();
+    this->renderaction->record(this->root);
+    this->renderaction->render(this->root);
+    this->swapBuffers();
   }
 
   void rebuildSwapchain()
@@ -435,7 +436,7 @@ public:
       THROW_ON_ERROR(vkQueueWaitIdle(this->device->default_queue));
     }
 
-    VkImageSubresourceRange subresource_range{
+    const VkImageSubresourceRange subresource_range{
       VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
     };
 
@@ -485,14 +486,14 @@ public:
         static_cast<uint32_t>(src_image_barriers.size()),
         src_image_barriers.data());
 
-      VkImageSubresourceLayers subresource_layers{
+      const VkImageSubresourceLayers subresource_layers{
         subresource_range.aspectMask,     // aspectMask
         subresource_range.baseMipLevel,   // mipLevel
         subresource_range.baseArrayLayer, // baseArrayLayer
         subresource_range.layerCount      // layerCount;
       };
 
-      VkOffset3D offset = {
+      const VkOffset3D offset = {
         0, 0, 0
       };
 
@@ -557,7 +558,9 @@ public:
       default: break;
       }
       this->mouse_pos = pos;
-      this->render();
+
+      this->renderaction->render(this->root);
+      this->swapBuffers();
     }
   }
 

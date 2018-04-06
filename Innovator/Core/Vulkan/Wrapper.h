@@ -1083,7 +1083,7 @@ public:
 
   VulkanFramebuffer(std::shared_ptr<VulkanDevice> device,
                     const std::shared_ptr<VulkanRenderpass> & renderpass,
-                    std::vector<VkImageView> attachments, 
+                    const std::vector<VkImageView> & attachments, 
                     VkExtent2D extent,
                     uint32_t layers)
     : device(std::move(device))

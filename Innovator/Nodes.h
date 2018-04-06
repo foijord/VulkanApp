@@ -13,30 +13,6 @@
 #include <vector>
 #include <memory>
 
-template <typename NodeType, typename ActionType>
-void init_children(NodeType * group, ActionType * action)
-{
-  for (const auto& node : group->children) {
-    node->init(action);
-  }
-}
-
-template <typename NodeType, typename ActionType>
-void stage_children(NodeType * group, ActionType * action)
-{
-  for (const auto& node : group->children) {
-    node->staging(action);
-  }
-}
-
-template <typename NodeType, typename ActionType>
-void render_children(NodeType * group, ActionType * action)
-{
-  for (const auto& node : group->children) {
-    node->render(action);
-  }
-}
-
 class Group : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Group);
@@ -48,30 +24,47 @@ public:
 
   std::vector<std::shared_ptr<Node>> children;
 
-private:
-  void doInit(RenderAction * action) override
+protected:
+  void doAlloc(RenderAction * action) override
   {
-    init_children(this, action);
+    for (const auto& node : this->children) {
+      node->alloc(action);
+    }
   }
 
-  void doStaging(RenderAction * action) override
+  void doStage(RenderAction * action) override
   {
-    stage_children(this, action);
+    for (const auto& node : this->children) {
+      node->stage(action);
+    }
+  }
+
+  void doRecord(RenderAction * action) override
+  {
+    for (const auto& node : this->children) {
+      node->record(action);
+    }
   }
 
   void doRender(RenderAction * action) override
   {
-    render_children(this, action);
+    for (const auto& node : this->children) {
+      node->render(action);
+    }
   }
 
   void doRender(BoundingBoxAction * action) override
   {
-    render_children(this, action);
+    for (const auto& node : this->children) {
+      node->render(action);
+    }
   }
 
   void doRender(HandleEventAction * action) override
   {
-    render_children(this, action);
+    for (const auto& node : this->children) {
+      node->render(action);
+    }
   }
 };
 
@@ -85,34 +78,40 @@ public:
     : Group(std::move(children)) {}
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     StateScope scope(action);
-    init_children(this, action);
+    Group::doAlloc(action);
   }
 
-  void doStaging(RenderAction * action) override
+  void doStage(RenderAction * action) override
   {
     StateScope scope(action);
-    stage_children(this, action);
+    Group::doStage(action);
+  }
+
+  void doRecord(RenderAction * action) override
+  {
+    StateScope scope(action);
+    Group::doRecord(action);
   }
 
   void doRender(RenderAction * action) override
   {
     StateScope scope(action);
-    render_children(this, action);
+    Group::doRender(action);
   }
 
   void doRender(BoundingBoxAction * action) override
   {
     StateScope scope(action);
-    render_children(this, action);
+    Group::doRender(action);
   }
 
   void doRender(HandleEventAction * action) override
   {
     StateScope scope(action);
-    render_children(this, action);
+    Group::doRender(action);
   }
 };
 
@@ -246,17 +245,17 @@ public:
   std::vector<T> values;
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     this->doAction(action);
   }
 
-  void doStaging(RenderAction * action) override
+  void doStage(RenderAction * action) override
   {
     this->doAction(action);
   }
 
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     this->doAction(action);
   }
@@ -294,17 +293,17 @@ public:
     : texture(texture) {}
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     this->doAction(action);
   }
 
-  void doStaging(RenderAction * action) override
+  void doStage(RenderAction * action) override
   {
     this->doAction(action);
   }
 
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     this->doAction(action);
   }
@@ -344,8 +343,7 @@ private:
       action->state.ProjMatrix
     };
 
-    this->bufferdata->staging(action);
-    this->bufferdata->render(action);
+    this->bufferdata->stage(action);
   }
 
   std::shared_ptr<BufferData<glm::mat4>> bufferdata;
@@ -362,7 +360,7 @@ public:
   {}
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     this->buffer_object = std::make_shared<BufferObject>(
       action->state.bufferdata.size,
@@ -374,7 +372,7 @@ private:
     action->bufferobjects.push_back(this->buffer_object);
   }
 
-  void doStaging(RenderAction * action) override
+  void doStage(RenderAction * action) override
   {
     action->state.bufferdata.offset = this->buffer_object->offset;
     action->state.bufferdata.buffer = this->buffer_object->buffer->buffer;
@@ -385,7 +383,7 @@ private:
       action->state.bufferdata.offset);
   }
 
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.bufferdata.buffer = this->buffer_object->buffer->buffer;
     action->state.bufferdata.offset = this->buffer_object->offset;
@@ -413,7 +411,7 @@ public:
   {}
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     this->buffer_object = std::make_shared<BufferObject>(
       action->state.bufferdata.size,
@@ -425,7 +423,7 @@ private:
     action->bufferobjects.push_back(this->buffer_object);
   }
 
-  void doStaging(RenderAction * action) override
+  void doStage(RenderAction * action) override
   {
     std::vector<VkBufferCopy> regions = { {
         action->state.bufferdata.offset,  // srcOffset
@@ -440,7 +438,7 @@ private:
       regions.data());
   }
 
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.bufferdata.buffer = this->buffer_object->buffer->buffer;
     action->state.bufferdata.offset = this->buffer_object->offset;
@@ -472,8 +470,7 @@ public:
 private:
   void doRender(RenderAction * action) override
   {
-    this->buffer->staging(action);
-    this->buffer->render(action);
+    this->buffer->stage(action);
   }
 
   std::shared_ptr<CpuMemoryBuffer> buffer;
@@ -490,7 +487,7 @@ public:
   {}
 
 private:
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.indices.push_back({
       this->type,                                             // type
@@ -509,7 +506,7 @@ public:
   virtual ~BufferDescription() = default;
 
 private:
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.buffer_descriptions.push_back({
       action->state.layout_binding,                     // layout
@@ -541,7 +538,7 @@ public:
   {}
 
 private:
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.attribute_descriptions.push_back({
       this->location,
@@ -577,7 +574,7 @@ public:
   {}
 
 private:
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.layout_binding = {
       this->binding,
@@ -603,14 +600,14 @@ public:
   {}
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     std::ifstream input(filename, std::ios::binary);
     std::vector<char> code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
     this->shader = std::make_unique<VulkanShaderModule>(action->device, code);
   }
 
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.shaders.push_back({
       this->stage,                                  // stage
@@ -630,7 +627,7 @@ public:
   virtual ~Sampler() = default;
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     this->sampler = std::make_unique<VulkanSampler>(
       action->device,
@@ -651,7 +648,7 @@ private:
       VK_FALSE);
   }
 
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.texture_description.sampler = this->sampler->sampler;
   }
@@ -666,7 +663,7 @@ public:
   virtual ~Image() = default;
 
 private:
-  void doInit(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
     gli::texture * texture = action->state.imagedata.texture;
 
@@ -700,7 +697,7 @@ private:
     action->state.imagedata.image = this->image->image;
   }
 
-  void doStaging(RenderAction * action) override
+  void doStage(RenderAction * action) override
   {
     VkComponentMapping component_mapping{
       VK_COMPONENT_SWIZZLE_R, // r
@@ -784,7 +781,7 @@ private:
     }
   }
 
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.imagedata.usage_flags = this->usage_flags;
     action->state.imagedata.memory_property_flags = this->memory_property_flags;
@@ -845,7 +842,7 @@ public:
     : cullmode(cullmode) {}
 
 private:
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.rasterizationstate.cullMode = this->cullmode;
   }
@@ -890,7 +887,7 @@ public:
   {}
 
 private:
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.compute_description = {
       this->group_count_x,
@@ -919,7 +916,7 @@ public:
   {}
 
 private:
-  void doRender(RenderAction * action) override
+  void doRecord(RenderAction * action) override
   {
     action->state.drawdescription = {
       this->count,
