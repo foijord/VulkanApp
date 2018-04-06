@@ -44,6 +44,11 @@ public:
       memory_offset));
   }
 
+  void memcpy(const void * data, VkDeviceSize size) const
+  {
+    this->memory->memcpy(data, size, this->offset);
+  }
+
   std::shared_ptr<VulkanBuffer> buffer;
 
   VkBufferCreateFlags flags;

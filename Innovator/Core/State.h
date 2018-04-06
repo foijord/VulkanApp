@@ -76,12 +76,22 @@ struct VulkanImageDataDescription {
   VkImage image{ nullptr };
 };
 
+class TransformState {
+public:
+  TransformState() :
+    ViewMatrix(glm::mat4(1)),
+    ProjMatrix(glm::mat4(1)),
+    ModelMatrix(glm::mat4(1))
+  {}
+
+  glm::mat4 ViewMatrix;
+  glm::mat4 ProjMatrix;
+  glm::mat4 ModelMatrix;
+};
+
 class State {
 public:
   State() : 
-    ViewMatrix(glm::mat4(1)),
-    ProjMatrix(glm::mat4(1)),
-    ModelMatrix(glm::mat4(1)),
     rasterizationstate(defaultRasterizationState())
   {}
 
@@ -97,10 +107,6 @@ public:
     return default_state;
   }
   
-  glm::mat4 ViewMatrix;
-  glm::mat4 ProjMatrix;
-  glm::mat4 ModelMatrix;
-
   VulkanLayoutBinding layout_binding;
   VulkanDrawDescription drawdescription;
   VulkanImageDataDescription imagedata;

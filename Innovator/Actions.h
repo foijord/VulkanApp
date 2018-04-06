@@ -22,6 +22,7 @@ public:
   virtual ~Action() = default;
 
   State state;
+  TransformState transform_state;
 };
 
 template <typename NodeType> 
@@ -318,9 +319,21 @@ inline DrawCommandObject::DrawCommandObject(RenderAction * action, State & state
 class StateScope {
 public:
   NO_COPY_OR_ASSIGNMENT(StateScope);
-  explicit StateScope(Action * action) : state(action->state), action(action) {}
-  ~StateScope() { action->state = state; }
+  
+  explicit StateScope(Action * action) : 
+    state(action->state), 
+    transform_state(action->transform_state),
+    action(action) 
+  {}
+
+  ~StateScope()
+  {
+    action->state = this->state;
+    action->transform_state = this->transform_state;
+  }
+
 private:
-  State state;
   Action * action;
+  State state;
+  TransformState transform_state;
 };

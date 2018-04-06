@@ -164,9 +164,9 @@ private:
   void doRender(RenderAction * action) override
   {
     this->aspectratio = action->viewport.width / action->viewport.height;
-    action->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
-    action->state.ViewMatrix = glm::translate(action->state.ViewMatrix, -this->position);
-    action->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
+    action->transform_state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
+    action->transform_state.ViewMatrix = glm::translate(action->transform_state.ViewMatrix, -this->position);
+    action->transform_state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
   }
 
   float farplane;
@@ -205,7 +205,7 @@ private:
     glm::mat4 matrix(1.0);
     matrix = glm::translate(matrix, this->translation);
     matrix = glm::scale(matrix, this->scaleFactor);
-    action->state.ModelMatrix *= matrix;
+    action->transform_state.ModelMatrix *= matrix;
   }
 
   glm::vec3 translation;
@@ -311,31 +311,6 @@ private:
   gli::texture texture;
 };
 
-class TransformBufferData : public Group {
-public:
-  NO_COPY_OR_ASSIGNMENT(TransformBufferData);
-  virtual ~TransformBufferData() = default;
-
-  TransformBufferData() : 
-    bufferdata(std::make_shared<BufferData<glm::mat4>>(2))
-  {
-    this->children = { this->bufferdata };
-  }
-
-private:
-  void doRender(RenderAction * action) override
-  {
-    this->bufferdata->values = {
-      action->state.ViewMatrix * action->state.ModelMatrix,
-      action->state.ProjMatrix
-    };
-
-    this->bufferdata->stage(action);
-  }
-
-  std::shared_ptr<BufferData<glm::mat4>> bufferdata;
-};
-
 class CpuMemoryBuffer : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(CpuMemoryBuffer);
@@ -416,7 +391,7 @@ private:
         action->state.bufferdata.offset,  // srcOffset
         this->buffer_object->offset,      // dstOffset
         action->state.bufferdata.size,    // size
-      } };
+    } };
 
     vkCmdCopyBuffer(action->command->buffer(),
       action->state.bufferdata.buffer,
@@ -442,24 +417,35 @@ private:
   std::shared_ptr<BufferObject> buffer_object{ nullptr };
 };
 
-class DynamicMemoryBuffer : public Group {
+class TransformBuffer : public Group {
 public:
-  NO_COPY_OR_ASSIGNMENT(DynamicMemoryBuffer);
-  DynamicMemoryBuffer() = delete;
-  virtual ~DynamicMemoryBuffer() = default;
+  NO_COPY_OR_ASSIGNMENT(TransformBuffer);
+  TransformBuffer() = delete;
+  virtual ~TransformBuffer() = default;
 
-  explicit DynamicMemoryBuffer(VkBufferUsageFlags buffer_usage_flags) : 
+  explicit TransformBuffer(VkBufferUsageFlags buffer_usage_flags) :
+    bufferdata(std::make_shared<BufferData<glm::mat4>>(2)),
     buffer(std::make_unique<CpuMemoryBuffer>(buffer_usage_flags))
   {
-    this->children = { this->buffer };
+    this->children = { 
+      this->bufferdata,
+      this->buffer 
+    };
   }
 
 private:
   void doRender(RenderAction * action) override
   {
+    this->bufferdata->values = {
+      action->transform_state.ViewMatrix * action->transform_state.ModelMatrix,
+      action->transform_state.ProjMatrix
+    };
+
+    this->bufferdata->stage(action);
     this->buffer->stage(action);
   }
 
+  std::shared_ptr<BufferData<glm::mat4>> bufferdata;
   std::shared_ptr<CpuMemoryBuffer> buffer;
 };
 
@@ -851,7 +837,7 @@ private:
   void doRender(BoundingBoxAction * action) override
   {
     box3 box(this->min, this->max);
-    box.transform(action->state.ModelMatrix);
+    box.transform(action->transform_state.ModelMatrix);
     action->extendBy(box);
   }
 
@@ -1002,8 +988,7 @@ public:
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<VertexAttributeLayout>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
-      std::make_shared<TransformBufferData>(),
-      std::make_shared<DynamicMemoryBuffer>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT),
+      std::make_shared<TransformBuffer>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT),
       std::make_shared<LayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
       std::make_shared<BufferDescription>(),
       std::make_shared<BoundingBox>(glm::vec3(0), glm::vec3(1)),
