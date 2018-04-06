@@ -24,20 +24,6 @@ public:
   State state;
 };
 
-class HandleEventAction : public Action {
-public:
-  NO_COPY_OR_ASSIGNMENT(HandleEventAction);
-  HandleEventAction() = default;
-  virtual ~HandleEventAction() = default;
-
-  void apply(const std::shared_ptr<Node> & root)
-  {
-    root->render(this);
-  }
-
-  std::string key;
-};
-
 template <typename NodeType> 
 static std::shared_ptr<NodeType> 
 SearchAction(const std::shared_ptr<Node> & root) {

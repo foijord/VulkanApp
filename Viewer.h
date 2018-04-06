@@ -122,7 +122,6 @@ public:
     if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
     }
-    this->handleeventaction = std::make_unique<HandleEventAction>();
 
     this->depth_format = VK_FORMAT_D32_SFLOAT;
     this->color_format = this->surface_format.format;
@@ -525,13 +524,10 @@ public:
 
   void keyPressEvent(QKeyEvent * e) override
   {
-    //this->handleeventaction->key = e->key();
-    this->handleeventaction->apply(this->root);
   }
 
   void keyReleaseEvent(QKeyEvent * e) override
   {
-    
   }
 
   void mousePressEvent(QMouseEvent * e) override
@@ -578,7 +574,6 @@ public:
   std::unique_ptr<ImageObject> depth_buffer_object;
   std::unique_ptr<VulkanImageView> depth_buffer_view;
   std::unique_ptr<RenderAction> renderaction;
-  std::unique_ptr<HandleEventAction> handleeventaction;
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::shared_ptr<Separator> root;
   std::shared_ptr<Camera> camera;

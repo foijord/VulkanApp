@@ -59,13 +59,6 @@ protected:
       node->render(action);
     }
   }
-
-  void doRender(HandleEventAction * action) override
-  {
-    for (const auto& node : this->children) {
-      node->render(action);
-    }
-  }
 };
 
 class Separator : public Group {
@@ -103,12 +96,6 @@ private:
   }
 
   void doRender(BoundingBoxAction * action) override
-  {
-    StateScope scope(action);
-    Group::doRender(action);
-  }
-
-  void doRender(HandleEventAction * action) override
   {
     StateScope scope(action);
     Group::doRender(action);
