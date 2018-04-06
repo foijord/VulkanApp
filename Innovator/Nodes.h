@@ -2,6 +2,7 @@
 
 #include <Innovator/Core/Node.h>
 #include <Innovator/Actions.h>
+#include <Innovator/Core/Math/Box.h>
 
 #include <gli/load.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -46,17 +47,10 @@ protected:
     }
   }
 
-  void doRender(RenderAction * action) override
+  void doRender(RenderState & state) override
   {
     for (const auto& node : this->children) {
-      node->render(action);
-    }
-  }
-
-  void doRender(BoundingBoxAction * action) override
-  {
-    for (const auto& node : this->children) {
-      node->render(action);
+      node->render(state);
     }
   }
 };
@@ -89,16 +83,11 @@ private:
     Group::doRecord(action);
   }
 
-  void doRender(RenderAction * action) override
+  void doRender(RenderState & state) override
   {
-    StateScope scope(action);
-    Group::doRender(action);
-  }
-
-  void doRender(BoundingBoxAction * action) override
-  {
-    StateScope scope(action);
-    Group::doRender(action);
+    RenderState s = state;
+    Group::doRender(state);
+    state = s;
   }
 };
 
@@ -149,24 +138,22 @@ public:
     this->focaldistance = glm::length(this->position - focalpoint);
   }
 
-  void viewAll(const std::shared_ptr<Separator> & root)
+  void view(const box3 & box)
   {
-    BoundingBoxAction action;
-    root->render(&action);
-    const auto focalpoint = action.bounding_box.center();
-    this->focaldistance = glm::length(action.bounding_box.span());
+    const auto focalpoint = box.center();
+    this->focaldistance = glm::length(box.span());
 
     this->position = focalpoint + this->orientation[2] * this->focaldistance;
     this->lookAt(focalpoint);
   }
 
 private:
-  void doRender(RenderAction * action) override
+  void doRender(RenderState & state) override
   {
-    this->aspectratio = action->viewport.width / action->viewport.height;
-    action->transform_state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
-    action->transform_state.ViewMatrix = glm::translate(action->transform_state.ViewMatrix, -this->position);
-    action->transform_state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
+    this->aspectratio = state.viewport.width / state.viewport.height;
+    state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
+    state.ViewMatrix = glm::translate(state.ViewMatrix, -this->position);
+    state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
   }
 
   float farplane;
@@ -190,22 +177,17 @@ public:
       scaleFactor(scalefactor) {}
 
 private:
-  void doRender(BoundingBoxAction * action) override
+  void doRender(RenderState & state) override
   {
-    this->doActions(action);
+    this->doActions(state);
   }
 
-  void doRender(RenderAction * action) override
-  {
-    this->doActions(action);
-  }
-
-  void doActions(Action * action) const
+  void doActions(RenderState & state) const
   {
     glm::mat4 matrix(1.0);
     matrix = glm::translate(matrix, this->translation);
     matrix = glm::scale(matrix, this->scaleFactor);
-    action->transform_state.ModelMatrix *= matrix;
+    state.ModelMatrix *= matrix;
   }
 
   glm::vec3 translation;
@@ -324,42 +306,36 @@ public:
 private:
   void doAlloc(RenderAction * action) override
   {
-    this->buffer_object = std::make_shared<BufferObject>(
+    this->buffer = std::make_shared<BufferObject>(
       action->state.bufferdata.size,
-      this->buffer_create_flags,
+      0,
       this->buffer_usage_flags,
-      this->sharing_mode,
-      this->memory_property_flags);
+      VK_SHARING_MODE_EXCLUSIVE,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    action->bufferobjects.push_back(this->buffer_object);
+    action->bufferobjects.push_back(this->buffer);
   }
 
   void doStage(RenderAction * action) override
   {
-    action->state.bufferdata.offset = this->buffer_object->offset;
-    action->state.bufferdata.buffer = this->buffer_object->buffer->buffer;
+    action->state.bufferdata.offset = this->buffer->offset;
+    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
 
-    this->buffer_object->memory->memcpy(
-      action->state.bufferdata.data,
-      action->state.bufferdata.size,
-      action->state.bufferdata.offset);
+    this->buffer->memcpy(action->state.bufferdata.data);
   }
 
   void doRecord(RenderAction * action) override
   {
-    action->state.bufferdata.buffer = this->buffer_object->buffer->buffer;
-    action->state.bufferdata.offset = this->buffer_object->offset;
-    action->state.bufferdata.usage_flags = this->buffer_usage_flags;
-    action->state.bufferdata.memory_property_flags = this->memory_property_flags;
+    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    action->state.bufferdata.offset = this->buffer->offset;
+    action->state.bufferdata.usage_flags = this->buffer->usage;
+    action->state.bufferdata.memory_property_flags = this->buffer->memory_property_flags;
 
     action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
   }
 
   VkBufferUsageFlags buffer_usage_flags;
-  VkBufferCreateFlags buffer_create_flags{ 0 };
-  VkSharingMode sharing_mode{ VK_SHARING_MODE_EXCLUSIVE };
-  VkMemoryPropertyFlags memory_property_flags{ VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT };
-  std::shared_ptr<BufferObject> buffer_object{ nullptr };
+  std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
 class GpuMemoryBuffer : public Node {
@@ -375,78 +351,85 @@ public:
 private:
   void doAlloc(RenderAction * action) override
   {
-    this->buffer_object = std::make_shared<BufferObject>(
+    this->buffer = std::make_shared<BufferObject>(
       action->state.bufferdata.size,
-      this->buffer_create_flags,
+      0,
       this->buffer_usage_flags,
-      this->sharing_mode,
-      this->memory_property_flags);
+      VK_SHARING_MODE_EXCLUSIVE,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    action->bufferobjects.push_back(this->buffer_object);
+    action->bufferobjects.push_back(this->buffer);
   }
 
   void doStage(RenderAction * action) override
   {
     std::vector<VkBufferCopy> regions = { {
         action->state.bufferdata.offset,  // srcOffset
-        this->buffer_object->offset,      // dstOffset
+        this->buffer->offset,             // dstOffset
         action->state.bufferdata.size,    // size
     } };
 
     vkCmdCopyBuffer(action->command->buffer(),
-      action->state.bufferdata.buffer,
-      this->buffer_object->buffer->buffer,
-      static_cast<uint32_t>(regions.size()),
-      regions.data());
+                    action->state.bufferdata.buffer,
+                    this->buffer->buffer->buffer,
+                    static_cast<uint32_t>(regions.size()),
+                    regions.data());
   }
 
   void doRecord(RenderAction * action) override
   {
-    action->state.bufferdata.buffer = this->buffer_object->buffer->buffer;
-    action->state.bufferdata.offset = this->buffer_object->offset;
-    action->state.bufferdata.usage_flags = this->buffer_usage_flags;
-    action->state.bufferdata.memory_property_flags = this->memory_property_flags;
+    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    action->state.bufferdata.offset = this->buffer->offset;
+    action->state.bufferdata.usage_flags = this->buffer->usage;
+    action->state.bufferdata.memory_property_flags = this->buffer->memory_property_flags;
 
     action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
   }
 
   VkBufferUsageFlags buffer_usage_flags{ 0 };
-  VkBufferCreateFlags buffer_create_flags{ 0 };
-  VkSharingMode sharing_mode{ VK_SHARING_MODE_EXCLUSIVE };
-  VkMemoryPropertyFlags memory_property_flags{ VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
-  std::shared_ptr<BufferObject> buffer_object{ nullptr };
+  std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
 class TransformBuffer : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(TransformBuffer);
-  TransformBuffer() = delete;
+  TransformBuffer() = default;
   virtual ~TransformBuffer() = default;
 
-  explicit TransformBuffer(VkBufferUsageFlags buffer_usage_flags) :
-    bufferdata(std::make_shared<BufferData<glm::mat4>>(2)),
-    buffer(std::make_unique<CpuMemoryBuffer>(buffer_usage_flags))
-  {
-    this->children = { 
-      this->bufferdata,
-      this->buffer 
-    };
-  }
-
 private:
-  void doRender(RenderAction * action) override
+  void doAlloc(RenderAction * action) override
   {
-    this->bufferdata->values = {
-      action->transform_state.ViewMatrix * action->transform_state.ModelMatrix,
-      action->transform_state.ProjMatrix
-    };
+    this->buffer = std::make_shared<BufferObject>(
+      sizeof(glm::mat4) * 2,
+      0,
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+      VK_SHARING_MODE_EXCLUSIVE,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    this->bufferdata->stage(action);
-    this->buffer->stage(action);
+    action->bufferobjects.push_back(this->buffer);
   }
 
-  std::shared_ptr<BufferData<glm::mat4>> bufferdata;
-  std::shared_ptr<CpuMemoryBuffer> buffer;
+  void doRecord(RenderAction * action) override
+  {
+    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    action->state.bufferdata.offset = this->buffer->offset;
+    action->state.bufferdata.usage_flags = this->buffer->usage;
+    action->state.bufferdata.memory_property_flags = this->buffer->memory_property_flags;
+
+    action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
+  }
+
+  void doRender(RenderState & state) override
+  {
+    glm::mat4 data[2] = {
+      state.ViewMatrix * state.ModelMatrix,
+      state.ProjMatrix
+    };
+
+    this->buffer->memcpy(data);
+  }
+
+  std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
 class IndexBufferDescription : public Node {
@@ -823,28 +806,6 @@ private:
   VkCullModeFlags cullmode;
 };
 
-class BoundingBox : public Node {
-public:
-  NO_COPY_OR_ASSIGNMENT(BoundingBox);
-  BoundingBox() = delete;
-  virtual ~BoundingBox() = default;
-
-  explicit BoundingBox(glm::vec3 min, glm::vec3 max) : 
-    min(min), max(max)
-  {}
-
-private:
-  void doRender(BoundingBoxAction * action) override
-  {
-    box3 box(this->min, this->max);
-    box.transform(action->transform_state.ModelMatrix);
-    action->extendBy(box);
-  }
-
-  glm::vec3 min;
-  glm::vec3 max;
-};
-
 class ComputeCommand : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(ComputeCommand);
@@ -988,10 +949,9 @@ public:
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<VertexAttributeLayout>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
-      std::make_shared<TransformBuffer>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT),
+      std::make_shared<TransformBuffer>(),
       std::make_shared<LayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
       std::make_shared<BufferDescription>(),
-      std::make_shared<BoundingBox>(glm::vec3(0), glm::vec3(1)),
       std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
     };
   }

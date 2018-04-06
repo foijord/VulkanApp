@@ -195,7 +195,8 @@ public:
     if (!this->camera) {
       this->camera = std::make_shared<Camera>();
       this->root->children = { this->camera, scene };
-      this->camera->viewAll(this->root);
+
+      this->camera->view(box3(glm::vec3(0), glm::vec3(1)));
     }
     else {
       this->root->children = { scene };

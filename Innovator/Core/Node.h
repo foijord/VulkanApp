@@ -24,27 +24,16 @@ public:
     this->doRecord(action);
   }
 
-  void render(class RenderAction * action)
+  void render(class RenderState & state)
   {
-    this->doRender(action);
-  }
-
-  void render(class BoundingBoxAction * action) 
-  {
-    this->doRender(action);
-  }
-
-  void render(class HandleEventAction * action) 
-  {
-    this->doRender(action);
+    this->doRender(state);
   }
 
 private:
   virtual void doAlloc(class RenderAction *) {}
   virtual void doStage(class RenderAction *) {}
   virtual void doRecord(class RenderAction *) {}
-  virtual void doRender(class RenderAction *) {}
-  virtual void doRender(class BoundingBoxAction *) {}
+  virtual void doRender(class RenderState &) {}
   virtual void doRender(class HandleEventAction *) {}
 };
 

@@ -76,14 +76,15 @@ struct VulkanImageDataDescription {
   VkImage image{ nullptr };
 };
 
-class TransformState {
+class RenderState {
 public:
-  TransformState() :
+  RenderState() :
     ViewMatrix(glm::mat4(1)),
     ProjMatrix(glm::mat4(1)),
     ModelMatrix(glm::mat4(1))
   {}
 
+  VkViewport viewport;
   glm::mat4 ViewMatrix;
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;

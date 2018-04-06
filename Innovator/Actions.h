@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Innovator/Core/Misc/Defines.h>
-#include <Innovator/Core/Math/Box.h>
 #include <Innovator/Core/Node.h>
 #include <Innovator/Core/State.h>
 #include <Innovator/Core/VulkanObjects.h>
@@ -11,7 +10,6 @@
 #include <memory>
 #include <utility>
 #include <vector>
-#include <string>
 #include <fstream>
 #include <iostream>
 
@@ -22,7 +20,6 @@ public:
   virtual ~Action() = default;
 
   State state;
-  TransformState transform_state;
 };
 
 template <typename NodeType> 
@@ -39,25 +36,6 @@ SearchAction(const std::shared_ptr<Node> & root) {
   }
   return std::shared_ptr<NodeType>();
 }
-
-class BoundingBoxAction : public Action {
-public:
-  NO_COPY_OR_ASSIGNMENT(BoundingBoxAction);
-  BoundingBoxAction() = default;
-  virtual ~BoundingBoxAction() = default;
-
-  void apply(const std::shared_ptr<Node> & root)
-  {
-    root->render(this);
-  }
-
-  void extendBy(const box3 & box)
-  {
-    this->bounding_box.extendBy(box);
-  }
-
-  box3 bounding_box;
-};
 
 class RenderAction : public Action {
 public:
@@ -214,14 +192,13 @@ public:
 
   void render(const std::shared_ptr<Node> & root)
   {
-    root->render(this);
+    RenderState state;
+    state.viewport = this->viewport;
+    root->render(state);
 
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
     THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
     this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, {}, this->fence->fence);
-
-    this->graphic_states.clear();
-    this->compute_states.clear();
   }
 
   void clearCache()
@@ -322,18 +299,15 @@ public:
   
   explicit StateScope(Action * action) : 
     state(action->state), 
-    transform_state(action->transform_state),
     action(action) 
   {}
 
   ~StateScope()
   {
     action->state = this->state;
-    action->transform_state = this->transform_state;
   }
 
 private:
   Action * action;
   State state;
-  TransformState transform_state;
 };

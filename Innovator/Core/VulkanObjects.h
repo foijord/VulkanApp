@@ -44,9 +44,9 @@ public:
       memory_offset));
   }
 
-  void memcpy(const void * data, VkDeviceSize size) const
+  void memcpy(const void * data) const
   {
-    this->memory->memcpy(data, size, this->offset);
+    this->memory->memcpy(data, this->size, this->offset);
   }
 
   std::shared_ptr<VulkanBuffer> buffer;
