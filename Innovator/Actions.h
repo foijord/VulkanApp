@@ -4,7 +4,6 @@
 #include <Innovator/Core/Node.h>
 #include <Innovator/Core/State.h>
 #include <Innovator/Core/VulkanObjects.h>
-#include <Innovator/Commands.h>
 
 #include <map>
 #include <memory>
@@ -30,7 +29,7 @@ SearchAction(const std::shared_ptr<Node> & root) {
 
 class MemoryAllocator {
 public:
-  NO_COPY_OR_ASSIGNMENT(MemoryAllocator);
+  NO_COPY_OR_ASSIGNMENT(MemoryAllocator)
   MemoryAllocator() = delete;
   ~MemoryAllocator() = default;
 
@@ -83,7 +82,7 @@ public:
 
 class MemoryStager {
 public:
-  NO_COPY_OR_ASSIGNMENT(MemoryStager);
+  NO_COPY_OR_ASSIGNMENT(MemoryStager)
   MemoryStager() = delete;
 
   explicit MemoryStager(std::shared_ptr<VulkanDevice> device,
@@ -129,24 +128,23 @@ public:
 
 class SceneRenderer {
 public:
-  NO_COPY_OR_ASSIGNMENT(SceneRenderer);
+  NO_COPY_OR_ASSIGNMENT(SceneRenderer)
   SceneRenderer() = delete;
   ~SceneRenderer() = default;
 
   explicit SceneRenderer(VkViewport viewport,
                          const std::shared_ptr<Node> & root) :
-    viewport(viewport)
+    state(viewport)
   {
     root->render(this);
   }
 
   RenderState state;
-  VkViewport viewport;
 };
 
 class SceneManager {
 public:
-  NO_COPY_OR_ASSIGNMENT(SceneManager);
+  NO_COPY_OR_ASSIGNMENT(SceneManager)
   SceneManager() = delete;
 
   explicit SceneManager(std::shared_ptr<VulkanDevice> device,
@@ -206,21 +204,7 @@ public:
   {
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
 
-    root->record(this);
-
     this->command->begin();
-
-    for (auto & state : this->compute_states) {
-      this->compute_commands.push_back(std::make_unique<ComputeCommandObject>(this, state));
-    }
-
-    for (const auto & compute_command : this->compute_commands) {
-      VulkanCommandBuffers * command = compute_command->command.get();
-
-      vkCmdExecuteCommands(this->command->buffer(), 
-                           static_cast<uint32_t>(command->buffers.size()), 
-                           command->buffers.data());
-    }
 
     VkRenderPassBeginInfo begin_info{
       VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
@@ -232,23 +216,20 @@ public:
       this->clearvalues.data()                         // pClearValues
     };
 
-    vkCmdBeginRenderPass(this->command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+    vkCmdBeginRenderPass(this->command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
-    for (auto & state : this->graphic_states) {
-      this->draw_commands.push_back(std::make_unique<DrawCommandObject>(this, state));
-    }
-
-    for (const auto & draw_command : this->draw_commands) {
-      VulkanCommandBuffers * command = draw_command->command.get();
-
-      vkCmdExecuteCommands(this->command->buffer(), 
-                           static_cast<uint32_t>(command->buffers.size()), 
-                           command->buffers.data());
-    }
+    root->record(this);
 
     vkCmdEndRenderPass(this->command->buffer());
-    this->command->end();
 
+    this->command->end();
+  }
+
+  void submit(const std::shared_ptr<Node> & root)
+  {
+    SceneRenderer renderer(this->viewport, root);
+
+    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
     THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
 
     this->command->submit(this->device->default_queue, 
@@ -256,25 +237,6 @@ public:
                           {}, 
                           {}, 
                           this->fence->fence);
-
-    this->graphic_states.clear();
-    this->compute_states.clear();
-  }
-
-  void render(const std::shared_ptr<Node> & root)
-  {
-    SceneRenderer renderer(this->viewport, root);
-
-    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
-    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
-    this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, {}, this->fence->fence);
-  }
-
-  void clearCache()
-  {
-    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
-    this->draw_commands.clear();
-    this->compute_commands.clear();
   }
 
   State state;
@@ -291,72 +253,7 @@ public:
 
   std::vector<VkClearValue> clearvalues;
 
-  std::vector<State> graphic_states;
-  std::vector<State> compute_states;
-
-  std::vector<std::unique_ptr<DrawCommandObject>> draw_commands;
-  std::vector<std::unique_ptr<ComputeCommandObject>> compute_commands;
-
   std::shared_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<VulkanPipelineCache> pipelinecache;
 };
-
-inline ComputeCommandObject::ComputeCommandObject(SceneManager * action, State & state)
-{
-  this->pipeline = std::make_unique<ComputePipelineObject>(
-    action->device,
-    state.shaders[0],
-    state.buffer_descriptions,
-    state.textures,
-    action->pipelinecache);
-
-  this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-  this->command->begin();
-
-  this->pipeline->bind(this->command->buffer());
-
-  vkCmdDispatch(this->command->buffer(),
-    state.compute_description.group_count_x,
-    state.compute_description.group_count_y,
-    state.compute_description.group_count_z);
-
-  this->command->end();
-}
-
-inline DrawCommandObject::DrawCommandObject(SceneManager * action, State & state)
-{
-  this->pipeline = std::make_unique<GraphicsPipelineObject>(
-    action->device,
-    state.attribute_descriptions,
-    state.shaders,
-    state.buffer_descriptions,
-    state.textures,
-    state.rasterizationstate,
-    action->renderpass,
-    action->pipelinecache,
-    state.drawdescription);
-
-  this->command = std::make_unique<VulkanCommandBuffers>(action->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-  this->command->begin(0, action->renderpass->renderpass, 0, action->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
-
-  this->pipeline->bind(this->command->buffer());
-
-  for (const auto& attribute : state.attribute_descriptions) {
-    VkDeviceSize offsets[1] = { 0 };
-    vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
-  }
-  vkCmdSetViewport(this->command->buffer(), 0, 1, &action->viewport);
-  vkCmdSetScissor(this->command->buffer(), 0, 1, &action->scissor);
-
-  if (!state.indices.empty()) {
-    for (const auto& indexbuffer : state.indices) {
-      vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
-      vkCmdDrawIndexed(this->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
-    }
-  }
-  else {
-    vkCmdDraw(this->command->buffer(), state.drawdescription.count, 1, 0, 0);
-  }
-  this->command->end();
-}

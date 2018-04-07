@@ -6,7 +6,7 @@
   Class(Class&&) = delete;                              \
   Class(const Class&) = delete;                         \
   Class & operator=(Class&&) = delete;                  \
-  Class & operator=(const Class&) = delete              \
+  Class & operator=(const Class&) = delete;             \
 
 class VkException : public std::exception {};
 class VkTimeoutException : public VkException {};

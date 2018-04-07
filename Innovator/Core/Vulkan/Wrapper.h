@@ -150,7 +150,7 @@ public:
 
 class VulkanInstanceBase {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanInstanceBase);
+  NO_COPY_OR_ASSIGNMENT(VulkanInstanceBase)
 
   explicit VulkanInstanceBase(const VkApplicationInfo & application_info,
                               const std::vector<const char *> & required_layers,
@@ -204,7 +204,7 @@ public:
 
 class VulkanInstance : public VulkanInstanceBase {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanInstance);
+  NO_COPY_OR_ASSIGNMENT(VulkanInstance)
   ~VulkanInstance() = default;
 
   explicit VulkanInstance(const VkApplicationInfo & application_info,
@@ -274,7 +274,7 @@ public:
 
 class VulkanLogicalDevice {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanLogicalDevice);
+  NO_COPY_OR_ASSIGNMENT(VulkanLogicalDevice)
 
   VulkanLogicalDevice(const VulkanPhysicalDevice & physical_device,
                       const VkPhysicalDeviceFeatures & enabled_features,
@@ -326,7 +326,7 @@ class VulkanDevice;
 
 class VulkanMemory {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanMemory);
+  NO_COPY_OR_ASSIGNMENT(VulkanMemory)
 
   explicit VulkanMemory(std::shared_ptr<VulkanDevice> device,
                         VkDeviceSize size,
@@ -344,7 +344,7 @@ public:
 
 class VulkanDevice : public VulkanLogicalDevice {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanDevice);
+  NO_COPY_OR_ASSIGNMENT(VulkanDevice)
 
   VulkanDevice(const VulkanPhysicalDevice& physical_device,
                const VkPhysicalDeviceFeatures& enabled_features,
@@ -388,7 +388,7 @@ VulkanDevice::~VulkanDevice()
 
 class VulkanDebugCallback {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanDebugCallback);
+  NO_COPY_OR_ASSIGNMENT(VulkanDebugCallback)
 
   explicit VulkanDebugCallback(std::shared_ptr<VulkanInstance> vulkan,
                                VkDebugReportFlagsEXT flags,
@@ -418,7 +418,7 @@ public:
 
 class VulkanSemaphore {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanSemaphore);
+  NO_COPY_OR_ASSIGNMENT(VulkanSemaphore)
 
   explicit VulkanSemaphore(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device))
@@ -442,7 +442,7 @@ public:
 
 class VulkanSwapchain {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanSwapchain);
+  NO_COPY_OR_ASSIGNMENT(VulkanSwapchain)
 
   VulkanSwapchain(std::shared_ptr<VulkanDevice> device,
                   std::shared_ptr<VulkanInstance> vulkan,
@@ -520,7 +520,7 @@ public:
 
 class VulkanDescriptorPool {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorPool);
+  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorPool)
 
   explicit VulkanDescriptorPool(std::shared_ptr<VulkanDevice> device, 
                                 std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
@@ -549,7 +549,7 @@ public:
 
 class VulkanDescriptorSetLayout {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSetLayout);
+  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSetLayout)
 
   VulkanDescriptorSetLayout(std::shared_ptr<VulkanDevice> device, 
                             std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings)
@@ -577,7 +577,7 @@ public:
 
 class VulkanDescriptorSets {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSets);
+  NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSets)
 
   VulkanDescriptorSets(std::shared_ptr<VulkanDevice> device,
                        std::shared_ptr<VulkanDescriptorPool> pool,
@@ -626,7 +626,7 @@ public:
 
 class VulkanFence {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanFence);
+  NO_COPY_OR_ASSIGNMENT(VulkanFence)
 
   explicit VulkanFence(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device))
@@ -651,7 +651,7 @@ public:
 
 class VulkanCommandBuffers {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanCommandBuffers);
+  NO_COPY_OR_ASSIGNMENT(VulkanCommandBuffers)
 
   explicit VulkanCommandBuffers(std::shared_ptr<VulkanDevice> device, 
                                 size_t count = 1,
@@ -758,7 +758,7 @@ public:
 
 class VulkanImage {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanImage);
+  NO_COPY_OR_ASSIGNMENT(VulkanImage)
 
   VulkanImage(std::shared_ptr<VulkanDevice> device, 
               VkImageCreateFlags flags,
@@ -807,7 +807,7 @@ public:
 
 class VulkanBuffer {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanBuffer);
+  NO_COPY_OR_ASSIGNMENT(VulkanBuffer)
 
   VulkanBuffer(std::shared_ptr<VulkanDevice> device,
                VkBufferCreateFlags flags, 
@@ -878,7 +878,7 @@ VulkanMemory::unmap() const
 
 class MemoryCopy {
 public:
-  NO_COPY_OR_ASSIGNMENT(MemoryCopy);
+  NO_COPY_OR_ASSIGNMENT(MemoryCopy)
 
   MemoryCopy(VulkanMemory * memory, const void * src, VkDeviceSize size, VkDeviceSize offset)
     : memory(memory)
@@ -899,7 +899,7 @@ VulkanMemory::memcpy(const void* src, VkDeviceSize size, VkDeviceSize offset)
 
 class VulkanImageView {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanImageView);
+  NO_COPY_OR_ASSIGNMENT(VulkanImageView)
 
   VulkanImageView(std::shared_ptr<VulkanImage> image,
                   VkFormat format,
@@ -933,7 +933,7 @@ public:
 
 class VulkanSampler {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanSampler);
+  NO_COPY_OR_ASSIGNMENT(VulkanSampler)
 
   VulkanSampler(std::shared_ptr<VulkanDevice> device, 
                 VkFilter magFilter,
@@ -988,7 +988,7 @@ public:
 
 class VulkanShaderModule {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanShaderModule);
+  NO_COPY_OR_ASSIGNMENT(VulkanShaderModule)
 
   VulkanShaderModule(std::shared_ptr<VulkanDevice> device,
                      const std::vector<char> & code)
@@ -1017,7 +1017,7 @@ public:
 
 class VulkanPipelineCache {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanPipelineCache);
+  NO_COPY_OR_ASSIGNMENT(VulkanPipelineCache)
 
   explicit VulkanPipelineCache(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device))
@@ -1044,7 +1044,7 @@ public:
 
 class VulkanRenderpass {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanRenderpass);
+  NO_COPY_OR_ASSIGNMENT(VulkanRenderpass)
 
   VulkanRenderpass(std::shared_ptr<VulkanDevice> device,
                    const std::vector<VkAttachmentDescription> & attachments,
@@ -1079,7 +1079,7 @@ public:
 
 class VulkanFramebuffer {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanFramebuffer);
+  NO_COPY_OR_ASSIGNMENT(VulkanFramebuffer)
 
   VulkanFramebuffer(std::shared_ptr<VulkanDevice> device,
                     const std::shared_ptr<VulkanRenderpass> & renderpass,
@@ -1114,7 +1114,7 @@ public:
 
 class VulkanPipelineLayout {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanPipelineLayout);
+  NO_COPY_OR_ASSIGNMENT(VulkanPipelineLayout)
 
   VulkanPipelineLayout(std::shared_ptr<VulkanDevice> device, 
                        const std::vector<VkDescriptorSetLayout> & setlayouts,
@@ -1145,7 +1145,7 @@ public:
 
 class VulkanComputePipeline {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanComputePipeline);
+  NO_COPY_OR_ASSIGNMENT(VulkanComputePipeline)
 
   VulkanComputePipeline(std::shared_ptr<VulkanDevice> device,
                         VkPipelineCache pipelineCache,
@@ -1185,7 +1185,7 @@ public:
 
 class VulkanGraphicsPipeline {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanGraphicsPipeline);
+  NO_COPY_OR_ASSIGNMENT(VulkanGraphicsPipeline)
 
   VulkanGraphicsPipeline(std::shared_ptr<VulkanDevice> device, 
                          VkRenderPass render_pass,
@@ -1257,7 +1257,7 @@ public:
       nullptr,                                               // pScissors
     };
 
-    VkStencilOpState stencil_op_state{
+    const VkStencilOpState stencil_op_state{
       VK_STENCIL_OP_KEEP,   // failOp
       VK_STENCIL_OP_KEEP,   // passOp
       VK_STENCIL_OP_KEEP,   // depthFailOp

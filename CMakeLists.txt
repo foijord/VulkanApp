@@ -22,7 +22,6 @@ add_executable(${TARGET_NAME}
   Viewer.h
   Innovator/Nodes.h
   Innovator/Actions.h
-  Innovator/Commands.h
   Innovator/Core/Node.h
   Innovator/Core/File.h
   Innovator/Core/State.h

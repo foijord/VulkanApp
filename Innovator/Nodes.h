@@ -16,7 +16,7 @@
 
 class Group : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Group);
+  NO_COPY_OR_ASSIGNMENT(Group)
   Group() = default;
   virtual ~Group() = default;
 
@@ -57,7 +57,7 @@ protected:
 
 class Separator : public Group {
 public:
-  NO_COPY_OR_ASSIGNMENT(Separator);
+  NO_COPY_OR_ASSIGNMENT(Separator)
   Separator() = default;
   virtual ~Separator() = default;
 
@@ -96,7 +96,7 @@ private:
 
 class Camera : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Camera);
+  NO_COPY_OR_ASSIGNMENT(Camera)
   virtual ~Camera() = default;
   explicit Camera()
     : farplane(1000.0f),
@@ -153,7 +153,7 @@ public:
 private:
   void doRender(SceneRenderer * renderer) override
   {
-    this->aspectratio = renderer->viewport.width / renderer->viewport.height;
+    this->aspectratio = renderer->state.viewport.width / renderer->state.viewport.height;
     renderer->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
     renderer->state.ViewMatrix = glm::translate(renderer->state.ViewMatrix, -this->position);
     renderer->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
@@ -170,7 +170,7 @@ private:
 
 class Transform : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Transform);
+  NO_COPY_OR_ASSIGNMENT(Transform)
   Transform() = default;
   virtual ~Transform() = default;
 
@@ -195,7 +195,7 @@ private:
 template <typename T>
 class BufferData : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(BufferData);
+  NO_COPY_OR_ASSIGNMENT(BufferData)
   BufferData() = default;
   virtual ~BufferData() = default;
 
@@ -249,7 +249,7 @@ private:
 
 class ImageData : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(ImageData);
+  NO_COPY_OR_ASSIGNMENT(ImageData)
   ImageData() = delete;
   virtual ~ImageData() = default;
 
@@ -309,7 +309,7 @@ private:
 
 class CpuMemoryBuffer : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(CpuMemoryBuffer);
+  NO_COPY_OR_ASSIGNMENT(CpuMemoryBuffer)
   CpuMemoryBuffer() = delete;
   virtual ~CpuMemoryBuffer() = default;
 
@@ -354,7 +354,7 @@ private:
 
 class GpuMemoryBuffer : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(GpuMemoryBuffer);
+  NO_COPY_OR_ASSIGNMENT(GpuMemoryBuffer)
   GpuMemoryBuffer() = delete;
   virtual ~GpuMemoryBuffer() = default;
 
@@ -406,7 +406,7 @@ private:
 
 class TransformBuffer : public Group {
 public:
-  NO_COPY_OR_ASSIGNMENT(TransformBuffer);
+  NO_COPY_OR_ASSIGNMENT(TransformBuffer)
   TransformBuffer() = default;
   virtual ~TransformBuffer() = default;
 
@@ -448,7 +448,7 @@ private:
 
 class IndexBufferDescription : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(IndexBufferDescription);
+  NO_COPY_OR_ASSIGNMENT(IndexBufferDescription)
   IndexBufferDescription() = delete;
   virtual ~IndexBufferDescription() = default;
 
@@ -471,7 +471,7 @@ private:
 
 class BufferDescription : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(BufferDescription);
+  NO_COPY_OR_ASSIGNMENT(BufferDescription)
   BufferDescription() = default;
   virtual ~BufferDescription() = default;
 
@@ -489,7 +489,7 @@ private:
 
 class VertexAttributeLayout : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(VertexAttributeLayout);
+  NO_COPY_OR_ASSIGNMENT(VertexAttributeLayout)
   VertexAttributeLayout() = delete;
   virtual ~VertexAttributeLayout() = default;
 
@@ -531,7 +531,7 @@ private:
 
 class LayoutBinding : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(LayoutBinding);
+  NO_COPY_OR_ASSIGNMENT(LayoutBinding)
   LayoutBinding() = delete;
   virtual ~LayoutBinding() = default;
 
@@ -560,7 +560,7 @@ private:
 
 class Shader : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Shader);
+  NO_COPY_OR_ASSIGNMENT(Shader)
   Shader() = delete;
   virtual ~Shader() = default;
 
@@ -592,7 +592,7 @@ private:
 
 class Sampler : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Sampler);
+  NO_COPY_OR_ASSIGNMENT(Sampler)
   Sampler() = default;
   virtual ~Sampler() = default;
 
@@ -628,7 +628,7 @@ private:
 
 class Image : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Image);
+  NO_COPY_OR_ASSIGNMENT(Image)
   Image() = default;
   virtual ~Image() = default;
 
@@ -787,7 +787,7 @@ private:
 
 class Texture : public Group {
 public:
-  NO_COPY_OR_ASSIGNMENT(Texture);
+  NO_COPY_OR_ASSIGNMENT(Texture)
   Texture() = delete;
   virtual ~Texture() = default;
 
@@ -804,7 +804,7 @@ public:
 
 class CullMode : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(CullMode);
+  NO_COPY_OR_ASSIGNMENT(CullMode)
   CullMode() = delete;
   virtual ~CullMode() = default;
 
@@ -822,7 +822,7 @@ private:
 
 class ComputeCommand : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(ComputeCommand);
+  NO_COPY_OR_ASSIGNMENT(ComputeCommand)
   ComputeCommand() = delete;
   virtual ~ComputeCommand() = default;
 
@@ -837,23 +837,31 @@ public:
 private:
   void doRecord(SceneManager * action) override
   {
-    action->state.compute_description = {
-      this->group_count_x,
-      this->group_count_y,
-      this->group_count_z,
-    };
+    this->pipeline = std::make_unique<ComputePipelineObject>(
+      action->device,
+      action->state.shaders[0],
+      action->state.buffer_descriptions,
+      action->state.textures,
+      action->pipelinecache);
 
-    action->compute_states.push_back(action->state);
+    this->pipeline->bind(action->command->buffer());
+
+    vkCmdDispatch(action->command->buffer(),
+                  this->group_count_x,
+                  this->group_count_y,
+                  this->group_count_z);
   }
 
   uint32_t group_count_x;
   uint32_t group_count_y;
   uint32_t group_count_z;
+
+  std::unique_ptr<ComputePipelineObject> pipeline;
 };
 
 class DrawCommand : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(DrawCommand);
+  NO_COPY_OR_ASSIGNMENT(DrawCommand)
   DrawCommand() = delete;
   virtual ~DrawCommand() = default;
 
@@ -866,21 +874,45 @@ public:
 private:
   void doRecord(SceneManager * action) override
   {
-    action->state.drawdescription = {
-      this->count,
-      this->topology,
-    };
+    this->pipeline = std::make_unique<GraphicsPipelineObject>(
+      action->device,
+      action->state.attribute_descriptions,
+      action->state.shaders,
+      action->state.buffer_descriptions,
+      action->state.textures,
+      action->state.rasterizationstate,
+      action->renderpass,
+      action->pipelinecache,
+      this->topology);
 
-    action->graphic_states.push_back(action->state);
+    this->pipeline->bind(action->command->buffer());
+
+    for (const auto& attribute : action->state.attribute_descriptions) {
+      VkDeviceSize offsets[1] = { 0 };
+      vkCmdBindVertexBuffers(action->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
+    }
+    vkCmdSetViewport(action->command->buffer(), 0, 1, &action->viewport);
+    vkCmdSetScissor(action->command->buffer(), 0, 1, &action->scissor);
+
+    if (!action->state.indices.empty()) {
+      for (const auto& indexbuffer : action->state.indices) {
+        vkCmdBindIndexBuffer(action->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
+        vkCmdDrawIndexed(action->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
+      }
+    }
+    else {
+      vkCmdDraw(action->command->buffer(), this->count, 1, 0, 0);
+    }
   }
 
   uint32_t count;
   VkPrimitiveTopology topology;
+  std::unique_ptr<GraphicsPipelineObject> pipeline;
 };
 
 class Box : public Separator {
 public:
-  NO_COPY_OR_ASSIGNMENT(Box);
+  NO_COPY_OR_ASSIGNMENT(Box)
   virtual ~Box() = default;
 
   Box()

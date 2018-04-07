@@ -202,7 +202,6 @@ public:
       this->root->children = { scene };
     }
 
-    this->renderaction->clearCache();
     this->renderaction->alloc(this->root);
     this->renderaction->stage(this->root);
     this->renderaction->record(this->root);
@@ -244,7 +243,7 @@ public:
     QWindow::resizeEvent(e);
     this->rebuildSwapchain();
     this->renderaction->record(this->root);
-    this->renderaction->render(this->root);
+    this->renderaction->submit(this->root);
     this->swapBuffers();
   }
 
@@ -557,7 +556,7 @@ public:
       }
       this->mouse_pos = pos;
 
-      this->renderaction->render(this->root);
+      this->renderaction->submit(this->root);
       this->swapBuffers();
     }
   }

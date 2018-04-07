@@ -12,7 +12,7 @@
 
 class BufferObject {
 public:
-  NO_COPY_OR_ASSIGNMENT(BufferObject);
+  NO_COPY_OR_ASSIGNMENT(BufferObject)
   BufferObject() = delete;
   ~BufferObject() = default;
   
@@ -63,7 +63,7 @@ public:
 
 class ImageObject {
 public:
-  NO_COPY_OR_ASSIGNMENT(ImageObject);
+  NO_COPY_OR_ASSIGNMENT(ImageObject)
   ImageObject() = delete;
   ~ImageObject() = default;
 
@@ -113,7 +113,7 @@ public:
 
 class DescriptorSetObject {
 public:
-  NO_COPY_OR_ASSIGNMENT(DescriptorSetObject);
+  NO_COPY_OR_ASSIGNMENT(DescriptorSetObject)
   DescriptorSetObject() = delete;
   ~DescriptorSetObject() = default;
 
@@ -167,7 +167,7 @@ public:
         VK_IMAGE_LAYOUT_GENERAL,                  // imageLayout
       };
 
-      VkWriteDescriptorSet write_descriptor_set {
+      const VkWriteDescriptorSet write_descriptor_set {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,   // sType
         nullptr,                                  // pNext
         this->descriptor_set->descriptor_sets[0], // dstSet
@@ -190,7 +190,7 @@ public:
         buffer.size,                              // range
       };
 
-      VkWriteDescriptorSet write_descriptor_set {
+      const VkWriteDescriptorSet write_descriptor_set {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,   // sType
         nullptr,                                  // pNext
         this->descriptor_set->descriptor_sets[0], // dstSet
@@ -221,11 +221,11 @@ public:
 
 class GraphicsPipelineObject {
 public:
-  NO_COPY_OR_ASSIGNMENT(GraphicsPipelineObject);
+  NO_COPY_OR_ASSIGNMENT(GraphicsPipelineObject)
   GraphicsPipelineObject() = delete;
   ~GraphicsPipelineObject() = default;
 
-  GraphicsPipelineObject(std::shared_ptr<VulkanDevice> device,
+  GraphicsPipelineObject(const std::shared_ptr<VulkanDevice> & device,
                          const std::vector<VulkanVertexAttributeDescription> & attributes,
                          const std::vector<VulkanShaderModuleDescription> & shaders,
                          const std::vector<VulkanBufferDescription> & buffers,
@@ -233,10 +233,9 @@ public:
                          const VkPipelineRasterizationStateCreateInfo & rasterizationstate,
                          const std::shared_ptr<VulkanRenderpass> & renderpass,
                          const std::unique_ptr<VulkanPipelineCache> & pipelinecache,
-                         const VulkanDrawDescription & drawdescription)
-    : device(std::move(device))
+                         VkPrimitiveTopology topology)
   {
-    this->descriptor_set = std::make_unique<DescriptorSetObject>(this->device, textures, buffers);
+    this->descriptor_set = std::make_unique<DescriptorSetObject>(device, textures, buffers);
 
     std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
     for (const VulkanShaderModuleDescription & shader : shaders) {
@@ -256,15 +255,15 @@ public:
 
     for (const VulkanVertexAttributeDescription & attribute : attributes) {
       attribute_descriptions.push_back({
-        attribute.location, // location
-        attribute.binding,  // binding
-        attribute.format,   // format
-        attribute.offset,   // offset
+        attribute.location,             // location
+        attribute.binding,              // binding
+        attribute.format,               // format
+        attribute.offset,               // offset
       });
       binding_descriptions.push_back({
-        attribute.binding,    // binding
-        attribute.stride,     // stride
-        attribute.inputrate, //inputRate
+        attribute.binding,              // binding
+        attribute.stride,               // stride
+        attribute.inputrate,            //inputRate
       });
     }
 
@@ -274,11 +273,11 @@ public:
     };
 
     this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
-      this->device,
+      device,
       renderpass->renderpass,
       pipelinecache->cache,
       this->descriptor_set->pipeline_layout->layout,
-      drawdescription.topology,
+      topology,
       rasterizationstate,
       dynamic_states,
       shader_stage_infos,
@@ -292,14 +291,13 @@ public:
     this->pipeline->bind(command);
   }
 
-  std::shared_ptr<VulkanDevice> device;
   std::unique_ptr<VulkanGraphicsPipeline> pipeline;
   std::unique_ptr<DescriptorSetObject> descriptor_set;
 };
 
 class ComputePipelineObject {
 public:
-  NO_COPY_OR_ASSIGNMENT(ComputePipelineObject);
+  NO_COPY_OR_ASSIGNMENT(ComputePipelineObject)
   ComputePipelineObject() = delete;
   ~ComputePipelineObject() = default;
 

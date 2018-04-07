@@ -47,17 +47,6 @@ struct VulkanShaderModuleDescription {
   VkShaderModule module;
 };
 
-struct VulkanDrawDescription {
-  uint32_t count;
-  VkPrimitiveTopology topology;
-};
-
-struct VulkanComputeDescription {
-  uint32_t group_count_x;
-  uint32_t group_count_y;
-  uint32_t group_count_z;
-};
-
 struct VulkanBufferDataDescription {
   VkDeviceSize size{ 0 };
   VkDeviceSize offset{ 0 };
@@ -78,12 +67,14 @@ struct VulkanImageDataDescription {
 
 class RenderState {
 public:
-  RenderState() :
+  RenderState(VkViewport viewport) :
+    viewport(viewport),
     ViewMatrix(glm::mat4(1)),
     ProjMatrix(glm::mat4(1)),
     ModelMatrix(glm::mat4(1))
   {}
 
+  VkViewport viewport;
   glm::mat4 ViewMatrix;
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;
@@ -108,11 +99,9 @@ public:
   }
   
   VulkanLayoutBinding layout_binding;
-  VulkanDrawDescription drawdescription;
   VulkanImageDataDescription imagedata;
   VulkanBufferDataDescription bufferdata;
   VulkanTextureDescription texture_description;
-  VulkanComputeDescription compute_description;
   VulkanVertexAttributeDescription attribute_description;
   VkPipelineRasterizationStateCreateInfo rasterizationstate;
 
