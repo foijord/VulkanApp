@@ -236,7 +236,7 @@ public:
 
   template <typename T>
   T getProcAddress(const std::string & name) {
-    T address = reinterpret_cast<T>(vkGetInstanceProcAddr(this->instance, name.c_str()));
+    auto address = reinterpret_cast<T>(vkGetInstanceProcAddr(this->instance, name.c_str()));
     if (!address) {
       throw std::runtime_error("vkGetInstanceProcAddr failed for " + name);
     }

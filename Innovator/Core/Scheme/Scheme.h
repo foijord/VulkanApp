@@ -25,7 +25,7 @@ typedef std::vector<exp_ptr> exp_vec;
 
 class Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Expression);
+  NO_COPY_OR_ASSIGNMENT(Expression)
   Expression() = default;
   virtual ~Expression() = default;
 
@@ -42,7 +42,7 @@ public:
 
 class Symbol : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Symbol);
+  NO_COPY_OR_ASSIGNMENT(Symbol)
   Symbol() = delete;
   virtual ~Symbol() = default;
 
@@ -107,7 +107,7 @@ Symbol::eval(env_ptr env)
 
 class Number : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Number);
+  NO_COPY_OR_ASSIGNMENT(Number)
   Number() = delete;
   virtual ~Number() = default;
 
@@ -122,7 +122,7 @@ public:
 
 class Boolean : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Boolean);
+  NO_COPY_OR_ASSIGNMENT(Boolean)
   Boolean() = delete;
   virtual ~Boolean() = default;
 
@@ -143,7 +143,7 @@ public:
 
 class String : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(String);
+  NO_COPY_OR_ASSIGNMENT(String)
   String() = delete;
   virtual ~String() = default;
 
@@ -160,7 +160,7 @@ public:
 
 class Quote : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Quote);
+  NO_COPY_OR_ASSIGNMENT(Quote)
   Quote() = delete;
   virtual ~Quote() = default;
 
@@ -182,7 +182,7 @@ public:
 
 class Define : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Define);
+  NO_COPY_OR_ASSIGNMENT(Define)
   Define() = delete;
   virtual ~Define() = default;
 
@@ -211,7 +211,7 @@ public:
 
 class If : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(If);
+  NO_COPY_OR_ASSIGNMENT(If)
   If() = delete;
   virtual ~If() = default;
 
@@ -241,7 +241,7 @@ public:
 
 class Function : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Function);
+  NO_COPY_OR_ASSIGNMENT(Function)
   Function() = delete;
   virtual ~Function() = default;
 
@@ -255,7 +255,7 @@ public:
 
 class Lambda : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Lambda);
+  NO_COPY_OR_ASSIGNMENT(Lambda)
   Lambda() = delete;
   virtual ~Lambda() = default;
 
@@ -334,7 +334,7 @@ public:
 template <typename T>
 class Operator : public Callable {
 public:
-  NO_COPY_OR_ASSIGNMENT(Operator);
+  NO_COPY_OR_ASSIGNMENT(Operator)
   Operator() = default;
   virtual ~Operator() = default;
 
@@ -357,7 +357,7 @@ typedef Operator<std::multiplies<>> Mul;
 
 class Less : public Callable {
 public:
-  NO_COPY_OR_ASSIGNMENT(Less);
+  NO_COPY_OR_ASSIGNMENT(Less)
   Less() = default;
   virtual ~Less() = default;
 
@@ -370,7 +370,7 @@ public:
 
 class More : public Callable {
 public:
-  NO_COPY_OR_ASSIGNMENT(More);
+  NO_COPY_OR_ASSIGNMENT(More)
   More() = default;
   virtual ~More() = default;
 
@@ -383,7 +383,7 @@ public:
 
 class Same: public Callable {
 public:
-  NO_COPY_OR_ASSIGNMENT(Same);
+  NO_COPY_OR_ASSIGNMENT(Same)
   Same() = default;
   virtual ~Same() = default;
 
@@ -396,7 +396,7 @@ public:
 
 class Car : public Callable {
 public:
-  NO_COPY_OR_ASSIGNMENT(Car);
+  NO_COPY_OR_ASSIGNMENT(Car)
   Car() = default;
   virtual ~Car() = default;
 
@@ -411,7 +411,7 @@ public:
 
 class Cdr : public Callable {
 public:
-  NO_COPY_OR_ASSIGNMENT(Cdr);
+  NO_COPY_OR_ASSIGNMENT(Cdr)
   Cdr() = default;
   virtual ~Cdr() = default;
 

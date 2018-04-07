@@ -33,18 +33,17 @@ public:
   MemoryAllocator() = delete;
   ~MemoryAllocator() = default;
 
-  explicit MemoryAllocator(std::shared_ptr<VulkanDevice> device,
-                           const std::shared_ptr<Node> & root) :
+  explicit MemoryAllocator(std::shared_ptr<VulkanDevice> device) :
     device(std::move(device))
-  {
-    root->alloc(this);
+  {}
 
+  void allocate()
+  {
     for (auto & image : this->imageobjects) {
       image->bind();
     }
 
     for (auto & buffer_object : this->bufferobjects) {
-
       const auto buffer = std::make_shared<VulkanBuffer>(
         this->device,
         buffer_object->flags,
@@ -132,12 +131,9 @@ public:
   SceneRenderer() = delete;
   ~SceneRenderer() = default;
 
-  explicit SceneRenderer(VkViewport viewport,
-                         const std::shared_ptr<Node> & root) :
+  explicit SceneRenderer(VkViewport viewport) :
     state(viewport)
-  {
-    root->render(this);
-  }
+  {}
 
   RenderState state;
 };
@@ -190,12 +186,14 @@ public:
     }
   }
 
-  void alloc(const std::shared_ptr<Node> & root)
+  void alloc(const std::shared_ptr<Node> & root) const
   {
-    MemoryAllocator allocator(this->device, root);
+    MemoryAllocator allocator(this->device);
+    root->alloc(&allocator);
+    allocator.allocate();
   }
 
-  void stage(const std::shared_ptr<Node> & root)
+  void stage(const std::shared_ptr<Node> & root) const
   {
     MemoryStager stager(this->device, this->fence, root);
   }
@@ -225,9 +223,10 @@ public:
     this->command->end();
   }
 
-  void submit(const std::shared_ptr<Node> & root)
+  void submit(const std::shared_ptr<Node> & root) const
   {
-    SceneRenderer renderer(this->viewport, root);
+    SceneRenderer renderer(this->viewport);
+    root->render(&renderer);
 
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
     THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));

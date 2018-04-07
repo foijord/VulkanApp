@@ -124,7 +124,7 @@ public:
     std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
     std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings;
 
-    for (const VulkanTextureDescription & texture : textures) {
+    for (const auto & texture : textures) {
       descriptor_pool_sizes.push_back({
         texture.layout.type,                    // type 
         1,                                      // descriptorCount
@@ -208,7 +208,7 @@ public:
   }
 
 
-  void bind(VkCommandBuffer command, VkPipelineBindPoint bind_point)
+  void bind(VkCommandBuffer command, VkPipelineBindPoint bind_point) const
   {
     this->descriptor_set->bind(command, bind_point, this->pipeline_layout->layout);
   }
@@ -285,7 +285,7 @@ public:
       attribute_descriptions);
   }
 
-  void bind(VkCommandBuffer command)
+  void bind(VkCommandBuffer command) const
   {
     this->descriptor_set->bind(command, VK_PIPELINE_BIND_POINT_GRAPHICS);
     this->pipeline->bind(command);
@@ -304,7 +304,7 @@ public:
   ComputePipelineObject(const std::shared_ptr<VulkanDevice> & device, 
                         const VulkanShaderModuleDescription & shader,
                         const std::vector<VulkanBufferDescription> & buffers,
-                        const std::vector<VulkanTextureDescription> textures,
+                        const std::vector<VulkanTextureDescription> & textures,
                         const std::unique_ptr<VulkanPipelineCache> & pipelinecache)
   {
     this->descriptor_set = std::make_unique<DescriptorSetObject>(device, textures, buffers);
@@ -328,7 +328,7 @@ public:
   }
 
 
-  void bind(VkCommandBuffer command)
+  void bind(VkCommandBuffer command) const
   {
     this->descriptor_set->bind(command, VK_PIPELINE_BIND_POINT_COMPUTE);
     this->pipeline->bind(command);
