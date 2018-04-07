@@ -214,11 +214,11 @@ public:
       uint32_t image_index = this->swapchain->getNextImageIndex(this->semaphore);
 
       this->swap_buffers_command->submit(this->device->default_queue,
-        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        image_index,
-        { this->semaphore->semaphore });
+                                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                         image_index,
+                                         { this->semaphore->semaphore });
 
-      VkPresentInfoKHR present_info {
+      VkPresentInfoKHR present_info{
         VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
         nullptr,                            // pNext
         0,                                  // waitSemaphoreCount
@@ -228,6 +228,7 @@ public:
         &image_index,                       // pImageIndices
         nullptr                             // pResults
       };
+
       THROW_ON_ERROR(this->vulkan->vkQueuePresent(this->device->default_queue, &present_info));
     }
     catch (VkErrorOutOfDateException &) {

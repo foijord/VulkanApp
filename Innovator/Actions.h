@@ -200,22 +200,6 @@ public:
   void stage(const std::shared_ptr<Node> & root)
   {
     MemoryStager stager(this->device, this->fence, root);
-    //THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
-
-    //this->command->begin();
-
-    //root->stage(this);
-
-    //this->command->end();
-
-    //THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
-
-    //this->command->submit(
-    //  this->device->default_queue, 
-    //  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-    //  {}, 
-    //  {}, 
-    //  this->fence->fence);
   }
 
   void record(const std::shared_ptr<Node> & root)
@@ -226,12 +210,16 @@ public:
 
     this->command->begin();
 
-    for (State & state : this->compute_states) {
-      if (this->compute_commands.find(&state.compute_description) == this->compute_commands.end()) {
-        this->compute_commands[&state.compute_description] = std::make_unique<ComputeCommandObject>(this, state);
-      }
-      VulkanCommandBuffers * command = this->compute_commands[&state.compute_description]->command.get();
-      vkCmdExecuteCommands(this->command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
+    for (auto & state : this->compute_states) {
+      this->compute_commands.push_back(std::make_unique<ComputeCommandObject>(this, state));
+    }
+
+    for (const auto & compute_command : this->compute_commands) {
+      VulkanCommandBuffers * command = compute_command->command.get();
+
+      vkCmdExecuteCommands(this->command->buffer(), 
+                           static_cast<uint32_t>(command->buffers.size()), 
+                           command->buffers.data());
     }
 
     VkRenderPassBeginInfo begin_info{
@@ -246,19 +234,28 @@ public:
 
     vkCmdBeginRenderPass(this->command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-    for (State & state : this->graphic_states) {
-      if (this->draw_commands.find(&state.drawdescription) == this->draw_commands.end()) {
-        this->draw_commands[&state.drawdescription] = std::make_unique<DrawCommandObject>(this, state);
-      }
-      VulkanCommandBuffers * command = this->draw_commands[&state.drawdescription]->command.get();
-      vkCmdExecuteCommands(this->command->buffer(), static_cast<uint32_t>(command->buffers.size()), command->buffers.data());
+    for (auto & state : this->graphic_states) {
+      this->draw_commands.push_back(std::make_unique<DrawCommandObject>(this, state));
+    }
+
+    for (const auto & draw_command : this->draw_commands) {
+      VulkanCommandBuffers * command = draw_command->command.get();
+
+      vkCmdExecuteCommands(this->command->buffer(), 
+                           static_cast<uint32_t>(command->buffers.size()), 
+                           command->buffers.data());
     }
 
     vkCmdEndRenderPass(this->command->buffer());
     this->command->end();
 
     THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
-    this->command->submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, {}, this->fence->fence);
+
+    this->command->submit(this->device->default_queue, 
+                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+                          {}, 
+                          {}, 
+                          this->fence->fence);
 
     this->graphic_states.clear();
     this->compute_states.clear();
@@ -297,8 +294,8 @@ public:
   std::vector<State> graphic_states;
   std::vector<State> compute_states;
 
-  std::map<VulkanDrawDescription *, std::unique_ptr<DrawCommandObject>> draw_commands;
-  std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
+  std::vector<std::unique_ptr<DrawCommandObject>> draw_commands;
+  std::vector<std::unique_ptr<ComputeCommandObject>> compute_commands;
 
   std::shared_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;
