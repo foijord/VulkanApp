@@ -84,7 +84,6 @@ public:
     ModelMatrix(glm::mat4(1))
   {}
 
-  VkViewport viewport;
   glm::mat4 ViewMatrix;
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;

@@ -381,7 +381,7 @@ public:
       extent2d,
       1);
 
-    this->renderaction = std::make_unique<RenderAction>(
+    this->renderaction = std::make_unique<SceneManager>(
       this->device,
       this->renderpass,
       this->framebuffer,
@@ -574,7 +574,7 @@ public:
   std::shared_ptr<VulkanImage> depth_buffer;
   std::unique_ptr<ImageObject> depth_buffer_object;
   std::unique_ptr<VulkanImageView> depth_buffer_view;
-  std::unique_ptr<RenderAction> renderaction;
+  std::unique_ptr<SceneManager> renderaction;
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::shared_ptr<Separator> root;
   std::shared_ptr<Camera> camera;

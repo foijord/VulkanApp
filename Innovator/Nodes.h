@@ -33,24 +33,24 @@ protected:
     }
   }
 
-  void doStage(RenderAction * action) override
+  void doStage(MemoryStager * stager) override
   {
     for (const auto& node : this->children) {
-      node->stage(action);
+      node->stage(stager);
     }
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     for (const auto& node : this->children) {
       node->record(action);
     }
   }
 
-  void doRender(RenderState & state) override
+  void doRender(class SceneRenderer * renderer) override
   {
     for (const auto& node : this->children) {
-      node->render(state);
+      node->render(renderer);
     }
   }
 };
@@ -72,23 +72,25 @@ private:
     allocator->state = s;
   }
 
-  void doStage(RenderAction * action) override
+  void doStage(MemoryStager * stager) override
   {
-    StateScope scope(action);
-    Group::doStage(action);
+    State s = stager->state;
+    Group::doStage(stager);
+    stager->state = s;
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
-    StateScope scope(action);
+    State s = action->state;
     Group::doRecord(action);
+    action->state = s;
   }
 
-  void doRender(RenderState & state) override
+  void doRender(SceneRenderer * renderer) override
   {
-    RenderState s = state;
-    Group::doRender(state);
-    state = s;
+    RenderState s = renderer->state;
+    Group::doRender(renderer);
+    renderer->state = s;
   }
 };
 
@@ -149,12 +151,12 @@ public:
   }
 
 private:
-  void doRender(RenderState & state) override
+  void doRender(SceneRenderer * renderer) override
   {
-    this->aspectratio = state.viewport.width / state.viewport.height;
-    state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
-    state.ViewMatrix = glm::translate(state.ViewMatrix, -this->position);
-    state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
+    this->aspectratio = renderer->viewport.width / renderer->viewport.height;
+    renderer->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
+    renderer->state.ViewMatrix = glm::translate(renderer->state.ViewMatrix, -this->position);
+    renderer->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
   }
 
   float farplane;
@@ -178,17 +180,12 @@ public:
       scaleFactor(scalefactor) {}
 
 private:
-  void doRender(RenderState & state) override
-  {
-    this->doActions(state);
-  }
-
-  void doActions(RenderState & state) const
+  void doRender(SceneRenderer * renderer) override
   {
     glm::mat4 matrix(1.0);
     matrix = glm::translate(matrix, this->translation);
     matrix = glm::scale(matrix, this->scaleFactor);
-    state.ModelMatrix *= matrix;
+    renderer->state.ModelMatrix *= matrix;
   }
 
   glm::vec3 translation;
@@ -237,12 +234,12 @@ private:
     allocator->state.bufferdata = this->get_buffer_data_description();
   }
 
-  void doStage(RenderAction * action) override
+  void doStage(MemoryStager * stager) override
   {
-    action->state.bufferdata = this->get_buffer_data_description();
+    stager->state.bufferdata = this->get_buffer_data_description();
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.bufferdata = this->get_buffer_data_description();
   }
@@ -256,11 +253,11 @@ public:
   ImageData() = delete;
   virtual ~ImageData() = default;
 
-  explicit ImageData(const std::string & filename)
-    : ImageData(gli::load(filename)) {}
+  explicit ImageData(const std::string & filename) : 
+    ImageData(gli::load(filename)) {}
 
-  explicit ImageData(const gli::texture & texture)
-    : texture(texture) {}
+  explicit ImageData(const gli::texture & texture) : 
+    texture(texture) {}
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
@@ -276,17 +273,25 @@ private:
     allocator->state.bufferdata.data = this->texture.data();
   }
 
-  void doStage(RenderAction * action) override
+  void doStage(MemoryStager * stager) override
+  {
+    stager->state.imagedata = {
+      0,                      // usage_flags
+      0,                      // memory_property_flags
+      &this->texture,         // texture
+      nullptr,                // image
+    };
+
+    stager->state.bufferdata.size = this->texture.size();
+    stager->state.bufferdata.data = this->texture.data();
+  }
+
+  void doRecord(SceneManager * action) override
   {
     this->doAction(action);
   }
 
-  void doRecord(RenderAction * action) override
-  {
-    this->doAction(action);
-  }
-
-  void doAction(RenderAction * action)
+  void doAction(SceneManager * action)
   {
     action->state.imagedata = {
       0,                      // usage_flags
@@ -325,15 +330,15 @@ private:
     allocator->bufferobjects.push_back(this->buffer);
   }
 
-  void doStage(RenderAction * action) override
+  void doStage(MemoryStager * stager) override
   {
-    action->state.bufferdata.offset = this->buffer->offset;
-    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
+    stager->state.bufferdata.offset = this->buffer->offset;
+    stager->state.bufferdata.buffer = this->buffer->buffer->buffer;
 
-    this->buffer->memcpy(action->state.bufferdata.data);
+    this->buffer->memcpy(stager->state.bufferdata.data);
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.bufferdata.buffer = this->buffer->buffer->buffer;
     action->state.bufferdata.offset = this->buffer->offset;
@@ -370,22 +375,22 @@ private:
     allocator->bufferobjects.push_back(this->buffer);
   }
 
-  void doStage(RenderAction * action) override
+  void doStage(MemoryStager * stager) override
   {
     std::vector<VkBufferCopy> regions = { {
-        action->state.bufferdata.offset,  // srcOffset
+        stager->state.bufferdata.offset,  // srcOffset
         this->buffer->offset,             // dstOffset
-        action->state.bufferdata.size,    // size
+        stager->state.bufferdata.size,    // size
     } };
 
-    vkCmdCopyBuffer(action->command->buffer(),
-                    action->state.bufferdata.buffer,
+    vkCmdCopyBuffer(stager->command->buffer(),
+                    stager->state.bufferdata.buffer,
                     this->buffer->buffer->buffer,
                     static_cast<uint32_t>(regions.size()),
                     regions.data());
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.bufferdata.buffer = this->buffer->buffer->buffer;
     action->state.bufferdata.offset = this->buffer->offset;
@@ -418,7 +423,7 @@ private:
     allocator->bufferobjects.push_back(this->buffer);
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.bufferdata.buffer = this->buffer->buffer->buffer;
     action->state.bufferdata.offset = this->buffer->offset;
@@ -428,11 +433,11 @@ private:
     action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
   }
 
-  void doRender(RenderState & state) override
+  void doRender(SceneRenderer * renderer) override
   {
     glm::mat4 data[2] = {
-      state.ViewMatrix * state.ModelMatrix,
-      state.ProjMatrix
+      renderer->state.ViewMatrix * renderer->state.ModelMatrix,
+      renderer->state.ProjMatrix
     };
 
     this->buffer->memcpy(data);
@@ -452,7 +457,7 @@ public:
   {}
 
 private:
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.indices.push_back({
       this->type,                                             // type
@@ -471,7 +476,7 @@ public:
   virtual ~BufferDescription() = default;
 
 private:
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.buffer_descriptions.push_back({
       action->state.layout_binding,                     // layout
@@ -503,7 +508,7 @@ public:
   {}
 
 private:
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.attribute_descriptions.push_back({
       this->location,
@@ -539,7 +544,7 @@ public:
   {}
 
 private:
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.layout_binding = {
       this->binding,
@@ -572,7 +577,7 @@ private:
     this->shader = std::make_unique<VulkanShaderModule>(allocator->device, code);
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.shaders.push_back({
       this->stage,                                  // stage
@@ -613,7 +618,7 @@ private:
       VK_FALSE);
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.texture_description.sampler = this->sampler->sampler;
   }
@@ -662,7 +667,7 @@ private:
     allocator->state.imagedata.image = this->image->image;
   }
 
-  void doStage(RenderAction * action) override
+  void doStage(MemoryStager * stager) override
   {
     VkComponentMapping component_mapping{
       VK_COMPONENT_SWIZZLE_R, // r
@@ -671,7 +676,7 @@ private:
       VK_COMPONENT_SWIZZLE_A  // a
     };
 
-    gli::texture * texture = action->state.imagedata.texture;
+    gli::texture * texture = stager->state.imagedata.texture;
 
     VkImageSubresourceRange subresource_range = {
       VK_IMAGE_ASPECT_COLOR_BIT,                    // aspectMask 
@@ -695,17 +700,17 @@ private:
       VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
       VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
-      action->device->default_queue_index,                           // srcQueueFamilyIndex
-      action->device->default_queue_index,                           // dstQueueFamilyIndex
+      stager->device->default_queue_index,                           // srcQueueFamilyIndex
+      stager->device->default_queue_index,                           // dstQueueFamilyIndex
       this->image->image,                                            // image
       subresource_range,                                             // subresourceRange
     };
 
-    vkCmdPipelineBarrier(action->command->buffer(),
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      0, 0, nullptr, 0, nullptr, 1,
-      &memory_barrier);
+    vkCmdPipelineBarrier(stager->command->buffer(),
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         0, 0, nullptr, 0, nullptr, 1,
+                         &memory_barrier);
 
     VkDeviceSize buffer_offset = 0;
     for (uint32_t mip_level = 0; mip_level < texture->levels(); mip_level++) {
@@ -735,18 +740,18 @@ private:
         image_extent                               // imageExtent
       };
 
-      vkCmdCopyBufferToImage(action->command->buffer(),
-        action->state.bufferdata.buffer,
-        this->image->image,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &buffer_image_copy);
+      vkCmdCopyBufferToImage(stager->command->buffer(),
+                             stager->state.bufferdata.buffer,
+                             this->image->image,
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             1,
+                             &buffer_image_copy);
 
       buffer_offset += texture->size(mip_level);
     }
   }
 
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.imagedata.usage_flags = this->usage_flags;
     action->state.imagedata.memory_property_flags = this->memory_property_flags;
@@ -807,7 +812,7 @@ public:
     : cullmode(cullmode) {}
 
 private:
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.rasterizationstate.cullMode = this->cullmode;
   }
@@ -830,7 +835,7 @@ public:
   {}
 
 private:
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.compute_description = {
       this->group_count_x,
@@ -859,7 +864,7 @@ public:
   {}
 
 private:
-  void doRecord(RenderAction * action) override
+  void doRecord(SceneManager * action) override
   {
     action->state.drawdescription = {
       this->count,

@@ -14,25 +14,25 @@ public:
     this->doAlloc(allocator);
   }
 
-  void stage(class RenderAction * action)
+  void stage(class MemoryStager * stager)
   {
-    this->doStage(action);
+    this->doStage(stager);
   }
 
-  void record(class RenderAction * action)
+  void record(class SceneManager * action)
   {
     this->doRecord(action);
   }
 
-  void render(class RenderState & state)
+  void render(class SceneRenderer * renderer)
   {
-    this->doRender(state);
+    this->doRender(renderer);
   }
 
 private:
   virtual void doAlloc(class MemoryAllocator *) {}
-  virtual void doStage(class RenderAction *) {}
-  virtual void doRecord(class RenderAction *) {}
-  virtual void doRender(class RenderState &) {}
+  virtual void doStage(class MemoryStager *) {}
+  virtual void doRecord(class SceneManager *) {}
+  virtual void doRender(class SceneRenderer *) {}
 };
 

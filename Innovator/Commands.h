@@ -5,7 +5,7 @@
 #include <memory>
 
 class State;
-class RenderAction;
+class SceneManager;
 class VulkanCommandBuffers;
 class ComputePipelineObject;
 class GraphicsPipelineObject;
@@ -16,7 +16,7 @@ public:
   ComputeCommandObject() = delete;
   ~ComputeCommandObject() = default;
 
-  ComputeCommandObject(RenderAction * action, State & state);
+  ComputeCommandObject(SceneManager * action, State & state);
 
   std::unique_ptr<ComputePipelineObject> pipeline;
   std::unique_ptr<VulkanCommandBuffers> command;
@@ -28,7 +28,7 @@ public:
   DrawCommandObject() = default;
   virtual ~DrawCommandObject() = default;
 
-  DrawCommandObject(RenderAction * action, State & state);
+  DrawCommandObject(SceneManager * action, State & state);
 
   std::unique_ptr<GraphicsPipelineObject> pipeline;
   std::unique_ptr<VulkanCommandBuffers> command;

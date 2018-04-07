@@ -13,15 +13,6 @@
 #include <fstream>
 #include <iostream>
 
-class Action {
-public:
-  NO_COPY_OR_ASSIGNMENT(Action);
-  Action() = default;
-  virtual ~Action() = default;
-
-  State state;
-};
-
 template <typename NodeType> 
 static std::shared_ptr<NodeType> 
 SearchAction(const std::shared_ptr<Node> & root) {
@@ -40,6 +31,7 @@ SearchAction(const std::shared_ptr<Node> & root) {
 class MemoryAllocator {
 public:
   NO_COPY_OR_ASSIGNMENT(MemoryAllocator);
+  MemoryAllocator() = delete;
   ~MemoryAllocator() = default;
 
   explicit MemoryAllocator(std::shared_ptr<VulkanDevice> device,
@@ -89,12 +81,75 @@ public:
   std::vector<std::shared_ptr<BufferObject>> bufferobjects;
 };
 
-class RenderAction : public Action {
+class MemoryStager {
 public:
-  NO_COPY_OR_ASSIGNMENT(RenderAction);
-  RenderAction() = default;
+  NO_COPY_OR_ASSIGNMENT(MemoryStager);
+  MemoryStager() = delete;
 
-  explicit RenderAction(std::shared_ptr<VulkanDevice> device,
+  explicit MemoryStager(std::shared_ptr<VulkanDevice> device,
+                        std::shared_ptr<VulkanFence> fence,
+                        const std::shared_ptr<Node> & root) :
+    device(std::move(device)),
+    fence(std::move(fence)),
+    command(std::make_unique<VulkanCommandBuffers>(this->device))
+  {
+    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+
+    this->command->begin();
+
+    root->stage(this);
+
+    this->command->end();
+
+    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+
+    this->command->submit(
+      this->device->default_queue,
+      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      {},
+      {},
+      this->fence->fence);
+  }
+
+  ~MemoryStager()
+  {
+    try {
+      THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+    }
+    catch (std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
+  }
+
+  State state;
+  std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanFence> fence;
+  std::unique_ptr<VulkanCommandBuffers> command;
+};
+
+class SceneRenderer {
+public:
+  NO_COPY_OR_ASSIGNMENT(SceneRenderer);
+  SceneRenderer() = delete;
+  ~SceneRenderer() = default;
+
+  explicit SceneRenderer(VkViewport viewport,
+                         const std::shared_ptr<Node> & root) :
+    viewport(viewport)
+  {
+    root->render(this);
+  }
+
+  RenderState state;
+  VkViewport viewport;
+};
+
+class SceneManager {
+public:
+  NO_COPY_OR_ASSIGNMENT(SceneManager);
+  SceneManager() = delete;
+
+  explicit SceneManager(std::shared_ptr<VulkanDevice> device,
                         std::shared_ptr<VulkanRenderpass> renderpass,
                         std::shared_ptr<VulkanFramebuffer> framebuffer, 
                         VkExtent2D extent)
@@ -128,7 +183,7 @@ public:
     };
   }
 
-  virtual ~RenderAction() 
+  virtual ~SceneManager() 
   {
     try {
       THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
@@ -144,22 +199,23 @@ public:
 
   void stage(const std::shared_ptr<Node> & root)
   {
-    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+    MemoryStager stager(this->device, this->fence, root);
+    //THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
 
-    this->command->begin();
+    //this->command->begin();
 
-    root->stage(this);
+    //root->stage(this);
 
-    this->command->end();
+    //this->command->end();
 
-    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+    //THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
 
-    this->command->submit(
-      this->device->default_queue, 
-      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-      {}, 
-      {}, 
-      this->fence->fence);
+    //this->command->submit(
+    //  this->device->default_queue, 
+    //  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+    //  {}, 
+    //  {}, 
+    //  this->fence->fence);
   }
 
   void record(const std::shared_ptr<Node> & root)
@@ -210,9 +266,7 @@ public:
 
   void render(const std::shared_ptr<Node> & root)
   {
-    RenderState state;
-    state.viewport = this->viewport;
-    root->render(state);
+    SceneRenderer renderer(this->viewport, root);
 
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
     THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
@@ -225,6 +279,8 @@ public:
     this->draw_commands.clear();
     this->compute_commands.clear();
   }
+
+  State state;
 
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanRenderpass> renderpass;
@@ -244,12 +300,12 @@ public:
   std::map<VulkanDrawDescription *, std::unique_ptr<DrawCommandObject>> draw_commands;
   std::map<VulkanComputeDescription *, std::unique_ptr<ComputeCommandObject>> compute_commands;
 
-  std::unique_ptr<VulkanFence> fence;
+  std::shared_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<VulkanPipelineCache> pipelinecache;
 };
 
-inline ComputeCommandObject::ComputeCommandObject(RenderAction * action, State & state)
+inline ComputeCommandObject::ComputeCommandObject(SceneManager * action, State & state)
 {
   this->pipeline = std::make_unique<ComputePipelineObject>(
     action->device,
@@ -271,7 +327,7 @@ inline ComputeCommandObject::ComputeCommandObject(RenderAction * action, State &
   this->command->end();
 }
 
-inline DrawCommandObject::DrawCommandObject(RenderAction * action, State & state)
+inline DrawCommandObject::DrawCommandObject(SceneManager * action, State & state)
 {
   this->pipeline = std::make_unique<GraphicsPipelineObject>(
     action->device,
@@ -307,22 +363,3 @@ inline DrawCommandObject::DrawCommandObject(RenderAction * action, State & state
   }
   this->command->end();
 }
-
-class StateScope {
-public:
-  NO_COPY_OR_ASSIGNMENT(StateScope);
-  
-  explicit StateScope(Action * action) : 
-    state(action->state), 
-    action(action) 
-  {}
-
-  ~StateScope()
-  {
-    action->state = this->state;
-  }
-
-private:
-  Action * action;
-  State state;
-};
