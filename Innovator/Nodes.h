@@ -129,7 +129,7 @@ public:
 private:
   void doRender(SceneRenderer * renderer) override
   {
-    this->aspectratio = renderer->state.viewport.width / renderer->state.viewport.height;
+    this->aspectratio = renderer->viewport.width / renderer->viewport.height;
     renderer->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
     renderer->state.ViewMatrix = glm::translate(renderer->state.ViewMatrix, -this->position);
     renderer->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
@@ -805,13 +805,13 @@ private:
   {
     this->pipeline = std::make_unique<GraphicsPipelineObject>(
       recorder->device,
+      recorder->renderpass,
+      recorder->pipelinecache,
       recorder->state.attribute_descriptions,
       recorder->state.shaders,
       recorder->state.buffer_descriptions,
       recorder->state.textures,
       recorder->state.rasterizationstate,
-      recorder->renderpass,
-      recorder->pipelinecache,
       this->topology);
 
     this->pipeline->bind(recorder->command->buffer());
@@ -820,8 +820,6 @@ private:
       VkDeviceSize offsets[1] = { 0 };
       vkCmdBindVertexBuffers(recorder->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
     }
-    vkCmdSetViewport(recorder->command->buffer(), 0, 1, &recorder->state.viewport);
-    vkCmdSetScissor(recorder->command->buffer(), 0, 1, &recorder->state.scissor);
 
     if (!recorder->state.indices.empty()) {
       for (const auto& indexbuffer : recorder->state.indices) {

@@ -210,7 +210,7 @@ public:
   void swapBuffers()
   {
     try {
-      uint32_t image_index = this->swapchain->getNextImageIndex(this->semaphore);
+      auto image_index = this->swapchain->getNextImageIndex(this->semaphore);
 
       this->swap_buffers_command->submit(this->device->default_queue,
                                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
@@ -405,9 +405,9 @@ public:
       VK_FALSE,
       this->swapchain ? this->swapchain->swapchain : nullptr);
 
-    std::vector<VkImage> swapchain_images = this->swapchain->getSwapchainImages();
+    auto swapchain_images = this->swapchain->getSwapchainImages();
     {
-      for (VkImage & swapchain_image : swapchain_images) {
+      for (auto& swapchain_image : swapchain_images) {
         memory_barriers.push_back({
           VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
           nullptr,                                                       // pNext

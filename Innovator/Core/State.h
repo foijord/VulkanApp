@@ -67,14 +67,12 @@ struct StageState {
 };
 
 struct RenderState {
-  explicit RenderState(VkViewport viewport) :
-    viewport(viewport),
+  explicit RenderState() :
     ViewMatrix(glm::mat4(1)),
     ProjMatrix(glm::mat4(1)),
     ModelMatrix(glm::mat4(1))
   {}
 
-  VkViewport viewport;
   glm::mat4 ViewMatrix;
   glm::mat4 ProjMatrix;
   glm::mat4 ModelMatrix;
@@ -97,9 +95,6 @@ struct RecordState {
     return default_state;
   }
   
-  VkViewport viewport;
-  VkRect2D scissor;
-
   VkDescriptorBufferInfo buffer;
 
   VulkanLayoutBinding layout_binding;

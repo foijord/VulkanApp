@@ -71,19 +71,6 @@ public:
   VulkanCommandBuffers * command;
 };
 
-class SceneRenderer {
-public:
-  NO_COPY_OR_ASSIGNMENT(SceneRenderer)
-  SceneRenderer() = delete;
-  ~SceneRenderer() = default;
-
-  explicit SceneRenderer(VkViewport viewport) :
-    state(viewport)
-  {}
-
-  RenderState state;
-};
-
 class CommandRecorder {
 public:
   NO_COPY_OR_ASSIGNMENT(CommandRecorder)
@@ -103,9 +90,6 @@ public:
     pipelinecache(std::move(pipelinecache)),
     command(command)
   {
-    this->state.viewport = viewport;
-    this->state.scissor = scissor;
-
     this->command->begin();
 
     VkRenderPassBeginInfo begin_info{
@@ -119,11 +103,15 @@ public:
     };
 
     vkCmdBeginRenderPass(this->command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdSetViewport(this->command->buffer(), 0, 1, &viewport);
+    vkCmdSetScissor(this->command->buffer(), 0, 1, &scissor);
   }
 
   ~CommandRecorder()
   {
     vkCmdEndRenderPass(this->command->buffer());
+
     try {
       this->command->end();
     }
@@ -141,6 +129,20 @@ public:
   VulkanCommandBuffers * command;
 };
 
+class SceneRenderer {
+public:
+  NO_COPY_OR_ASSIGNMENT(SceneRenderer)
+   SceneRenderer() = delete;
+  ~SceneRenderer() = default;
+
+  explicit SceneRenderer(VkViewport viewport) :
+    viewport(viewport)
+  {}
+
+  VkViewport viewport;
+  RenderState state;
+};
+
 class SceneManager {
 public:
   NO_COPY_OR_ASSIGNMENT(SceneManager)
@@ -154,7 +156,8 @@ public:
       renderpass(std::move(renderpass)),
       framebuffer(std::move(framebuffer)),
       extent(extent),
-      fence(std::make_unique<VulkanFence>(this->device)),
+      stage_fence(std::make_unique<VulkanFence>(this->device)),
+      render_fence(std::make_unique<VulkanFence>(this->device)),
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       staging_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device))
@@ -222,31 +225,30 @@ public:
         memory_requirements.size,
         memory_type_index);
 
-      const VkDeviceSize memory_offset = 0;
-      const VkDeviceSize buffer_offset = 0;
+      const VkDeviceSize offset = 0;
 
-      buffer_object->bind(buffer, memory, buffer_offset, memory_offset);
+      buffer_object->bind(buffer, memory, offset);
     }
   }
 
   void stage(const std::shared_ptr<Node> & root) const
   {
-    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
     {
       MemoryStager stager(this->device, this->staging_command.get());
       root->stage(&stager);
     }
-    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+
+    this->stage_fence->reset();
 
     this->staging_command->submit(this->device->default_queue,
                                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                  this->fence->fence);
+                                  this->stage_fence->fence);
+
+    this->stage_fence->wait();
   }
 
   void record(const std::shared_ptr<Node> & root) const
   {
-    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
-
     CommandRecorder recorder(this->device,
                              this->renderpass,
                              this->pipelinecache,
@@ -265,12 +267,13 @@ public:
     SceneRenderer renderer(this->viewport);
     root->render(&renderer);
 
-    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
-    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+    this->render_fence->reset();
 
     this->render_command->submit(this->device->default_queue,
-                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-                                 this->fence->fence);
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                 this->render_fence->fence);
+
+    this->render_fence->wait();
   }
 
   std::shared_ptr<VulkanDevice> device;
@@ -285,7 +288,9 @@ public:
 
   std::vector<VkClearValue> clearvalues;
 
-  std::shared_ptr<VulkanFence> fence;
+  std::shared_ptr<VulkanFence> stage_fence;
+  std::shared_ptr<VulkanFence> render_fence;
+
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::unique_ptr<VulkanCommandBuffers> staging_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;

@@ -30,18 +30,17 @@ public:
 
   void bind(std::shared_ptr<VulkanBuffer> buffer,
             std::shared_ptr<VulkanMemory> memory, 
-            VkDeviceSize buffer_offset,
-            VkDeviceSize memory_offset)
+            VkDeviceSize offset)
   {
     this->buffer = std::move(buffer);
     this->memory = std::move(memory);
-    this->offset = buffer_offset;
+    this->offset = offset;
 
     THROW_ON_ERROR(vkBindBufferMemory(
       this->buffer->device->device,
       this->buffer->buffer,
       this->memory->memory,
-      memory_offset));
+      this->offset));
   }
 
   void memcpy(const void * data) const
@@ -215,13 +214,13 @@ public:
   ~GraphicsPipelineObject() = default;
 
   GraphicsPipelineObject(const std::shared_ptr<VulkanDevice> & device,
+                         const std::shared_ptr<VulkanRenderpass> & renderpass,
+                         const std::shared_ptr<VulkanPipelineCache> & pipelinecache,
                          const std::vector<VulkanVertexAttributeDescription> & attributes,
                          const std::vector<VulkanShaderModuleDescription> & shaders,
                          const std::vector<VulkanBufferDescription> & buffers,
                          const std::vector<VulkanTextureDescription> & textures,
                          const VkPipelineRasterizationStateCreateInfo & rasterizationstate,
-                         const std::shared_ptr<VulkanRenderpass> & renderpass,
-                         const std::shared_ptr<VulkanPipelineCache> & pipelinecache,
                          VkPrimitiveTopology topology)
   {
     this->descriptor_set = std::make_unique<DescriptorSetObject>(device, textures, buffers);

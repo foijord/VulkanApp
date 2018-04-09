@@ -645,6 +645,16 @@ public:
     vkDestroyFence(this->device->device, this->fence, nullptr);
   }
 
+  void reset() const
+  {
+    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence));
+  }
+
+  void wait() const
+  {
+    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence, VK_TRUE, UINT64_MAX));
+  }
+
   std::shared_ptr<VulkanDevice> device;
   VkFence fence { nullptr };
 };
@@ -733,7 +743,7 @@ public:
                      const std::vector<VkSemaphore> & signal_semaphores,
                      VkFence fence)
   {
-    VkSubmitInfo submit_info {
+    VkSubmitInfo submit_info{
       VK_STRUCTURE_TYPE_SUBMIT_INFO,                   // sType 
       nullptr,                                         // pNext  
       static_cast<uint32_t>(wait_semaphores.size()),   // waitSemaphoreCount  
@@ -744,6 +754,7 @@ public:
       static_cast<uint32_t>(signal_semaphores.size()), // signalSemaphoreCount
       signal_semaphores.data(),                        // pSignalSemaphores
     };
+
     THROW_ON_ERROR(vkQueueSubmit(queue, 1, &submit_info, fence));
   }
 
