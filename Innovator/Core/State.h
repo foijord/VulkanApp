@@ -31,15 +31,12 @@ struct VulkanIndexBufferDescription {
 
 struct VulkanBufferDescription {
   VulkanLayoutBinding layout;
-  VkBuffer buffer;
-  VkDeviceSize size;
-  VkDeviceSize offset;
+  VkDescriptorBufferInfo buffer;
 };
 
 struct VulkanTextureDescription {
   VulkanLayoutBinding layout;
-  VkImageView view;
-  VkSampler sampler;
+  VkDescriptorImageInfo image;
 };
 
 struct VulkanShaderModuleDescription {
@@ -48,26 +45,29 @@ struct VulkanShaderModuleDescription {
 };
 
 struct VulkanBufferDataDescription {
-  VkDeviceSize size{ 0 };
-  VkDeviceSize offset{ 0 };
-  size_t count{ 0 };
-  VkDeviceSize elem_size{ 0 };
-  VkBufferUsageFlags usage_flags{ 0 };
-  VkMemoryPropertyFlags memory_property_flags{ 0 };
-  void * data{ nullptr };
-  VkBuffer buffer{ nullptr };
+  VkDeviceSize stride;
+  size_t size;
+  void * data;
 };
 
 struct VulkanImageDataDescription {
-  VkImageUsageFlags usage_flags{ 0 };
-  VkMemoryPropertyFlags memory_property_flags{ 0 };
-  gli::texture * texture{ nullptr };
-  VkImage image{ nullptr };
+  gli::texture * texture;
 };
 
-class RenderState {
-public:
-  RenderState(VkViewport viewport) :
+struct MemoryState {
+  VkDescriptorBufferInfo buffer;
+  VulkanImageDataDescription imagedata;
+  VulkanBufferDataDescription bufferdata;
+};
+
+struct StageState {
+  VkDescriptorBufferInfo buffer;
+  VulkanImageDataDescription imagedata;
+  VulkanBufferDataDescription bufferdata;
+};
+
+struct RenderState {
+  explicit RenderState(VkViewport viewport) :
     viewport(viewport),
     ViewMatrix(glm::mat4(1)),
     ProjMatrix(glm::mat4(1)),
@@ -80,9 +80,8 @@ public:
   glm::mat4 ModelMatrix;
 };
 
-class State {
-public:
-  State() : 
+struct RecordState {
+  RecordState() : 
     rasterizationstate(defaultRasterizationState())
   {}
 
@@ -98,8 +97,12 @@ public:
     return default_state;
   }
   
+  VkViewport viewport;
+  VkRect2D scissor;
+
+  VkDescriptorBufferInfo buffer;
+
   VulkanLayoutBinding layout_binding;
-  VulkanImageDataDescription imagedata;
   VulkanBufferDataDescription bufferdata;
   VulkanTextureDescription texture_description;
   VulkanVertexAttributeDescription attribute_description;
@@ -109,7 +112,5 @@ public:
   std::vector<VulkanIndexBufferDescription> indices;
   std::vector<VulkanShaderModuleDescription> shaders;
   std::vector<VulkanBufferDescription> buffer_descriptions;
-  std::vector<VulkanImageDataDescription> image_descriptions;
-  std::vector<VulkanBufferDataDescription> bufferdata_descriptions;
   std::vector<VulkanVertexAttributeDescription> attribute_descriptions;
 };

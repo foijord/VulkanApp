@@ -14,6 +14,26 @@
 #include <vector>
 #include <memory>
 
+template <typename Traverser, typename State>
+class StateScope {
+public:
+  NO_COPY_OR_ASSIGNMENT(StateScope)
+  StateScope() = delete;
+
+  explicit StateScope(Traverser * traverser) : 
+    traverser(traverser),
+    state(traverser->state)
+  {}
+
+  ~StateScope()
+  {
+    traverser->state = this->state;
+  }
+  
+  Traverser * traverser;
+  State state;
+};
+
 class Separator : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(Separator)
@@ -26,30 +46,26 @@ public:
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
-    State s = allocator->state;
+    StateScope<MemoryAllocator, MemoryState> scope(allocator);
     Group::doAlloc(allocator);
-    allocator->state = s;
   }
 
   void doStage(MemoryStager * stager) override
   {
-    State s = stager->state;
+    StateScope<MemoryStager, StageState> scope(stager);
     Group::doStage(stager);
-    stager->state = s;
   }
 
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    State s = action->state;
-    Group::doRecord(action);
-    action->state = s;
+    StateScope<CommandRecorder, RecordState> scope(recorder);
+    Group::doRecord(recorder);
   }
 
   void doRender(SceneRenderer * renderer) override
   {
-    RenderState s = renderer->state;
+    StateScope<SceneRenderer, RenderState> scope(renderer);
     Group::doRender(renderer);
-    renderer->state = s;
   }
 };
 
@@ -57,14 +73,15 @@ class Camera : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Camera)
   virtual ~Camera() = default;
-  explicit Camera()
-    : farplane(1000.0f),
-      nearplane(0.1f),
-      aspectratio(4.0f / 3.0f),
-      fieldofview(0.7f),
-      focaldistance(1.0f),
-      position(glm::vec3(0, 0, 1)),
-      orientation(glm::mat3(1.0))
+
+  explicit Camera() : 
+    farplane(1000.0f),
+    nearplane(0.1f),
+    aspectratio(4.0f / 3.0f),
+    fieldofview(0.7f),
+    focaldistance(1.0f),
+    position(glm::vec3(0, 0, 1)),
+    orientation(glm::mat3(1.0))
   {}
 
   void zoom(float dy)
@@ -162,48 +179,33 @@ public:
     values(std::move(values))
   {}
 
-  explicit BufferData(size_t num) : 
-    num(num)
-  {
-    this->values.reserve(num);
-  }
-
   std::vector<T> values;
 
 private:
-  VulkanBufferDataDescription get_buffer_data_description()
+  template <typename StateType>
+  void initState(StateType & state)
   {
-    const size_t num = this->values.empty() ?
-      this->num : this->values.size();
-
-    return {
-      sizeof(T) * num,                  // size
-      0,                                // offset
-      num,                              // count
-      sizeof(T),                        // elem_size
-      0,                                // usage_flags
-      0,                                // memory_property_flags
+    state.bufferdata = {
+      sizeof(T),                        // stride
+      sizeof(T) * this->values.size(),  // size
       this->values.data(),              // data
-      nullptr,                          // buffer
     };
   }
 
   void doAlloc(MemoryAllocator * allocator) override
   {
-    allocator->state.bufferdata = this->get_buffer_data_description();
+    this->initState(allocator->state);
   }
 
   void doStage(MemoryStager * stager) override
   {
-    stager->state.bufferdata = this->get_buffer_data_description();
+    this->initState(stager->state);
   }
 
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.bufferdata = this->get_buffer_data_description();
+    this->initState(recorder->state);
   }
-
-  size_t num{ 0 };
 };
 
 class ImageData : public Node {
@@ -219,37 +221,28 @@ public:
     texture(texture) {}
 
 private:
-  void updateState(State & state)
+  template <typename StateType>
+  void initState(StateType & state)
   {
     state.imagedata = {
-      0,                      // usage_flags
-      0,                      // memory_property_flags
-      &this->texture,         // texture
-      nullptr,                // image
+      &this->texture,                   // texture
     };
 
-    state.bufferdata.size = this->texture.size();
-    state.bufferdata.data = this->texture.data();
+    state.bufferdata = {
+      1,                                // stride
+      this->texture.size(),             // size
+      this->texture.data(),             // data
+    };
   }
 
   void doAlloc(MemoryAllocator * allocator) override
   {
-    this->updateState(allocator->state);
+    this->initState(allocator->state);
   }
 
   void doStage(MemoryStager * stager) override
   {
-    this->updateState(stager->state);
-  }
-
-  void doRecord(SceneManager * action) override
-  {
-    this->doAction(action);
-  }
-
-  void doAction(SceneManager * action)
-  {
-    this->updateState(action->state);
+    this->initState(stager->state);
   }
 
   gli::texture texture;
@@ -266,6 +259,16 @@ public:
   {}
 
 private:
+  template <typename StateType>
+  void updateState(StateType & state)
+  {
+    state.buffer = {
+      this->buffer->buffer->buffer,      // buffer
+      this->buffer->offset,              // offset
+      this->buffer->range,               // range
+    };
+  }
+
   void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
@@ -280,20 +283,13 @@ private:
 
   void doStage(MemoryStager * stager) override
   {
-    stager->state.bufferdata.offset = this->buffer->offset;
-    stager->state.bufferdata.buffer = this->buffer->buffer->buffer;
-
+    this->updateState(stager->state);
     this->buffer->memcpy(stager->state.bufferdata.data);
   }
 
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
-    action->state.bufferdata.offset = this->buffer->offset;
-    action->state.bufferdata.usage_flags = this->buffer->usage;
-    action->state.bufferdata.memory_property_flags = this->buffer->memory_property_flags;
-
-    action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
+    this->updateState(recorder->state);
   }
 
   VkBufferUsageFlags buffer_usage_flags;
@@ -326,33 +322,32 @@ private:
   void doStage(MemoryStager * stager) override
   {
     std::vector<VkBufferCopy> regions = { {
-        stager->state.bufferdata.offset,  // srcOffset
+        stager->state.buffer.offset,      // srcOffset
         this->buffer->offset,             // dstOffset
         stager->state.bufferdata.size,    // size
     } };
 
     vkCmdCopyBuffer(stager->command->buffer(),
-                    stager->state.bufferdata.buffer,
+                    stager->state.buffer.buffer,
                     this->buffer->buffer->buffer,
                     static_cast<uint32_t>(regions.size()),
                     regions.data());
   }
 
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
-    action->state.bufferdata.offset = this->buffer->offset;
-    action->state.bufferdata.usage_flags = this->buffer->usage;
-    action->state.bufferdata.memory_property_flags = this->buffer->memory_property_flags;
-
-    action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
+    recorder->state.buffer = {
+      this->buffer->buffer->buffer,      // buffer
+      this->buffer->offset,              // offset
+      this->buffer->range,               // range
+    };
   }
 
-  VkBufferUsageFlags buffer_usage_flags{ 0 };
+  VkBufferUsageFlags buffer_usage_flags;
   std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
-class TransformBuffer : public Group {
+class TransformBuffer : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(TransformBuffer)
   TransformBuffer() = default;
@@ -371,14 +366,13 @@ private:
     allocator->bufferobjects.push_back(this->buffer);
   }
 
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.bufferdata.buffer = this->buffer->buffer->buffer;
-    action->state.bufferdata.offset = this->buffer->offset;
-    action->state.bufferdata.usage_flags = this->buffer->usage;
-    action->state.bufferdata.memory_property_flags = this->buffer->memory_property_flags;
-
-    action->state.bufferdata_descriptions.push_back(action->state.bufferdata);
+    recorder->state.buffer = {
+      this->buffer->buffer->buffer,      // buffer
+      this->buffer->offset,              // offset
+      this->buffer->range,               // range
+    };
   }
 
   void doRender(SceneRenderer * renderer) override
@@ -405,12 +399,14 @@ public:
   {}
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.indices.push_back({
-      this->type,                                             // type
-      action->state.bufferdata.buffer,                        // buffer
-      static_cast<uint32_t>(action->state.bufferdata.count),  // count
+    const auto count = recorder->state.bufferdata.size / recorder->state.bufferdata.stride;
+
+    recorder->state.indices.push_back({
+      this->type,                                               // type
+      recorder->state.buffer.buffer,                            // buffer
+      static_cast<uint32_t>(count),                             // count
     });
   }
 
@@ -424,13 +420,11 @@ public:
   virtual ~BufferDescription() = default;
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.buffer_descriptions.push_back({
-      action->state.layout_binding,                     // layout
-      action->state.bufferdata.buffer,                  // buffer 
-      action->state.bufferdata.size,                    // size 
-      action->state.bufferdata.offset,                  // offset 
+    recorder->state.buffer_descriptions.push_back({
+      recorder->state.layout_binding,                     // layout
+      recorder->state.buffer,                             // buffer
     });
   }
 };
@@ -456,16 +450,16 @@ public:
   {}
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.attribute_descriptions.push_back({
+    recorder->state.attribute_descriptions.push_back({
       this->location,
       this->binding,
       this->format,
       this->offset,
-      static_cast<uint32_t>(action->state.bufferdata.elem_size * this->stride),
+      static_cast<uint32_t>(recorder->state.bufferdata.stride * this->stride),
       this->inputrate,
-      action->state.bufferdata.buffer,
+      recorder->state.buffer.buffer,
     });
   }
 
@@ -492,9 +486,9 @@ public:
   {}
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.layout_binding = {
+    recorder->state.layout_binding = {
       this->binding,
       this->type,
       this->stage,
@@ -521,11 +515,11 @@ public:
   }
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    this->shader = std::make_unique<VulkanShaderModule>(action->device, this->code);
+    this->shader = std::make_unique<VulkanShaderModule>(recorder->device, this->code);
 
-    action->state.shaders.push_back({
+    recorder->state.shaders.push_back({
       this->stage,                                  // stage
       this->shader->module,                         // module
     });
@@ -543,10 +537,10 @@ public:
   virtual ~Sampler() = default;
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
     this->sampler = std::make_unique<VulkanSampler>(
-      action->device,
+      recorder->device,
       VK_FILTER_LINEAR,
       VK_FILTER_LINEAR,
       VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -563,7 +557,7 @@ private:
       VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
       VK_FALSE);
 
-    action->state.texture_description.sampler = this->sampler->sampler;
+    recorder->state.texture_description.image.sampler = this->sampler->sampler;
   }
 
   std::unique_ptr<VulkanSampler> sampler;
@@ -578,7 +572,7 @@ public:
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
-    gli::texture * texture = allocator->state.imagedata.texture;
+    const auto texture = allocator->state.imagedata.texture;
 
     VkExtent3D extent = {
       static_cast<uint32_t>(texture->extent().x),
@@ -586,7 +580,7 @@ private:
       static_cast<uint32_t>(texture->extent().z)
     };
 
-    std::shared_ptr<VulkanImage> image = std::make_shared<VulkanImage>(
+    auto image = std::make_shared<VulkanImage>(
       allocator->device,
       0,
       vulkan_image_type[texture->target()],
@@ -595,19 +589,17 @@ private:
       static_cast<uint32_t>(texture->levels()),
       static_cast<uint32_t>(texture->layers()),
       VK_SAMPLE_COUNT_1_BIT,
-      VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-      this->usage_flags,
+      VK_IMAGE_TILING_OPTIMAL,
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
       std::vector<uint32_t>(),
-      VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED);
+      VK_IMAGE_LAYOUT_UNDEFINED);
 
     this->image = std::make_shared<ImageObject>(
       image,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     allocator->imageobjects.push_back(this->image);
-
-    allocator->state.imagedata.image = this->image->image->image;
   }
 
   void doStage(MemoryStager * stager) override
@@ -684,7 +676,7 @@ private:
       };
 
       vkCmdCopyBufferToImage(stager->command->buffer(),
-                             stager->state.bufferdata.buffer,
+                             stager->state.buffer.buffer,
                              this->image->image->image,
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                              1,
@@ -694,21 +686,17 @@ private:
     }
   }
 
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.imagedata.usage_flags = this->usage_flags;
-    action->state.imagedata.memory_property_flags = this->image->memory_property_flags;
-    action->state.imagedata.image = this->image->image->image;
+    recorder->state.texture_description.layout = recorder->state.layout_binding;
+    recorder->state.texture_description.image.imageView = this->view->view;
+    recorder->state.texture_description.image.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    action->state.texture_description.layout = action->state.layout_binding;
-    action->state.texture_description.view = this->view->view;
-
-    action->state.textures.push_back(action->state.texture_description);
+    recorder->state.textures.push_back(recorder->state.texture_description);
   }
 
   std::shared_ptr<ImageObject> image;
   std::unique_ptr<VulkanImageView> view;
-  VkImageUsageFlags usage_flags{ VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT };
 
   inline static std::map<gli::format, VkFormat> vulkan_format{
     { gli::format::FORMAT_R8_UNORM_PACK8, VkFormat::VK_FORMAT_R8_UNORM },
@@ -753,9 +741,9 @@ public:
     : cullmode(cullmode) {}
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
-    action->state.rasterizationstate.cullMode = this->cullmode;
+    recorder->state.rasterizationstate.cullMode = this->cullmode;
   }
 
   VkCullModeFlags cullmode;
@@ -776,18 +764,18 @@ public:
   {}
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
     this->pipeline = std::make_unique<ComputePipelineObject>(
-      action->device,
-      action->state.shaders[0],
-      action->state.buffer_descriptions,
-      action->state.textures,
-      action->pipelinecache);
+      recorder->device,
+      recorder->state.shaders[0],
+      recorder->state.buffer_descriptions,
+      recorder->state.textures,
+      recorder->pipelinecache);
 
-    this->pipeline->bind(action->command->buffer());
+    this->pipeline->bind(recorder->command->buffer());
 
-    vkCmdDispatch(action->command->buffer(),
+    vkCmdDispatch(recorder->command->buffer(),
                   this->group_count_x,
                   this->group_count_y,
                   this->group_count_z);
@@ -813,36 +801,36 @@ public:
   {}
 
 private:
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
     this->pipeline = std::make_unique<GraphicsPipelineObject>(
-      action->device,
-      action->state.attribute_descriptions,
-      action->state.shaders,
-      action->state.buffer_descriptions,
-      action->state.textures,
-      action->state.rasterizationstate,
-      action->renderpass,
-      action->pipelinecache,
+      recorder->device,
+      recorder->state.attribute_descriptions,
+      recorder->state.shaders,
+      recorder->state.buffer_descriptions,
+      recorder->state.textures,
+      recorder->state.rasterizationstate,
+      recorder->renderpass,
+      recorder->pipelinecache,
       this->topology);
 
-    this->pipeline->bind(action->command->buffer());
+    this->pipeline->bind(recorder->command->buffer());
 
-    for (const auto& attribute : action->state.attribute_descriptions) {
+    for (const auto& attribute : recorder->state.attribute_descriptions) {
       VkDeviceSize offsets[1] = { 0 };
-      vkCmdBindVertexBuffers(action->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
+      vkCmdBindVertexBuffers(recorder->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
     }
-    vkCmdSetViewport(action->command->buffer(), 0, 1, &action->viewport);
-    vkCmdSetScissor(action->command->buffer(), 0, 1, &action->scissor);
+    vkCmdSetViewport(recorder->command->buffer(), 0, 1, &recorder->state.viewport);
+    vkCmdSetScissor(recorder->command->buffer(), 0, 1, &recorder->state.scissor);
 
-    if (!action->state.indices.empty()) {
-      for (const auto& indexbuffer : action->state.indices) {
-        vkCmdBindIndexBuffer(action->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
-        vkCmdDrawIndexed(action->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
+    if (!recorder->state.indices.empty()) {
+      for (const auto& indexbuffer : recorder->state.indices) {
+        vkCmdBindIndexBuffer(recorder->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
+        vkCmdDrawIndexed(recorder->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
       }
     }
     else {
-      vkCmdDraw(action->command->buffer(), this->count, 1, 0, 0);
+      vkCmdDraw(recorder->command->buffer(), this->count, 1, 0, 0);
     }
   }
 

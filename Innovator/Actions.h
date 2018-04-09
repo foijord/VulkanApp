@@ -37,43 +37,7 @@ public:
     device(std::move(device))
   {}
 
-  void allocate()
-  {
-    for (auto & image : this->imageobjects) {
-      image->bind();
-    }
-
-    for (auto & buffer_object : this->bufferobjects) {
-      const auto buffer = std::make_shared<VulkanBuffer>(
-        this->device,
-        buffer_object->flags,
-        buffer_object->size,
-        buffer_object->usage,
-        buffer_object->sharingMode);
-
-      VkMemoryRequirements memory_requirements;
-      vkGetBufferMemoryRequirements(
-        buffer->device->device,
-        buffer->buffer,
-        &memory_requirements);
-
-      auto memory_type_index = this->device->physical_device.getMemoryTypeIndex(
-        memory_requirements,
-        buffer_object->memory_property_flags);
-
-      const auto memory = std::make_shared<VulkanMemory>(
-        this->device,
-        memory_requirements.size,
-        memory_type_index);
-
-      const VkDeviceSize memory_offset = 0;
-      const VkDeviceSize buffer_offset = 0;
-
-      buffer_object->bind(buffer, memory, buffer_offset, memory_offset);
-    }
-  }
-
-  State state;
+  MemoryState state;
   std::shared_ptr<VulkanDevice> device;
   std::vector<std::shared_ptr<ImageObject>> imageobjects;
   std::vector<std::shared_ptr<BufferObject>> bufferobjects;
@@ -85,44 +49,26 @@ public:
   MemoryStager() = delete;
 
   explicit MemoryStager(std::shared_ptr<VulkanDevice> device,
-                        std::shared_ptr<VulkanFence> fence,
-                        const std::shared_ptr<Node> & root) :
+                        VulkanCommandBuffers * command) :
     device(std::move(device)),
-    fence(std::move(fence)),
-    command(std::make_unique<VulkanCommandBuffers>(this->device))
+    command(command)
   {
-    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
-
     this->command->begin();
-
-    root->stage(this);
-
-    this->command->end();
-
-    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
-
-    this->command->submit(
-      this->device->default_queue,
-      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      {},
-      {},
-      this->fence->fence);
   }
 
   ~MemoryStager()
   {
     try {
-      THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+      this->command->end();
     }
     catch (std::exception & e) {
       std::cerr << e.what() << std::endl;
     }
   }
 
-  State state;
+  StageState state;
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanFence> fence;
-  std::unique_ptr<VulkanCommandBuffers> command;
+  VulkanCommandBuffers * command;
 };
 
 class SceneRenderer {
@@ -138,6 +84,63 @@ public:
   RenderState state;
 };
 
+class CommandRecorder {
+public:
+  NO_COPY_OR_ASSIGNMENT(CommandRecorder)
+  CommandRecorder() = delete;
+
+  explicit CommandRecorder(std::shared_ptr<VulkanDevice> device,
+                           std::shared_ptr<VulkanRenderpass> renderpass,
+                           std::shared_ptr<VulkanPipelineCache> pipelinecache,
+                           VkFramebuffer framebuffer,
+                           VkRect2D scissor,
+                           VkViewport viewport,
+                           VkRect2D renderarea,
+                           const std::vector<VkClearValue> & clearvalues,
+                           VulkanCommandBuffers * command) :
+    device(std::move(device)),
+    renderpass(std::move(renderpass)),
+    pipelinecache(std::move(pipelinecache)),
+    command(command)
+  {
+    this->state.viewport = viewport;
+    this->state.scissor = scissor;
+
+    this->command->begin();
+
+    VkRenderPassBeginInfo begin_info{
+      VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
+      nullptr,                                         // pNext
+      this->renderpass->renderpass,                    // renderPass
+      framebuffer,                                     // framebuffer
+      renderarea,                                      // renderArea
+      static_cast<uint32_t>(clearvalues.size()),       // clearValueCount
+      clearvalues.data()                               // pClearValues
+    };
+
+    vkCmdBeginRenderPass(this->command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+  }
+
+  ~CommandRecorder()
+  {
+    vkCmdEndRenderPass(this->command->buffer());
+    try {
+      this->command->end();
+    }
+    catch (std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
+  }
+
+  RecordState state;
+
+  std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanRenderpass> renderpass;
+  std::shared_ptr<VulkanPipelineCache> pipelinecache;
+
+  VulkanCommandBuffers * command;
+};
+
 class SceneManager {
 public:
   NO_COPY_OR_ASSIGNMENT(SceneManager)
@@ -145,15 +148,16 @@ public:
 
   explicit SceneManager(std::shared_ptr<VulkanDevice> device,
                         std::shared_ptr<VulkanRenderpass> renderpass,
-                        std::shared_ptr<VulkanFramebuffer> framebuffer, 
-                        VkExtent2D extent)
+                        std::shared_ptr<VulkanFramebuffer> framebuffer,
+                        const VkExtent2D extent)
     : device(std::move(device)), 
       renderpass(std::move(renderpass)),
       framebuffer(std::move(framebuffer)),
       extent(extent),
       fence(std::make_unique<VulkanFence>(this->device)),
-      command(std::make_unique<VulkanCommandBuffers>(this->device)),
-      pipelinecache(std::make_unique<VulkanPipelineCache>(this->device))
+      render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
+      staging_command(std::make_unique<VulkanCommandBuffers>(this->device)),
+      pipelinecache(std::make_shared<VulkanPipelineCache>(this->device))
   {
     this->scissor = VkRect2D{{ 0, 0 }, this->extent};
 
@@ -190,37 +194,70 @@ public:
   {
     MemoryAllocator allocator(this->device);
     root->alloc(&allocator);
-    allocator.allocate();
+
+    for (auto & image : allocator.imageobjects) {
+      image->bind();
+    }
+
+    for (auto & buffer_object : allocator.bufferobjects) {
+      const auto buffer = std::make_shared<VulkanBuffer>(
+        this->device,
+        buffer_object->flags,
+        buffer_object->size,
+        buffer_object->usage,
+        buffer_object->sharingMode);
+
+      VkMemoryRequirements memory_requirements;
+      vkGetBufferMemoryRequirements(
+        this->device->device,
+        buffer->buffer,
+        &memory_requirements);
+
+      auto memory_type_index = this->device->physical_device.getMemoryTypeIndex(
+        memory_requirements,
+        buffer_object->memory_property_flags);
+
+      const auto memory = std::make_shared<VulkanMemory>(
+        this->device,
+        memory_requirements.size,
+        memory_type_index);
+
+      const VkDeviceSize memory_offset = 0;
+      const VkDeviceSize buffer_offset = 0;
+
+      buffer_object->bind(buffer, memory, buffer_offset, memory_offset);
+    }
   }
 
   void stage(const std::shared_ptr<Node> & root) const
   {
-    MemoryStager stager(this->device, this->fence, root);
+    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
+    {
+      MemoryStager stager(this->device, this->staging_command.get());
+      root->stage(&stager);
+    }
+    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
+
+    this->staging_command->submit(this->device->default_queue,
+                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                  this->fence->fence);
   }
 
-  void record(const std::shared_ptr<Node> & root)
+  void record(const std::shared_ptr<Node> & root) const
   {
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
 
-    this->command->begin();
+    CommandRecorder recorder(this->device,
+                             this->renderpass,
+                             this->pipelinecache,
+                             this->framebuffer->framebuffer,
+                             this->scissor,
+                             this->viewport,
+                             this->renderarea,
+                             this->clearvalues,
+                             this->render_command.get());
 
-    VkRenderPassBeginInfo begin_info{
-      VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
-      nullptr,                                         // pNext
-      this->renderpass->renderpass,                    // renderPass
-      this->framebuffer->framebuffer,                  // framebuffer
-      this->renderarea,                                // renderArea
-      static_cast<uint32_t>(this->clearvalues.size()), // clearValueCount
-      this->clearvalues.data()                         // pClearValues
-    };
-
-    vkCmdBeginRenderPass(this->command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    root->record(this);
-
-    vkCmdEndRenderPass(this->command->buffer());
-
-    this->command->end();
+    root->record(&recorder);
   }
 
   void submit(const std::shared_ptr<Node> & root) const
@@ -231,14 +268,10 @@ public:
     THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence->fence, VK_TRUE, UINT64_MAX));
     THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence->fence));
 
-    this->command->submit(this->device->default_queue, 
-                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-                          {}, 
-                          {}, 
-                          this->fence->fence);
+    this->render_command->submit(this->device->default_queue,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+                                 this->fence->fence);
   }
-
-  State state;
 
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanRenderpass> renderpass;
@@ -253,6 +286,7 @@ public:
   std::vector<VkClearValue> clearvalues;
 
   std::shared_ptr<VulkanFence> fence;
-  std::unique_ptr<VulkanCommandBuffers> command;
-  std::unique_ptr<VulkanPipelineCache> pipelinecache;
+  std::unique_ptr<VulkanCommandBuffers> render_command;
+  std::unique_ptr<VulkanCommandBuffers> staging_command;
+  std::shared_ptr<VulkanPipelineCache> pipelinecache;
 };

@@ -719,9 +719,9 @@ public:
 
   void submit(VkQueue queue,
               VkPipelineStageFlags flags,
+              VkFence fence = VK_NULL_HANDLE,
               const std::vector<VkSemaphore> & wait_semaphores = std::vector<VkSemaphore>(),
-              const std::vector<VkSemaphore> & signal_semaphores = std::vector<VkSemaphore>(),
-              VkFence fence = VK_NULL_HANDLE)
+              const std::vector<VkSemaphore> & signal_semaphores = std::vector<VkSemaphore>())
   {
     VulkanCommandBuffers::submit(queue, flags, this->buffers, wait_semaphores, signal_semaphores, fence);
   }

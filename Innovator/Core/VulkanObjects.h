@@ -54,6 +54,7 @@ public:
   VkBufferCreateFlags flags;
   VkDeviceSize size;
   VkDeviceSize offset{ 0 };
+  VkDeviceSize range{ VK_WHOLE_SIZE };
   VkBufferUsageFlags usage;
   VkSharingMode sharingMode;
 
@@ -140,16 +141,16 @@ public:
 
     for (const VulkanBufferDescription & buffer : buffers) {
       descriptor_pool_sizes.push_back({
-        buffer.layout.type,              // type
-        1,                               // descriptorCount
+        buffer.layout.type,                   // type
+        1,                                    // descriptorCount
       });
 
       descriptor_set_layout_bindings.push_back({
-        buffer.layout.binding,             // binding
-        buffer.layout.type,                // descriptorType
-        1,                                 // descriptorCount
-        buffer.layout.stage,               // stageFlags
-        nullptr,                           // pImmutableSamplers
+        buffer.layout.binding,                // binding
+        buffer.layout.type,                   // descriptorType
+        1,                                    // descriptorCount
+        buffer.layout.stage,                  // stageFlags
+        nullptr,                              // pImmutableSamplers
       });
     }
 
@@ -161,12 +162,6 @@ public:
     this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(device, setlayouts);
 
     for (const VulkanTextureDescription & texture : textures) {
-      VkDescriptorImageInfo image_info {
-        texture.sampler,                          // sampler
-        texture.view,                             // imageView
-        VK_IMAGE_LAYOUT_GENERAL,                  // imageLayout
-      };
-
       const VkWriteDescriptorSet write_descriptor_set {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,   // sType
         nullptr,                                  // pNext
@@ -175,7 +170,7 @@ public:
         0,                                        // dstArrayElement
         1,                                        // descriptorCount
         texture.layout.type,                      // descriptorType
-        &image_info,                              // pImageInfo
+        &texture.image,                           // pImageInfo
         nullptr,                                  // pBufferInfo
         nullptr,                                  // pTexelBufferView
       };
@@ -184,12 +179,6 @@ public:
     }
 
     for (const VulkanBufferDescription & buffer : buffers) {
-      VkDescriptorBufferInfo buffer_info {
-        buffer.buffer,                            // buffer
-        buffer.offset,                            // offset
-        buffer.size,                              // range
-      };
-
       const VkWriteDescriptorSet write_descriptor_set {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,   // sType
         nullptr,                                  // pNext
@@ -199,7 +188,7 @@ public:
         1,                                        // descriptorCount
         buffer.layout.type,                       // descriptorType
         nullptr,                                  // pImageInfo
-        &buffer_info,                             // pBufferInfo
+        &buffer.buffer,                           // pBufferInfo
         nullptr,                                  // pTexelBufferView
       };
 
@@ -232,7 +221,7 @@ public:
                          const std::vector<VulkanTextureDescription> & textures,
                          const VkPipelineRasterizationStateCreateInfo & rasterizationstate,
                          const std::shared_ptr<VulkanRenderpass> & renderpass,
-                         const std::unique_ptr<VulkanPipelineCache> & pipelinecache,
+                         const std::shared_ptr<VulkanPipelineCache> & pipelinecache,
                          VkPrimitiveTopology topology)
   {
     this->descriptor_set = std::make_unique<DescriptorSetObject>(device, textures, buffers);
@@ -305,7 +294,7 @@ public:
                         const VulkanShaderModuleDescription & shader,
                         const std::vector<VulkanBufferDescription> & buffers,
                         const std::vector<VulkanTextureDescription> & textures,
-                        const std::unique_ptr<VulkanPipelineCache> & pipelinecache)
+                        const std::shared_ptr<VulkanPipelineCache> & pipelinecache)
   {
     this->descriptor_set = std::make_unique<DescriptorSetObject>(device, textures, buffers);
 

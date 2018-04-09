@@ -19,9 +19,9 @@ public:
     this->doStage(stager);
   }
 
-  void record(class SceneManager * action)
+  void record(class CommandRecorder * recorder)
   {
-    this->doRecord(action);
+    this->doRecord(recorder);
   }
 
   void render(class SceneRenderer * renderer)
@@ -32,7 +32,7 @@ public:
 private:
   virtual void doAlloc(class MemoryAllocator *) {}
   virtual void doStage(class MemoryStager *) {}
-  virtual void doRecord(class SceneManager *) {}
+  virtual void doRecord(class CommandRecorder *) {}
   virtual void doRender(class SceneRenderer *) {}
 };
 
@@ -62,10 +62,10 @@ protected:
     }
   }
 
-  void doRecord(SceneManager * action) override
+  void doRecord(CommandRecorder * recorder) override
   {
     for (const auto& node : this->children) {
-      node->record(action);
+      node->record(recorder);
     }
   }
 
