@@ -208,46 +208,6 @@ private:
   }
 };
 
-class ImageData : public Node {
-public:
-  NO_COPY_OR_ASSIGNMENT(ImageData)
-  ImageData() = delete;
-  virtual ~ImageData() = default;
-
-  explicit ImageData(const std::string & filename) : 
-    ImageData(gli::load(filename)) {}
-
-  explicit ImageData(const gli::texture & texture) : 
-    texture(texture) {}
-
-private:
-  template <typename StateType>
-  void initState(StateType & state)
-  {
-    state.imagedata = {
-      &this->texture,                   // texture
-    };
-
-    state.bufferdata = {
-      1,                                // stride
-      this->texture.size(),             // size
-      this->texture.data(),             // data
-    };
-  }
-
-  void doAlloc(MemoryAllocator * allocator) override
-  {
-    this->initState(allocator->state);
-  }
-
-  void doStage(MemoryStager * stager) override
-  {
-    this->initState(stager->state);
-  }
-
-  gli::texture texture;
-};
-
 class CpuMemoryBuffer : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(CpuMemoryBuffer)
@@ -273,7 +233,6 @@ private:
   {
     this->buffer = std::make_shared<BufferObject>(
       allocator->state.bufferdata.size,
-      0,
       this->buffer_usage_flags,
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -311,7 +270,6 @@ private:
   {
     this->buffer = std::make_shared<BufferObject>(
       allocator->state.bufferdata.size,
-      0,
       this->buffer_usage_flags,
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -358,7 +316,6 @@ private:
   {
     this->buffer = std::make_shared<BufferObject>(
       sizeof(glm::mat4) * 2,
-      0,
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -566,37 +523,84 @@ private:
 class Image : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Image)
-  Image() = default;
+
+  explicit Image(const std::string & filename) :
+    Image(gli::load(filename)) 
+  {}
+
+  explicit Image(const gli::texture & texture) :
+    texture(texture),
+    format(vulkan_format[texture.format()]),
+    image_type(vulkan_image_type[texture.target()]),
+    image_view_type(vulkan_image_view_type[texture.target()])
+  {
+    this->extent = get_image_extent(0);
+
+    this->num_levels = static_cast<uint32_t>(this->texture.levels());
+    this->num_layers = static_cast<uint32_t>(this->texture.layers());
+
+    this->component_mapping = {
+      VK_COMPONENT_SWIZZLE_R,         // r
+      VK_COMPONENT_SWIZZLE_G,         // g
+      VK_COMPONENT_SWIZZLE_B,         // b
+      VK_COMPONENT_SWIZZLE_A          // a
+    };
+
+    this->subresource_range = {
+      VK_IMAGE_ASPECT_COLOR_BIT,                                 // aspectMask 
+      static_cast<uint32_t>(this->texture.base_level()),         // baseMipLevel 
+      static_cast<uint32_t>(this->texture.levels()),             // levelCount 
+      static_cast<uint32_t>(this->texture.base_layer()),         // baseArrayLayer 
+      static_cast<uint32_t>(this->texture.layers())              // layerCount 
+    };
+  }
+
   virtual ~Image() = default;
 
 private:
+  VkExtent3D get_image_extent(size_t mip_level) const
+  {
+    return {
+      static_cast<uint32_t>(this->texture.extent(mip_level).x),
+      static_cast<uint32_t>(this->texture.extent(mip_level).y),
+      static_cast<uint32_t>(this->texture.extent(mip_level).z)
+    };
+  }
+
   void doAlloc(MemoryAllocator * allocator) override
   {
-    const auto texture = allocator->state.imagedata.texture;
+    VkImageFormatProperties image_format_properties;
 
-    VkExtent3D extent = {
-      static_cast<uint32_t>(texture->extent().x),
-      static_cast<uint32_t>(texture->extent().y),
-      static_cast<uint32_t>(texture->extent().z)
-    };
+    THROW_ON_ERROR(vkGetPhysicalDeviceImageFormatProperties(
+      allocator->device->physical_device.device,
+      this->format,
+      this->image_type,
+      this->tiling,
+      this->usage_flags,
+      this->create_flags,
+      &image_format_properties));
 
-    auto image = std::make_shared<VulkanImage>(
-      allocator->device,
-      0,
-      vulkan_image_type[texture->target()],
-      vulkan_format[texture->format()],
-      extent,
-      static_cast<uint32_t>(texture->levels()),
-      static_cast<uint32_t>(texture->layers()),
-      VK_SAMPLE_COUNT_1_BIT,
-      VK_IMAGE_TILING_OPTIMAL,
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    this->buffer = std::make_shared<BufferObject>(
+      this->texture.size(),
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
-      std::vector<uint32_t>(),
-      VK_IMAGE_LAYOUT_UNDEFINED);
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    allocator->bufferobjects.push_back(this->buffer);
 
     this->image = std::make_shared<ImageObject>(
-      image,
+      std::make_shared<VulkanImage>(
+        allocator->device,
+        this->image_type,
+        this->format,
+        this->extent,
+        this->num_levels,
+        this->num_layers,
+        this->sample_count,
+        this->tiling,
+        this->usage_flags,
+        this->sharing_mode,
+        this->create_flags),
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     allocator->imageobjects.push_back(this->image);
@@ -604,29 +608,14 @@ private:
 
   void doStage(MemoryStager * stager) override
   {
-    VkComponentMapping component_mapping{
-      VK_COMPONENT_SWIZZLE_R,         // r
-      VK_COMPONENT_SWIZZLE_G,         // g
-      VK_COMPONENT_SWIZZLE_B,         // b
-      VK_COMPONENT_SWIZZLE_A          // a
-    };
-
-    const auto texture = stager->state.imagedata.texture;
-
-    VkImageSubresourceRange subresource_range = {
-      VK_IMAGE_ASPECT_COLOR_BIT,                            // aspectMask 
-      static_cast<uint32_t>(texture->base_level()),         // baseMipLevel 
-      static_cast<uint32_t>(texture->levels()),             // levelCount 
-      static_cast<uint32_t>(texture->base_layer()),         // baseArrayLayer 
-      static_cast<uint32_t>(texture->layers())              // layerCount 
-    };
+    this->buffer->memcpy(this->texture.data());
 
     this->view = std::make_unique<VulkanImageView>(
       this->image->image,
-      vulkan_format[texture->format()],
-      vulkan_image_view_type[texture->target()],
-      component_mapping,
-      subresource_range);
+      this->format,
+      this->image_view_type,
+      this->component_mapping,
+      this->subresource_range);
 
     VkImageMemoryBarrier memory_barrier{
       VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                // sType
@@ -638,7 +627,7 @@ private:
       stager->device->default_queue_index,                   // srcQueueFamilyIndex
       stager->device->default_queue_index,                   // dstQueueFamilyIndex
       this->image->image->image,                             // image
-      subresource_range,                                     // subresourceRange
+      this->subresource_range,                               // subresourceRange
     };
 
     vkCmdPipelineBarrier(stager->command->buffer(),
@@ -647,43 +636,36 @@ private:
                          0, 0, nullptr, 0, nullptr, 1,
                          &memory_barrier);
 
-    VkDeviceSize buffer_offset = 0;
-    for (uint32_t mip_level = 0; mip_level < texture->levels(); mip_level++) {
-      const VkExtent3D image_extent{
-        static_cast<uint32_t>(texture->extent(mip_level).x),
-        static_cast<uint32_t>(texture->extent(mip_level).y),
-        static_cast<uint32_t>(texture->extent(mip_level).z)
-      };
+    std::vector<VkBufferImageCopy> regions;
 
-      const VkOffset3D image_offset = {
-        0, 0, 0
-      };
+    VkDeviceSize buffer_offset = 0;
+    for (uint32_t mip_level = 0; mip_level < this->texture.levels(); mip_level++) {
 
       const VkImageSubresourceLayers subresource_layers{
-        subresource_range.aspectMask,               // aspectMask
-        mip_level,                                  // mipLevel
-        subresource_range.baseArrayLayer,           // baseArrayLayer
-        subresource_range.layerCount                // layerCount
+        this->subresource_range.aspectMask,               // aspectMask
+        mip_level,                                        // mipLevel
+        this->subresource_range.baseArrayLayer,           // baseArrayLayer
+        this->subresource_range.layerCount,               // layerCount
       };
 
-      VkBufferImageCopy buffer_image_copy{
+      regions.push_back({
         buffer_offset,                             // bufferOffset 
         0,                                         // bufferRowLength
         0,                                         // bufferImageHeight
         subresource_layers,                        // imageSubresource
-        image_offset,                              // imageOffset
-        image_extent                               // imageExtent
-      };
+        { 0, 0, 0 },                               // imageOffset
+        get_image_extent(mip_level),               // imageExtent
+      });
 
-      vkCmdCopyBufferToImage(stager->command->buffer(),
-                             stager->state.buffer.buffer,
-                             this->image->image->image,
-                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                             1,
-                             &buffer_image_copy);
-
-      buffer_offset += texture->size(mip_level);
+      buffer_offset += this->texture.size(mip_level);
     }
+
+    vkCmdCopyBufferToImage(stager->command->buffer(),
+                           this->buffer->buffer->buffer,
+                           this->image->image->image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           static_cast<uint32_t>(regions.size()),
+                           regions.data());
   }
 
   void doRecord(CommandRecorder * recorder) override
@@ -695,8 +677,26 @@ private:
     recorder->state.textures.push_back(recorder->state.texture_description);
   }
 
+  gli::texture texture;
+
+  std::shared_ptr<BufferObject> buffer;
   std::shared_ptr<ImageObject> image;
   std::unique_ptr<VulkanImageView> view;
+
+  VkExtent3D extent;
+  uint32_t num_levels;
+  uint32_t num_layers;
+  VkFormat format;
+  VkImageType image_type;
+  VkImageViewType image_view_type;
+  VkSampleCountFlagBits sample_count{ VK_SAMPLE_COUNT_1_BIT };
+  VkSharingMode sharing_mode{ VK_SHARING_MODE_EXCLUSIVE };
+  VkImageCreateFlags create_flags{ 0 };
+  VkImageUsageFlags usage_flags{ VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT };
+  VkImageTiling tiling{ VK_IMAGE_TILING_OPTIMAL };
+
+  VkComponentMapping component_mapping;
+  VkImageSubresourceRange subresource_range;
 
   inline static std::map<gli::format, VkFormat> vulkan_format{
     { gli::format::FORMAT_R8_UNORM_PACK8, VkFormat::VK_FORMAT_R8_UNORM },
@@ -723,10 +723,8 @@ public:
   explicit Texture(const std::string & filename)
   {
     this->children = {
-      std::make_shared<ImageData>(gli::load(filename)),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<Sampler>(),
-      std::make_shared<Image>(),
+      std::make_shared<Image>(filename),
     };
   }
 };

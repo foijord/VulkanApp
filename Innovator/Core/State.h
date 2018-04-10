@@ -50,19 +50,13 @@ struct VulkanBufferDataDescription {
   void * data;
 };
 
-struct VulkanImageDataDescription {
-  gli::texture * texture;
-};
-
 struct MemoryState {
   VkDescriptorBufferInfo buffer;
-  VulkanImageDataDescription imagedata;
   VulkanBufferDataDescription bufferdata;
 };
 
 struct StageState {
   VkDescriptorBufferInfo buffer;
-  VulkanImageDataDescription imagedata;
   VulkanBufferDataDescription bufferdata;
 };
 

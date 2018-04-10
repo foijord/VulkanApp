@@ -275,18 +275,15 @@ public:
 
       this->color_buffer = std::make_shared<VulkanImage>(
         this->device,
-        0,
         VK_IMAGE_TYPE_2D,
         this->color_format,
         extent3d,
         subresource_range.levelCount,
         subresource_range.layerCount,
         VK_SAMPLE_COUNT_1_BIT,
-        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        VK_SHARING_MODE_EXCLUSIVE,
-        std::vector<uint32_t>(),
-        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED);
+        VK_SHARING_MODE_EXCLUSIVE);
 
       this->color_buffer_object = std::make_unique<ImageObject>(
         this->color_buffer,
@@ -328,19 +325,15 @@ public:
 
       this->depth_buffer = std::make_shared<VulkanImage>(
         this->device,
-        0,
         VK_IMAGE_TYPE_2D,
         this->depth_format,
         extent3d,
         subresource_range.levelCount,
         subresource_range.layerCount,
         VK_SAMPLE_COUNT_1_BIT,
-        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        VK_SHARING_MODE_EXCLUSIVE,
-        std::vector<uint32_t>(),
-        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED);
-
+        VK_SHARING_MODE_EXCLUSIVE);
 
       this->depth_buffer_object = std::make_unique<ImageObject>(
         this->depth_buffer,
@@ -464,7 +457,7 @@ public:
         subresource_range,                                             // subresourceRange
       } };
 
-    std::vector<VkImageMemoryBarrier> dst_image_barriers = src_image_barriers;
+    auto dst_image_barriers = src_image_barriers;
     std::swap(dst_image_barriers[0].oldLayout, dst_image_barriers[0].newLayout);
     std::swap(dst_image_barriers[1].oldLayout, dst_image_barriers[1].newLayout);
     std::swap(dst_image_barriers[0].srcAccessMask, dst_image_barriers[0].dstAccessMask);

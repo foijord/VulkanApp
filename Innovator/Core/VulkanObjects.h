@@ -17,10 +17,10 @@ public:
   ~BufferObject() = default;
   
   BufferObject(VkDeviceSize size,
-               VkBufferCreateFlags flags,
                VkBufferUsageFlags usage,
                VkSharingMode sharingMode,
-               VkMemoryPropertyFlags memory_property_flags) :
+               VkMemoryPropertyFlags memory_property_flags,
+               VkBufferCreateFlags flags = 0) :
     flags(flags),
     size(size),
     usage(usage),

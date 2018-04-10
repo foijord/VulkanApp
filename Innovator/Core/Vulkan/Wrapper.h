@@ -772,7 +772,6 @@ public:
   NO_COPY_OR_ASSIGNMENT(VulkanImage)
 
   VulkanImage(std::shared_ptr<VulkanDevice> device, 
-              VkImageCreateFlags flags,
               VkImageType image_type, 
               VkFormat format, 
               VkExtent3D extent,
@@ -782,8 +781,9 @@ public:
               VkImageTiling tiling, 
               VkImageUsageFlags usage, 
               VkSharingMode sharing_mode,
-              std::vector<uint32_t> queue_family_indices,
-              VkImageLayout initial_layout)
+              VkImageCreateFlags flags = 0,
+              std::vector<uint32_t> queue_family_indices = std::vector<uint32_t>(),
+              VkImageLayout initial_layout = VK_IMAGE_LAYOUT_UNDEFINED)
     : device(std::move(device))
   {
     VkImageCreateInfo create_info {
