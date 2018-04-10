@@ -531,14 +531,12 @@ public:
   explicit Image(const gli::texture & texture) :
     texture(texture),
     format(vulkan_format[texture.format()]),
+    extent(get_image_extent(0)),
     image_type(vulkan_image_type[texture.target()]),
-    image_view_type(vulkan_image_view_type[texture.target()])
+    image_view_type(vulkan_image_view_type[texture.target()]),
+    num_levels(static_cast<uint32_t>(texture.levels())),
+    num_layers(static_cast<uint32_t>(texture.layers()))
   {
-    this->extent = get_image_extent(0);
-
-    this->num_levels = static_cast<uint32_t>(this->texture.levels());
-    this->num_layers = static_cast<uint32_t>(this->texture.layers());
-
     this->component_mapping = {
       VK_COMPONENT_SWIZZLE_R,         // r
       VK_COMPONENT_SWIZZLE_G,         // g
