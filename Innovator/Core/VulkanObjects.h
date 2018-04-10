@@ -36,11 +36,10 @@ public:
     this->memory = std::move(memory);
     this->offset = offset;
 
-    THROW_ON_ERROR(vkBindBufferMemory(
-      this->buffer->device->device,
-      this->buffer->buffer,
-      this->memory->memory,
-      this->offset));
+    THROW_ON_ERROR(vkBindBufferMemory(this->buffer->device->device,
+                                      this->buffer->buffer,
+                                      this->memory->memory,
+                                      this->offset));
   }
 
   void memcpy(const void * data) const
@@ -81,8 +80,8 @@ public:
       this->image->image,
       &memory_requirements);
 
-    uint32_t memory_type_index = this->image->device->physical_device.getMemoryTypeIndex(
-      memory_requirements,
+    auto memory_type_index = this->image->device->physical_device.getMemoryTypeIndex(
+      memory_requirements.memoryTypeBits,
       memory_property_flags);
 
     const auto memory = std::make_shared<VulkanMemory>(
@@ -99,11 +98,10 @@ public:
   {
     this->memory = std::move(memory);
 
-    THROW_ON_ERROR(vkBindImageMemory(
-      this->image->device->device,
-      this->image->image,
-      this->memory->memory,
-      offset));
+    THROW_ON_ERROR(vkBindImageMemory(this->image->device->device,
+                                     this->image->image,
+                                     this->memory->memory,
+                                     offset));
   }
 
   std::shared_ptr<VulkanImage> image;

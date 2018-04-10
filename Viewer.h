@@ -17,14 +17,13 @@
 
 class VulkanSurface {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanSurface);
+  NO_COPY_OR_ASSIGNMENT(VulkanSurface)
   VulkanSurface() = delete;
 
-  VulkanSurface(
-    std::shared_ptr<VulkanInstance> vulkan,
-    HWND window,
-    HINSTANCE hinstance) : 
-      vulkan(std::move(vulkan))
+  VulkanSurface(std::shared_ptr<VulkanInstance> vulkan,
+                HWND window,
+                HINSTANCE hinstance) : 
+    vulkan(std::move(vulkan))
   {
     VkWin32SurfaceCreateInfoKHR create_info{
       VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, // sType 
@@ -48,10 +47,10 @@ public:
 
 class VulkanViewer : public QWindow {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanViewer);
+  NO_COPY_OR_ASSIGNMENT(VulkanViewer)
   VulkanViewer() = delete;
 
-  VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) : 
+  explicit VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) : 
     QWindow(parent),
     vulkan(std::move(vulkan))
   {
@@ -66,7 +65,7 @@ public:
     required_device_features.tessellationShader = VK_TRUE;
     required_device_features.textureCompressionBC = VK_TRUE;
 
-    VulkanPhysicalDevice physical_device = this->vulkan->selectPhysicalDevice(required_device_features);
+    auto physical_device = this->vulkan->selectPhysicalDevice(required_device_features);
 
     std::vector<VkBool32> presentation_filter(physical_device.queue_family_properties.size());
     for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
@@ -74,7 +73,7 @@ public:
     }
 
     float queue_priorities[1] = { 1.0f };
-    uint32_t queue_index = physical_device.getQueueIndex(
+    const auto queue_index = physical_device.getQueueIndex(
       VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
       presentation_filter);
 
@@ -112,8 +111,6 @@ public:
 
     this->surface_format = surface_formats[0];
 
-    this->present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-
     uint32_t mode_count;
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &mode_count, nullptr));
     std::vector<VkPresentModeKHR> present_modes(mode_count);
@@ -123,7 +120,6 @@ public:
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
     }
 
-    this->depth_format = VK_FORMAT_D32_SFLOAT;
     this->color_format = this->surface_format.format;
 
     std::vector<VkAttachmentDescription> attachment_descriptions{ {
@@ -151,6 +147,7 @@ public:
     VkAttachmentReference depth_stencil_attachment{
       1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
     };
+
     std::vector<VkAttachmentReference> color_attachments{
       { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }
     };
@@ -204,7 +201,6 @@ public:
 
     this->renderaction->alloc(this->root);
     this->renderaction->stage(this->root);
-    this->renderaction->record(this->root);
   }
 
   void swapBuffers()
@@ -242,7 +238,7 @@ public:
   {
     QWindow::resizeEvent(e);
     this->rebuildSwapchain();
-    this->renderaction->record(this->root);
+    this->renderaction->record(this->root, this->renderpass, this->framebuffer);
     this->renderaction->submit(this->root);
     this->swapBuffers();
   }
@@ -252,12 +248,14 @@ public:
     // make sure all work submitted is done before we start recreating stuff
     THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
 
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(
       this->device->physical_device.device,
       this->surface->surface,
-      &this->surface_capabilities));
+      &surface_capabilities));
 
-    VkExtent2D extent2d = this->surface_capabilities.currentExtent;
+    VkExtent2D extent2d = surface_capabilities.currentExtent;
     VkExtent3D extent3d = { extent2d.width, extent2d.height, 1 };
 
     std::vector<VkImageMemoryBarrier> memory_barriers;
@@ -359,7 +357,7 @@ public:
         this->device->default_queue_index,                             // dstQueueFamilyIndex
         this->depth_buffer->image,                                     // image
         subresource_range                                              // subresourceRange
-        });
+      });
     }
 
     std::vector<VkImageView> framebuffer_attachments{
@@ -376,8 +374,6 @@ public:
 
     this->renderaction = std::make_unique<SceneManager>(
       this->device,
-      this->renderpass,
-      this->framebuffer,
       extent2d);
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
@@ -392,7 +388,7 @@ public:
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
       std::vector<uint32_t>(this->device->default_queue_index),
-      this->surface_capabilities.currentTransform,
+      surface_capabilities.currentTransform,
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       this->present_mode,
       VK_FALSE,
@@ -414,8 +410,10 @@ public:
           { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }                      // subresourceRange
           });
       }
+
       VulkanCommandBuffers command(this->device);
       command.begin();
+
       vkCmdPipelineBarrier(
         command.buffer(),
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -425,6 +423,7 @@ public:
         memory_barriers.data());
 
       command.end();
+
       command.submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
       THROW_ON_ERROR(vkQueueWaitIdle(this->device->default_queue));
     }
@@ -572,14 +571,13 @@ public:
   std::shared_ptr<Separator> root;
   std::shared_ptr<Camera> camera;
 
-  VkFormat depth_format;
+  VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
   VkFormat color_format;
 
-  VkPresentModeKHR present_mode;
-  VkSurfaceFormatKHR surface_format;
-  VkSurfaceCapabilitiesKHR surface_capabilities;
+  VkPresentModeKHR present_mode{ VK_PRESENT_MODE_MAILBOX_KHR };
+  VkSurfaceFormatKHR surface_format{};
 
-  Qt::MouseButton button;
-  bool mouse_pressed;
-  glm::vec2 mouse_pos;
+  Qt::MouseButton button{ Qt::MouseButton::NoButton };
+  bool mouse_pressed{ false };
+  glm::vec2 mouse_pos{};
 };

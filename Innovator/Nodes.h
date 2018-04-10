@@ -129,7 +129,8 @@ public:
 private:
   void doRender(SceneRenderer * renderer) override
   {
-    this->aspectratio = renderer->viewport.width / renderer->viewport.height;
+    this->aspectratio = static_cast<float>(renderer->extent.width) / 
+                        static_cast<float>(renderer->extent.height);
     renderer->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
     renderer->state.ViewMatrix = glm::translate(renderer->state.ViewMatrix, -this->position);
     renderer->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
@@ -530,28 +531,29 @@ public:
 
   explicit Image(const gli::texture & texture) :
     texture(texture),
-    format(vulkan_format[texture.format()]),
     extent(get_image_extent(0)),
+    num_levels(static_cast<uint32_t>(texture.levels())),
+    num_layers(static_cast<uint32_t>(texture.layers())),
+    format(vulkan_format[texture.format()]),
     image_type(vulkan_image_type[texture.target()]),
     image_view_type(vulkan_image_view_type[texture.target()]),
-    num_levels(static_cast<uint32_t>(texture.levels())),
-    num_layers(static_cast<uint32_t>(texture.layers()))
-  {
-    this->component_mapping = {
+    sample_count(VK_SAMPLE_COUNT_1_BIT),
+    sharing_mode(VK_SHARING_MODE_EXCLUSIVE),
+    create_flags(0),
+    usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
+    tiling(VK_IMAGE_TILING_OPTIMAL),
+    component_mapping({
       VK_COMPONENT_SWIZZLE_R,         // r
       VK_COMPONENT_SWIZZLE_G,         // g
       VK_COMPONENT_SWIZZLE_B,         // b
-      VK_COMPONENT_SWIZZLE_A          // a
-    };
-
-    this->subresource_range = {
+      VK_COMPONENT_SWIZZLE_A}),       // a
+    subresource_range({
       VK_IMAGE_ASPECT_COLOR_BIT,                                 // aspectMask 
       static_cast<uint32_t>(this->texture.base_level()),         // baseMipLevel 
       static_cast<uint32_t>(this->texture.levels()),             // levelCount 
       static_cast<uint32_t>(this->texture.base_layer()),         // baseArrayLayer 
-      static_cast<uint32_t>(this->texture.layers())              // layerCount 
-    };
-  }
+      static_cast<uint32_t>(this->texture.layers())})            // layerCount 
+  {}
 
   virtual ~Image() = default;
 
@@ -687,12 +689,11 @@ private:
   VkFormat format;
   VkImageType image_type;
   VkImageViewType image_view_type;
-  VkSampleCountFlagBits sample_count{ VK_SAMPLE_COUNT_1_BIT };
-  VkSharingMode sharing_mode{ VK_SHARING_MODE_EXCLUSIVE };
-  VkImageCreateFlags create_flags{ 0 };
-  VkImageUsageFlags usage_flags{ VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT };
-  VkImageTiling tiling{ VK_IMAGE_TILING_OPTIMAL };
-
+  VkSampleCountFlagBits sample_count;
+  VkSharingMode sharing_mode;
+  VkImageCreateFlags create_flags;
+  VkImageUsageFlags usage_flags;
+  VkImageTiling tiling;
   VkComponentMapping component_mapping;
   VkImageSubresourceRange subresource_range;
 

@@ -67,10 +67,10 @@ public:
     throw std::runtime_error("VulkanDevice::getQueueIndex: could not find queue with required properties");
   }
 
-  uint32_t getMemoryTypeIndex(VkMemoryRequirements requirements, VkMemoryPropertyFlags required_flags) const
+  uint32_t getMemoryTypeIndex(uint32_t memory_type, VkMemoryPropertyFlags required_flags) const
   {
     for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++) {
-      if (((requirements.memoryTypeBits >> i) & 1) == 1) { // check for required memory type
+      if (((memory_type >> i) & 1) == 1) { // check for required memory type
         if ((this->memory_properties.memoryTypes[i].propertyFlags & required_flags) == required_flags) {
           return i;
         }
