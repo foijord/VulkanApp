@@ -131,32 +131,33 @@ public:
 
   explicit CommandRecorder(std::shared_ptr<VulkanDevice> device,
                            std::shared_ptr<VulkanRenderpass> renderpass,
+                           std::shared_ptr<VulkanFramebuffer> framebuffer,
                            std::shared_ptr<VulkanPipelineCache> pipelinecache,
                            VulkanCommandBuffers * command) :
     device(std::move(device)),
     renderpass(std::move(renderpass)),
+    framebuffer(std::move(framebuffer)),
     pipelinecache(std::move(pipelinecache)),
     command(command)
   {
-    this->command->begin();
+    //this->command->begin();
   }
 
   ~CommandRecorder()
   {
-    vkCmdEndRenderPass(this->command->buffer());
-
-    try {
-      this->command->end();
-    }
-    catch (std::exception & e) {
-      std::cerr << e.what() << std::endl;
-    }
+    //try {
+    //  //this->command->end();
+    //}
+    //catch (std::exception & e) {
+    //  std::cerr << e.what() << std::endl;
+    //}
   }
 
   RecordState state;
 
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanRenderpass> renderpass;
+  std::shared_ptr<VulkanFramebuffer> framebuffer;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
 
   VulkanCommandBuffers * command;
@@ -165,10 +166,14 @@ public:
 class SceneRenderer {
 public:
   NO_COPY_OR_ASSIGNMENT(SceneRenderer)
-  SceneRenderer() = default;
+  SceneRenderer(VulkanCommandBuffers * command) :
+    command(command)
+  {}
+
   ~SceneRenderer() = default;
 
   RenderState state;
+  VulkanCommandBuffers * command;
 };
 
 class SceneManager {
@@ -213,9 +218,17 @@ public:
   {
     CommandRecorder recorder(this->device,
                              this->renderpass,
+                             framebuffer,
                              this->pipelinecache,
                              this->render_command.get());
 
+    root->record(&recorder);
+  }
+
+  void submit(const std::shared_ptr<Node> & root,
+              std::shared_ptr<VulkanFramebuffer> framebuffer,
+              const VkExtent2D extent) const
+  {
     VkRect2D scissor{ { 0, 0 }, extent };
 
     const VkRect2D renderarea{
@@ -247,18 +260,18 @@ public:
       clearvalues.data()                               // pClearValues
     };
 
+    this->render_command->begin();
+
     vkCmdBeginRenderPass(this->render_command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdSetViewport(this->render_command->buffer(), 0, 1, &viewport);
     vkCmdSetScissor(this->render_command->buffer(), 0, 1, &scissor);
 
-    root->record(&recorder);
-  }
-
-  void submit(const std::shared_ptr<Node> & root) const
-  {
-    SceneRenderer renderer;
+    SceneRenderer renderer(this->render_command.get());
     root->render(&renderer);
+
+    vkCmdEndRenderPass(this->render_command->buffer());
+    this->render_command->end();
 
     this->render_fence->reset();
 

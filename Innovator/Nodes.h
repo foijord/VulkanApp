@@ -809,26 +809,38 @@ private:
       recorder->state.rasterizationstate,
       this->topology);
 
-    this->pipeline->bind(recorder->command->buffer());
+    this->command = std::make_unique<VulkanCommandBuffers>(recorder->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+
+    this->command->begin(0, recorder->renderpass->renderpass, 0, recorder->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
+
+    this->pipeline->bind(this->command->buffer());
 
     for (const auto& attribute : recorder->state.attribute_descriptions) {
       VkDeviceSize offsets[1] = { 0 };
-      vkCmdBindVertexBuffers(recorder->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
+      vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
     }
 
     if (!recorder->state.indices.empty()) {
       for (const auto& indexbuffer : recorder->state.indices) {
-        vkCmdBindIndexBuffer(recorder->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
-        vkCmdDrawIndexed(recorder->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
+        vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
+        vkCmdDrawIndexed(this->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
       }
     }
     else {
-      vkCmdDraw(recorder->command->buffer(), this->count, 1, 0, 0);
+      vkCmdDraw(this->command->buffer(), this->count, 1, 0, 0);
     }
+
+    this->command->end();
+  }
+
+  void doRender(SceneRenderer * renderer) override
+  {
+    vkCmdExecuteCommands(renderer->command->buffer(), 1, &this->command->buffers[0]);
   }
 
   uint32_t count;
   VkPrimitiveTopology topology;
+  std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<GraphicsPipelineObject> pipeline;
 };
 

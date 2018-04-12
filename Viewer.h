@@ -248,7 +248,7 @@ public:
                                 static_cast<float>(this->extent2d.height);
 
     this->renderaction->record(this->root, this->framebuffer, this->extent2d);
-    this->renderaction->submit(this->root);
+    this->renderaction->submit(this->root, this->framebuffer, this->extent2d);
     this->swapBuffers();
   }
 
@@ -553,7 +553,7 @@ public:
       }
       this->mouse_pos = pos;
 
-      this->renderaction->submit(this->root);
+      this->renderaction->submit(this->root, this->framebuffer, this->extent2d);
       this->swapBuffers();
     }
   }
