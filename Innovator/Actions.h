@@ -128,30 +128,21 @@ class CommandRecorder {
 public:
   NO_COPY_OR_ASSIGNMENT(CommandRecorder)
   CommandRecorder() = delete;
+  ~CommandRecorder() = default;
 
   explicit CommandRecorder(std::shared_ptr<VulkanDevice> device,
                            std::shared_ptr<VulkanRenderpass> renderpass,
                            std::shared_ptr<VulkanFramebuffer> framebuffer,
                            std::shared_ptr<VulkanPipelineCache> pipelinecache,
+                           VkExtent2D extent,
                            VulkanCommandBuffers * command) :
     device(std::move(device)),
     renderpass(std::move(renderpass)),
     framebuffer(std::move(framebuffer)),
     pipelinecache(std::move(pipelinecache)),
+    extent(extent),
     command(command)
-  {
-    //this->command->begin();
-  }
-
-  ~CommandRecorder()
-  {
-    //try {
-    //  //this->command->end();
-    //}
-    //catch (std::exception & e) {
-    //  std::cerr << e.what() << std::endl;
-    //}
-  }
+  {}
 
   RecordState state;
 
@@ -159,14 +150,14 @@ public:
   std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFramebuffer> framebuffer;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
-
+  VkExtent2D extent;
   VulkanCommandBuffers * command;
 };
 
 class SceneRenderer {
 public:
   NO_COPY_OR_ASSIGNMENT(SceneRenderer)
-  SceneRenderer(VulkanCommandBuffers * command) :
+  explicit SceneRenderer(VulkanCommandBuffers * command) :
     command(command)
   {}
 
@@ -213,24 +204,23 @@ public:
   }
 
   void record(const std::shared_ptr<Node> & root,
-              std::shared_ptr<VulkanFramebuffer> framebuffer,
+              const std::shared_ptr<VulkanFramebuffer> & framebuffer,
               const VkExtent2D extent) const
   {
     CommandRecorder recorder(this->device,
                              this->renderpass,
                              framebuffer,
                              this->pipelinecache,
+                             extent,
                              this->render_command.get());
 
     root->record(&recorder);
   }
 
   void submit(const std::shared_ptr<Node> & root,
-              std::shared_ptr<VulkanFramebuffer> framebuffer,
+              const std::shared_ptr<VulkanFramebuffer> & framebuffer,
               const VkExtent2D extent) const
   {
-    VkRect2D scissor{ { 0, 0 }, extent };
-
     const VkRect2D renderarea{
       { 0, 0 },             // offset
       extent                // extent
@@ -238,16 +228,7 @@ public:
 
     std::vector<VkClearValue> clearvalues{
       { { { 0.0f, 0.0f, 0.0f, 0.0f } } },
-    { { { 1.0f, 0 } } }
-    };
-
-    VkViewport viewport{
-      0.0f,                                     // x
-      0.0f,                                     // y
-      static_cast<float>(extent.width),         // width
-      static_cast<float>(extent.height),        // height
-      0.0f,                                     // minDepth
-      1.0f                                      // maxDepth
+      { { { 1.0f, 0 } } }
     };
 
     VkRenderPassBeginInfo begin_info{
@@ -262,10 +243,9 @@ public:
 
     this->render_command->begin();
 
-    vkCmdBeginRenderPass(this->render_command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    vkCmdSetViewport(this->render_command->buffer(), 0, 1, &viewport);
-    vkCmdSetScissor(this->render_command->buffer(), 0, 1, &scissor);
+    vkCmdBeginRenderPass(this->render_command->buffer(), 
+                         &begin_info, 
+                         VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
     SceneRenderer renderer(this->render_command.get());
     root->render(&renderer);

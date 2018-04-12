@@ -378,9 +378,30 @@ public:
 private:
   void doRecord(CommandRecorder * recorder) override
   {
-    recorder->state.buffer_descriptions.push_back({
-      recorder->state.layout_binding,                     // layout
-      recorder->state.buffer,                             // buffer
+    recorder->state.write_descriptor_sets.push_back({
+      VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,   // sType
+      nullptr,                                  // pNext
+      nullptr,                                  // dstSet
+      recorder->state.layout_binding.binding,   // dstBinding
+      0,                                        // dstArrayElement
+      1,                                        // descriptorCount
+      recorder->state.layout_binding.type,      // descriptorType
+      nullptr,                                  // pImageInfo
+      &recorder->state.buffer,                  // pBufferInfo
+      nullptr,                                  // pTexelBufferView
+    });
+
+    recorder->state.descriptor_pool_sizes.push_back({
+      recorder->state.layout_binding.type,        // type 
+      1,                                          // descriptorCount
+    });
+
+    recorder->state.descriptor_set_layout_bindings.push_back({
+      recorder->state.layout_binding.binding,      // binding 
+      recorder->state.layout_binding.type,         // descriptorType 
+      1,                                           // descriptorCount 
+      recorder->state.layout_binding.stage,        // stageFlags 
+      nullptr,                                     // pImmutableSamplers 
     });
   }
 };
@@ -408,15 +429,22 @@ public:
 private:
   void doRecord(CommandRecorder * recorder) override
   {
-    recorder->state.attribute_descriptions.push_back({
+    recorder->state.vertex_input_bindings.push_back({
+      this->binding,
+      static_cast<uint32_t>(recorder->state.bufferdata.stride * this->stride),
+      this->inputrate,
+    });
+
+
+    recorder->state.vertex_attributes.push_back({
       this->location,
       this->binding,
       this->format,
       this->offset,
-      static_cast<uint32_t>(recorder->state.bufferdata.stride * this->stride),
-      this->inputrate,
-      recorder->state.buffer.buffer,
     });
+
+    recorder->state.vertex_attribute_buffers.push_back(recorder->state.buffer.buffer);
+    recorder->state.vertex_attribute_buffer_offsets.push_back(0);
   }
 
   uint32_t location;
@@ -471,14 +499,22 @@ public:
   }
 
 private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    this->shader = std::make_unique<VulkanShaderModule>(allocator->device, this->code);
+  }
+
   void doRecord(CommandRecorder * recorder) override
   {
-    this->shader = std::make_unique<VulkanShaderModule>(recorder->device, this->code);
-
-    recorder->state.shaders.push_back({
-      this->stage,                                  // stage
-      this->shader->module,                         // module
-    });
+    recorder->state.shader_stage_infos.push_back({
+      VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, // sType 
+      nullptr,                                             // pNext
+      0,                                                   // flags (reserved for future use)
+      this->stage,                                         // stage
+      this->shader->module,                                // module 
+      "main",                                              // pName 
+      nullptr,                                             // pSpecializationInfo
+      });
   }
 
   std::vector<char> code;
@@ -493,10 +529,10 @@ public:
   virtual ~Sampler() = default;
 
 private:
-  void doRecord(CommandRecorder * recorder) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
     this->sampler = std::make_unique<VulkanSampler>(
-      recorder->device,
+      allocator->device,
       VK_FILTER_LINEAR,
       VK_FILTER_LINEAR,
       VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -511,9 +547,12 @@ private:
       0.f,
       0.f,
       VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
-      VK_FALSE);
+      VK_FALSE);    
+  }
 
-    recorder->state.texture_description.image.sampler = this->sampler->sampler;
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.sampler = this->sampler->sampler;
   }
 
   std::unique_ptr<VulkanSampler> sampler;
@@ -668,11 +707,37 @@ private:
 
   void doRecord(CommandRecorder * recorder) override
   {
-    recorder->state.texture_description.layout = recorder->state.layout_binding;
-    recorder->state.texture_description.image.imageView = this->view->view;
-    recorder->state.texture_description.image.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    this->image_info = {
+      recorder->state.sampler,
+      this->view->view,
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
 
-    recorder->state.textures.push_back(recorder->state.texture_description);
+    recorder->state.write_descriptor_sets.push_back({
+      VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,     // sType
+      nullptr,                                    // pNext
+      nullptr,                                    // dstSet
+      recorder->state.layout_binding.binding,     // dstBinding
+      0,                                          // dstArrayElement
+      1,                                          // descriptorCount
+      recorder->state.layout_binding.type,        // descriptorType
+      &image_info,                                // pImageInfo
+      nullptr,                                    // pBufferInfo
+      nullptr,                                    // pTexelBufferView
+    });
+
+    recorder->state.descriptor_pool_sizes.push_back({
+      recorder->state.layout_binding.type,        // type 
+      1,                                          // descriptorCount
+    });
+
+    recorder->state.descriptor_set_layout_bindings.push_back({
+      recorder->state.layout_binding.binding,      // binding 
+      recorder->state.layout_binding.type,         // descriptorType 
+      1,                                           // descriptorCount 
+      recorder->state.layout_binding.stage,        // stageFlags 
+      nullptr,                                     // pImmutableSamplers 
+    });
   }
 
   gli::texture texture;
@@ -681,6 +746,7 @@ private:
   std::shared_ptr<ImageObject> image;
   std::unique_ptr<VulkanImageView> view;
 
+  VkDescriptorImageInfo image_info;
   VkExtent3D extent;
   uint32_t num_levels;
   uint32_t num_layers;
@@ -761,13 +827,20 @@ public:
 private:
   void doRecord(CommandRecorder * recorder) override
   {
-    this->pipeline = std::make_unique<ComputePipelineObject>(
-      recorder->device,
-      recorder->state.shaders[0],
-      recorder->state.buffer_descriptions,
-      recorder->state.textures,
-      recorder->pipelinecache);
+    this->descriptor_set = std::make_unique<DescriptorSetObject>(
+      recorder->device, 
+      recorder->state.write_descriptor_sets,
+      recorder->state.descriptor_pool_sizes,
+      recorder->state.descriptor_set_layout_bindings);
 
+    this->pipeline = std::make_unique<VulkanComputePipeline>(
+      recorder->device,
+      recorder->pipelinecache->cache,
+      0,
+      recorder->state.shader_stage_infos[0],
+      this->descriptor_set->pipeline_layout->layout);
+
+    this->descriptor_set->bind(recorder->command->buffer(), VK_PIPELINE_BIND_POINT_COMPUTE);
     this->pipeline->bind(recorder->command->buffer());
 
     vkCmdDispatch(recorder->command->buffer(),
@@ -780,7 +853,8 @@ private:
   uint32_t group_count_y;
   uint32_t group_count_z;
 
-  std::unique_ptr<ComputePipelineObject> pipeline;
+  std::unique_ptr<DescriptorSetObject> descriptor_set;
+  std::unique_ptr<VulkanComputePipeline> pipeline;
 };
 
 class DrawCommand : public Node {
@@ -798,28 +872,67 @@ public:
 private:
   void doRecord(CommandRecorder * recorder) override
   {
-    this->pipeline = std::make_unique<GraphicsPipelineObject>(
-      recorder->device,
-      recorder->renderpass,
-      recorder->pipelinecache,
-      recorder->state.attribute_descriptions,
-      recorder->state.shaders,
-      recorder->state.buffer_descriptions,
-      recorder->state.textures,
-      recorder->state.rasterizationstate,
-      this->topology);
+    if (!this->pipeline) {
+      this->descriptor_set = std::make_unique<DescriptorSetObject>(
+        recorder->device, 
+        recorder->state.write_descriptor_sets,
+        recorder->state.descriptor_pool_sizes,
+        recorder->state.descriptor_set_layout_bindings);
 
-    this->command = std::make_unique<VulkanCommandBuffers>(recorder->device, 1, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+      std::vector<VkDynamicState> dynamic_states{
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+      };
 
-    this->command->begin(0, recorder->renderpass->renderpass, 0, recorder->framebuffer->framebuffer, VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
-
-    this->pipeline->bind(this->command->buffer());
-
-    for (const auto& attribute : recorder->state.attribute_descriptions) {
-      VkDeviceSize offsets[1] = { 0 };
-      vkCmdBindVertexBuffers(this->command->buffer(), 0, 1, &attribute.buffer, &offsets[0]);
+      this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
+        recorder->device,
+        recorder->renderpass->renderpass,
+        recorder->pipelinecache->cache,
+        this->descriptor_set->pipeline_layout->layout,
+        this->topology,
+        recorder->state.rasterizationstate,
+        dynamic_states,
+        recorder->state.shader_stage_infos,
+        recorder->state.vertex_input_bindings,
+        recorder->state.vertex_attributes);
     }
 
+    this->command = std::make_unique<VulkanCommandBuffers>(recorder->device, 
+                                                           1, 
+                                                           VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+
+    this->command->begin(0, 
+                         recorder->renderpass->renderpass, 
+                         0, 
+                         recorder->framebuffer->framebuffer, 
+                         VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
+
+    this->descriptor_set->bind(this->command->buffer(), VK_PIPELINE_BIND_POINT_GRAPHICS);
+    this->pipeline->bind(this->command->buffer());
+
+    VkRect2D scissor{ 
+      { 0, 0 }, 
+      recorder->extent 
+    };
+
+    VkViewport viewport{
+      0.0f,                                         // x
+      0.0f,                                         // y
+      static_cast<float>(recorder->extent.width),   // width
+      static_cast<float>(recorder->extent.height),  // height
+      0.0f,                                         // minDepth
+      1.0f                                          // maxDepth
+    };
+
+    vkCmdSetViewport(this->command->buffer(), 0, 1, &viewport);
+    vkCmdSetScissor(this->command->buffer(), 0, 1, &scissor);
+
+    vkCmdBindVertexBuffers(this->command->buffer(), 
+                           0, 
+                           static_cast<uint32_t>(recorder->state.vertex_attribute_buffers.size()),
+                           recorder->state.vertex_attribute_buffers.data(),
+                           recorder->state.vertex_attribute_buffer_offsets.data());
+    
     if (!recorder->state.indices.empty()) {
       for (const auto& indexbuffer : recorder->state.indices) {
         vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
@@ -835,13 +948,16 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    vkCmdExecuteCommands(renderer->command->buffer(), 1, &this->command->buffers[0]);
+    vkCmdExecuteCommands(renderer->command->buffer(), 
+                         static_cast<uint32_t>(this->command->buffers.size()), 
+                         this->command->buffers.data());
   }
 
   uint32_t count;
   VkPrimitiveTopology topology;
   std::unique_ptr<VulkanCommandBuffers> command;
-  std::unique_ptr<GraphicsPipelineObject> pipeline;
+  std::unique_ptr<VulkanGraphicsPipeline> pipeline;
+  std::unique_ptr<DescriptorSetObject> descriptor_set;
 };
 
 class Box : public Separator {
