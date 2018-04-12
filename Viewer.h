@@ -170,6 +170,10 @@ public:
       attachment_descriptions,
       subpass_descriptions);
 
+    this->renderaction = std::make_unique<SceneManager>(
+      this->device,
+      this->renderpass);
+
     this->rebuildSwapchain();
   }
 
@@ -184,7 +188,7 @@ public:
     }
   }
 
-  void setSceneGraph(std::shared_ptr<class Node> scene)
+  void setSceneGraph(std::shared_ptr<Node> scene)
   {
     this->root = std::make_shared<Separator>();
     this->camera = SearchAction<Camera>(scene);
@@ -201,6 +205,7 @@ public:
 
     this->renderaction->alloc(this->root);
     this->renderaction->stage(this->root);
+    this->renderaction->record(this->root, this->framebuffer, this->extent2d);
   }
 
   void swapBuffers()
@@ -238,7 +243,11 @@ public:
   {
     QWindow::resizeEvent(e);
     this->rebuildSwapchain();
-    this->renderaction->record(this->root, this->renderpass, this->framebuffer);
+
+    this->camera->aspectratio = static_cast<float>(this->extent2d.width) / 
+                                static_cast<float>(this->extent2d.height);
+
+    this->renderaction->record(this->root, this->framebuffer, this->extent2d);
     this->renderaction->submit(this->root);
     this->swapBuffers();
   }
@@ -255,8 +264,8 @@ public:
       this->surface->surface,
       &surface_capabilities));
 
-    VkExtent2D extent2d = surface_capabilities.currentExtent;
-    VkExtent3D extent3d = { extent2d.width, extent2d.height, 1 };
+    this->extent2d = surface_capabilities.currentExtent;
+    VkExtent3D extent3d = { this->extent2d.width, this->extent2d.height, 1 };
 
     std::vector<VkImageMemoryBarrier> memory_barriers;
     {
@@ -369,12 +378,8 @@ public:
       this->device,
       this->renderpass,
       framebuffer_attachments,
-      extent2d,
+      this->extent2d,
       1);
-
-    this->renderaction = std::make_unique<SceneManager>(
-      this->device,
-      extent2d);
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
       this->device,
@@ -383,11 +388,11 @@ public:
       3,
       this->surface_format.format,
       this->surface_format.colorSpace,
-      extent2d,
+      this->extent2d,
       1,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
-      std::vector<uint32_t>(this->device->default_queue_index),
+      std::vector<uint32_t>{ this->device->default_queue_index },
       surface_capabilities.currentTransform,
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       this->present_mode,
@@ -571,6 +576,7 @@ public:
   std::shared_ptr<Separator> root;
   std::shared_ptr<Camera> camera;
 
+  VkExtent2D extent2d{ 0, 0 };
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
   VkFormat color_format;
 

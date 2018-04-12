@@ -126,16 +126,6 @@ public:
     this->lookAt(focalpoint);
   }
 
-private:
-  void doRender(SceneRenderer * renderer) override
-  {
-    this->aspectratio = static_cast<float>(renderer->extent.width) / 
-                        static_cast<float>(renderer->extent.height);
-    renderer->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
-    renderer->state.ViewMatrix = glm::translate(renderer->state.ViewMatrix, -this->position);
-    renderer->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
-  }
-
   float farplane;
   float nearplane;
   float aspectratio;
@@ -143,6 +133,14 @@ private:
   float focaldistance;
   glm::vec3 position;
   glm::mat3 orientation;
+
+  private:
+  void doRender(SceneRenderer * renderer) override
+  {
+    renderer->state.ViewMatrix = glm::transpose(glm::mat4(this->orientation));
+    renderer->state.ViewMatrix = glm::translate(renderer->state.ViewMatrix, -this->position);
+    renderer->state.ProjMatrix = glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
+  }
 };
 
 class Transform : public Node {
