@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Innovator/Camera.h>
+
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Node.h>
 #include <Innovator/Core/State.h>
@@ -92,35 +94,20 @@ class MemoryStager {
 public:
   NO_COPY_OR_ASSIGNMENT(MemoryStager)
   MemoryStager() = delete;
+  ~MemoryStager() = default;
 
-  explicit MemoryStager(std::shared_ptr<VulkanDevice> device) :
+  explicit MemoryStager(std::shared_ptr<VulkanDevice> device,
+                        VkCommandBuffer command) :
     device(std::move(device)),
-    command(std::make_unique<VulkanCommandBuffers>(this->device)),
+    command(command),
+    command_scope(std::make_unique<VulkanCommandBufferScope>(command)),
     fence(std::make_unique<VulkanFence>(this->device))
-  {
-    this->command->begin();
-  }
-
-  ~MemoryStager()
-  {
-    try {
-      this->command->end();
-      this->fence->reset();
-
-      this->command->submit(this->device->default_queue,
-                            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                            this->fence->fence);
-
-      this->fence->wait();
-    }
-    catch (std::exception & e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
+  {}
 
   StageState state{};
   std::shared_ptr<VulkanDevice> device;
-  std::unique_ptr<VulkanCommandBuffers> command;
+  VkCommandBuffer command;
+  std::unique_ptr<VulkanCommandBufferScope> command_scope;
   std::unique_ptr<VulkanFence> fence;
 };
 
@@ -128,47 +115,48 @@ class CommandRecorder {
 public:
   NO_COPY_OR_ASSIGNMENT(CommandRecorder)
   CommandRecorder() = delete;
+  ~CommandRecorder() = default;
 
   explicit CommandRecorder(std::shared_ptr<VulkanDevice> device,
-                           std::shared_ptr<VulkanRenderpass> renderpass,
-                           std::shared_ptr<VulkanPipelineCache> pipelinecache,
-                           VulkanCommandBuffers * command) :
+                           VkRenderPass renderpass,
+                           VkFramebuffer framebuffer,
+                           VkPipelineCache pipelinecache,
+                           VkExtent2D extent,
+                           VkCommandBuffer command) :
     device(std::move(device)),
-    renderpass(std::move(renderpass)),
-    pipelinecache(std::move(pipelinecache)),
+    renderpass(renderpass),
+    framebuffer(framebuffer),
+    pipelinecache(pipelinecache),
+    extent(extent),
     command(command)
-  {
-    this->command->begin();
-  }
-
-  ~CommandRecorder()
-  {
-    vkCmdEndRenderPass(this->command->buffer());
-
-    try {
-      this->command->end();
-    }
-    catch (std::exception & e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
+  {}
 
   RecordState state;
 
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanRenderpass> renderpass;
-  std::shared_ptr<VulkanPipelineCache> pipelinecache;
-
-  VulkanCommandBuffers * command;
+  VkRenderPass renderpass;
+  VkFramebuffer framebuffer;
+  VkPipelineCache pipelinecache;
+  VkExtent2D extent;
+  VkCommandBuffer command;
 };
 
 class SceneRenderer {
 public:
   NO_COPY_OR_ASSIGNMENT(SceneRenderer)
-  SceneRenderer() = default;
+  SceneRenderer() = delete;
   ~SceneRenderer() = default;
 
+  explicit SceneRenderer(VulkanCommandBuffers * command,
+                         Camera * camera) :
+    command(command),
+    camera(camera)
+  {}
+
+
   RenderState state;
+  VulkanCommandBuffers * command;
+  Camera * camera;
 };
 
 class SceneManager {
@@ -195,78 +183,72 @@ public:
     }
   }
 
-  void alloc(const std::shared_ptr<Node> & root) const
+  void alloc(Node * root) const
   {
     MemoryAllocator allocator(device);
     root->alloc(&allocator);
   }
 
-  void stage(const std::shared_ptr<Node> & root) const
+  void stage(Node * root) const
   {
-    MemoryStager stager(device);
-    root->stage(&stager);
+    VulkanCommandBuffers staging_command(this->device);
+    {
+      MemoryStager stager(this->device, staging_command.buffer());
+      root->stage(&stager);
+    }
+
+    const VulkanFence fence(this->device);
+    FenceScope fence_scope(this->device->device, fence.fence);
+    
+    staging_command.submit(this->device->default_queue,
+                           VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                           fence.fence);
   }
 
-  void record(const std::shared_ptr<Node> & root,
-              std::shared_ptr<VulkanFramebuffer> framebuffer,
-              const VkExtent2D extent) const
+  void record(Node * root, const VkFramebuffer framebuffer, const VkExtent2D extent) const
   {
     CommandRecorder recorder(this->device,
-                             this->renderpass,
-                             this->pipelinecache,
-                             this->render_command.get());
+                             this->renderpass->renderpass,
+                             framebuffer,
+                             this->pipelinecache->cache,
+                             extent,
+                             this->render_command->buffer());
 
-    VkRect2D scissor{ { 0, 0 }, extent };
+    root->record(&recorder);
+  }
+
+  void submit(Node * root, const VkFramebuffer framebuffer, Camera * camera, const VkExtent2D extent) const
+  {
+    camera->updateMatrices();
 
     const VkRect2D renderarea{
       { 0, 0 },             // offset
       extent                // extent
     };
 
-    std::vector<VkClearValue> clearvalues{
+    const std::vector<VkClearValue> clearvalues{
       { { { 0.0f, 0.0f, 0.0f, 0.0f } } },
-    { { { 1.0f, 0 } } }
+      { { { 1.0f, 0 } } }
     };
 
-    VkViewport viewport{
-      0.0f,                                     // x
-      0.0f,                                     // y
-      static_cast<float>(extent.width),         // width
-      static_cast<float>(extent.height),        // height
-      0.0f,                                     // minDepth
-      1.0f                                      // maxDepth
-    };
+    {
+      VulkanCommandBufferScope commandbuffer(this->render_command->buffer());
 
-    VkRenderPassBeginInfo begin_info{
-      VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
-      nullptr,                                         // pNext
-      this->renderpass->renderpass,                    // renderPass
-      framebuffer->framebuffer,                        // framebuffer
-      renderarea,                                      // renderArea
-      static_cast<uint32_t>(clearvalues.size()),       // clearValueCount
-      clearvalues.data()                               // pClearValues
-    };
+      VulkanRenderPassScope renderpass(this->renderpass->renderpass,
+                                       framebuffer,
+                                       renderarea,
+                                       clearvalues,
+                                       this->render_command->buffer());
 
-    vkCmdBeginRenderPass(this->render_command->buffer(), &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+      SceneRenderer renderer(this->render_command.get(), camera);
+      root->render(&renderer);
+    }
 
-    vkCmdSetViewport(this->render_command->buffer(), 0, 1, &viewport);
-    vkCmdSetScissor(this->render_command->buffer(), 0, 1, &scissor);
-
-    root->record(&recorder);
-  }
-
-  void submit(const std::shared_ptr<Node> & root) const
-  {
-    SceneRenderer renderer;
-    root->render(&renderer);
-
-    this->render_fence->reset();
+    FenceScope fence(this->device->device, this->render_fence->fence);
 
     this->render_command->submit(this->device->default_queue,
                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                  this->render_fence->fence);
-
-    this->render_fence->wait();
   }
 
   std::shared_ptr<VulkanDevice> device;

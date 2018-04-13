@@ -21,6 +21,7 @@ add_executable(${TARGET_NAME}
   main.cpp
   Viewer.h
   Innovator/Nodes.h
+  Innovator/Camera.h
   Innovator/Actions.h
   Innovator/Core/Node.h
   Innovator/Core/File.h

@@ -1,6 +1,2 @@
 (separator
- (layout-binding 1 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER VK_SHADER_STAGE_FRAGMENT_BIT)
- (texture "Textures/crate.dds")
- (shader "Shaders/vertex.vert.spv" VK_SHADER_STAGE_VERTEX_BIT)
- (shader "Shaders/fragment.frag.spv" VK_SHADER_STAGE_FRAGMENT_BIT)
  (box 0 0))

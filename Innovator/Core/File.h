@@ -28,7 +28,7 @@ public:
     auto type = static_cast<VkDescriptorType>(int(typeexpr->value));
     auto stage = static_cast<VkShaderStageFlags>(int(stageexpr->value));
 
-    return std::make_shared<NodeExpression>(std::make_shared<LayoutBinding>(binding, type, stage));
+    return std::make_shared<NodeExpression>(std::make_shared<DescriptorSetLayoutBinding>(binding, type, stage));
   }
 };
 
@@ -38,16 +38,6 @@ public:
   {
     check_num_args(args, 0);
     return std::make_shared<NodeExpression>(std::make_shared<Sampler>());
-  }
-};
-
-class TextureFunction : public Callable {
-public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
-  {
-    check_num_args(args, 1);
-    const auto filename = get_string(args, 0);
-    return std::make_shared<NodeExpression>(std::make_shared<Texture>(filename->value));
   }
 };
 
@@ -113,7 +103,6 @@ public:
       { "VK_SHADER_STAGE_FRAGMENT_BIT", std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT) },
       { "layout-binding", std::make_shared<LayoutBindingFunction>() },
       { "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER", std::make_shared<Number>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) },
-      { "texture", std::make_shared<TextureFunction>() },
       { "sampler", std::make_shared<SamplerFunction>() },
       { "box", std::make_shared<BoxFunction>() },
     };
