@@ -7,7 +7,6 @@
 #include <vulkan/vulkan.h>
 
 #include <utility>
-#include <vector>
 #include <memory>
 
 class BufferObject {
@@ -107,39 +106,4 @@ public:
   std::shared_ptr<VulkanImage> image;
   VkMemoryPropertyFlags memory_property_flags;
   std::shared_ptr<VulkanMemory> memory;
-};
-
-class DescriptorSetObject {
-public:
-  NO_COPY_OR_ASSIGNMENT(DescriptorSetObject)
-  DescriptorSetObject() = delete;
-  ~DescriptorSetObject() = default;
-
-  DescriptorSetObject(const std::shared_ptr<VulkanDevice> & device, 
-                      std::vector<VkWriteDescriptorSet> & write_descriptor_sets,
-                      std::vector<VkDescriptorPoolSize> & descriptor_pool_sizes,
-                      std::vector<VkDescriptorSetLayoutBinding> & descriptor_set_layout_bindings)
-  {
-    this->descriptor_set_layout = std::make_unique<VulkanDescriptorSetLayout>(device, descriptor_set_layout_bindings);
-    this->descriptor_pool = std::make_unique<VulkanDescriptorPool>(device, descriptor_pool_sizes);
-    this->descriptor_set = std::make_unique<VulkanDescriptorSets>(device, this->descriptor_pool, 1, descriptor_set_layout->layout);
-    
-    std::vector<VkDescriptorSetLayout> setlayouts { descriptor_set_layout->layout };
-    this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(device, setlayouts);
-
-    for (auto & write_descriptor_set : write_descriptor_sets) {
-      write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
-    }
-    this->descriptor_set->update(write_descriptor_sets);
-  }
-
-  void bind(VkCommandBuffer command, VkPipelineBindPoint bind_point) const
-  {
-    this->descriptor_set->bind(command, bind_point, this->pipeline_layout->layout);
-  }
-
-  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
-  std::shared_ptr<VulkanDescriptorSetLayout> descriptor_set_layout;
-  std::shared_ptr<VulkanDescriptorSets> descriptor_set;
-  std::shared_ptr<VulkanPipelineLayout> pipeline_layout;
 };

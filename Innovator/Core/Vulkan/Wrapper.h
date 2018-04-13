@@ -151,6 +151,7 @@ public:
 class VulkanInstanceBase {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanInstanceBase)
+  VulkanInstanceBase() = delete;
 
   explicit VulkanInstanceBase(const VkApplicationInfo & application_info,
                               const std::vector<const char *> & required_layers,
@@ -205,6 +206,7 @@ public:
 class VulkanInstance : public VulkanInstanceBase {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanInstance)
+  VulkanInstance() = delete;
   ~VulkanInstance() = default;
 
   explicit VulkanInstance(const VkApplicationInfo & application_info,
@@ -275,6 +277,7 @@ public:
 class VulkanLogicalDevice {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanLogicalDevice)
+  VulkanLogicalDevice() = delete;
 
   VulkanLogicalDevice(const VulkanPhysicalDevice & physical_device,
                       const VkPhysicalDeviceFeatures & enabled_features,
@@ -327,6 +330,7 @@ class VulkanDevice;
 class VulkanMemory {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanMemory)
+  VulkanMemory() = delete;
 
   explicit VulkanMemory(std::shared_ptr<VulkanDevice> device,
                         VkDeviceSize size,
@@ -345,6 +349,7 @@ public:
 class VulkanDevice : public VulkanLogicalDevice {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDevice)
+  VulkanDevice() = delete;
 
   VulkanDevice(const VulkanPhysicalDevice& physical_device,
                const VkPhysicalDeviceFeatures& enabled_features,
@@ -389,6 +394,7 @@ VulkanDevice::~VulkanDevice()
 class VulkanDebugCallback {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDebugCallback)
+  VulkanDebugCallback() = delete;
 
   explicit VulkanDebugCallback(std::shared_ptr<VulkanInstance> vulkan,
                                VkDebugReportFlagsEXT flags,
@@ -419,6 +425,7 @@ public:
 class VulkanSemaphore {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanSemaphore)
+  VulkanSemaphore() = delete;
 
   explicit VulkanSemaphore(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device))
@@ -443,6 +450,7 @@ public:
 class VulkanSwapchain {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanSwapchain)
+  VulkanSwapchain() = delete;
 
   VulkanSwapchain(std::shared_ptr<VulkanDevice> device,
                   std::shared_ptr<VulkanInstance> vulkan,
@@ -521,6 +529,7 @@ public:
 class VulkanDescriptorPool {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDescriptorPool)
+  VulkanDescriptorPool() = delete;
 
   explicit VulkanDescriptorPool(std::shared_ptr<VulkanDevice> device, 
                                 std::vector<VkDescriptorPoolSize> descriptor_pool_sizes)
@@ -550,6 +559,7 @@ public:
 class VulkanDescriptorSetLayout {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSetLayout)
+  VulkanDescriptorSetLayout() = delete;
 
   VulkanDescriptorSetLayout(std::shared_ptr<VulkanDevice> device, 
                             std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings)
@@ -578,6 +588,7 @@ public:
 class VulkanDescriptorSets {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanDescriptorSets)
+  VulkanDescriptorSets() = delete;
 
   VulkanDescriptorSets(std::shared_ptr<VulkanDevice> device,
                        std::shared_ptr<VulkanDescriptorPool> pool,
@@ -614,11 +625,6 @@ public:
                            static_cast<uint32_t>(descriptor_copies.size()), descriptor_copies.data());
   }
 
-  void bind(VkCommandBuffer buffer, VkPipelineBindPoint bind_point, VkPipelineLayout layout)
-  {
-    vkCmdBindDescriptorSets(buffer, bind_point, layout, 0, static_cast<uint32_t>(this->descriptor_sets.size()), this->descriptor_sets.data(), 0, nullptr);
-  }
-
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanDescriptorPool> pool;
   std::vector<VkDescriptorSet> descriptor_sets;
@@ -627,6 +633,7 @@ public:
 class VulkanFence {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanFence)
+  VulkanFence() = delete;
 
   explicit VulkanFence(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device))
@@ -645,23 +652,39 @@ public:
     vkDestroyFence(this->device->device, this->fence, nullptr);
   }
 
-  void reset() const
-  {
-    THROW_ON_ERROR(vkResetFences(this->device->device, 1, &this->fence));
-  }
-
-  void wait() const
-  {
-    THROW_ON_ERROR(vkWaitForFences(this->device->device, 1, &this->fence, VK_TRUE, UINT64_MAX));
-  }
-
   std::shared_ptr<VulkanDevice> device;
   VkFence fence { nullptr };
+};
+
+class FenceScope {
+public:
+  NO_COPY_OR_ASSIGNMENT(FenceScope)
+  FenceScope() = delete;
+
+  explicit FenceScope(VkDevice device, VkFence fence) :
+    device(device),
+    fence(fence)
+  {
+    THROW_ON_ERROR(vkResetFences(this->device, 1, &this->fence));
+  }
+
+  ~FenceScope()
+  {
+    try {
+      THROW_ON_ERROR(vkWaitForFences(this->device, 1, &this->fence, VK_TRUE, UINT64_MAX));
+    } catch(std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
+  }
+
+  VkDevice device;
+  VkFence fence;
 };
 
 class VulkanCommandBuffers {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanCommandBuffers)
+  VulkanCommandBuffers() = delete;
 
   explicit VulkanCommandBuffers(std::shared_ptr<VulkanDevice> device, 
                                 size_t count = 1,
@@ -685,38 +708,6 @@ public:
     vkFreeCommandBuffers(this->device->device, this->device->default_pool, static_cast<uint32_t>(this->buffers.size()), this->buffers.data());
   }
 
-  void begin(size_t buffer_index = 0, 
-             VkRenderPass renderpass = nullptr, 
-             uint32_t subpass = 0,
-             VkFramebuffer framebuffer = nullptr, 
-             VkCommandBufferUsageFlags flags = 0)
-  {
-    VkCommandBufferInheritanceInfo inheritance_info {
-      VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO, // sType
-      nullptr,                                           // pNext
-      renderpass,                                        // renderPass 
-      subpass,                                           // subpass 
-      framebuffer,                                       // framebuffer
-      VK_FALSE,                                          // occlusionQueryEnable
-      0,                                                 // queryFlags 
-      0,                                                 // pipelineStatistics 
-    };
-
-    VkCommandBufferBeginInfo begin_info {
-      VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, // sType 
-      nullptr,                                     // pNext 
-      flags,                                       // flags 
-      &inheritance_info,                           // pInheritanceInfo 
-    };
-
-    THROW_ON_ERROR(vkBeginCommandBuffer(this->buffers[buffer_index], &begin_info));
-  }
-
-  void end(size_t buffer_index = 0)
-  {
-    THROW_ON_ERROR(vkEndCommandBuffer(this->buffers[buffer_index]));
-  }
-
   void submit(VkQueue queue, 
               VkPipelineStageFlags flags, 
               size_t buffer_index, 
@@ -724,7 +715,7 @@ public:
               const std::vector<VkSemaphore> & signal_semaphores = std::vector<VkSemaphore>(),
               VkFence fence = VK_NULL_HANDLE)
   {
-    VulkanCommandBuffers::submit(queue, flags, { this->buffers[buffer_index] }, wait_semaphores, signal_semaphores, fence);
+    submit(queue, flags, { this->buffers[buffer_index] }, wait_semaphores, signal_semaphores, fence);
   }
 
   void submit(VkQueue queue,
@@ -733,7 +724,7 @@ public:
               const std::vector<VkSemaphore> & wait_semaphores = std::vector<VkSemaphore>(),
               const std::vector<VkSemaphore> & signal_semaphores = std::vector<VkSemaphore>())
   {
-    VulkanCommandBuffers::submit(queue, flags, this->buffers, wait_semaphores, signal_semaphores, fence);
+    submit(queue, flags, this->buffers, wait_semaphores, signal_semaphores, fence);
   }
 
   static void submit(VkQueue queue,
@@ -767,9 +758,55 @@ public:
   std::vector<VkCommandBuffer> buffers;
 };
 
+class VulkanCommandBufferScope {
+public:
+  NO_COPY_OR_ASSIGNMENT(VulkanCommandBufferScope)
+  VulkanCommandBufferScope() = delete;
+
+  VulkanCommandBufferScope(VkCommandBuffer command,
+                           VkRenderPass renderpass = nullptr,
+                           uint32_t subpass = 0,
+                           VkFramebuffer framebuffer = nullptr,
+                           VkCommandBufferUsageFlags flags = 0) :
+    command(command)
+  {
+    VkCommandBufferInheritanceInfo inheritance_info{
+      VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO, // sType
+      nullptr,                                           // pNext
+      renderpass,                                        // renderPass 
+      subpass,                                           // subpass 
+      framebuffer,                                       // framebuffer
+      VK_FALSE,                                          // occlusionQueryEnable
+      0,                                                 // queryFlags 
+      0,                                                 // pipelineStatistics 
+    };
+
+    VkCommandBufferBeginInfo begin_info{
+      VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, // sType 
+      nullptr,                                     // pNext 
+      flags,                                       // flags 
+      &inheritance_info,                           // pInheritanceInfo 
+    };
+
+    THROW_ON_ERROR(vkBeginCommandBuffer(this->command, &begin_info));
+  }
+
+  ~VulkanCommandBufferScope()
+  {
+    try {
+      THROW_ON_ERROR(vkEndCommandBuffer(this->command));
+    } catch (std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
+  }
+
+  VkCommandBuffer command;
+};
+
 class VulkanImage {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanImage)
+  VulkanImage() = delete;
 
   VulkanImage(std::shared_ptr<VulkanDevice> device, 
               VkImageType image_type, 
@@ -819,6 +856,7 @@ public:
 class VulkanBuffer {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanBuffer)
+  VulkanBuffer() = delete;
 
   VulkanBuffer(std::shared_ptr<VulkanDevice> device,
                VkBufferCreateFlags flags, 
@@ -911,6 +949,7 @@ VulkanMemory::memcpy(const void* src, VkDeviceSize size, VkDeviceSize offset)
 class VulkanImageView {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanImageView)
+  VulkanImageView() = delete;
 
   VulkanImageView(std::shared_ptr<VulkanImage> image,
                   VkFormat format,
@@ -919,7 +958,7 @@ public:
                   VkImageSubresourceRange subresource_range)
     : image(std::move(image))
   {
-    VkImageViewCreateInfo create_info {
+    VkImageViewCreateInfo create_info{
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, // sType 
       nullptr,                                  // pNext 
       0,                                        // flags (reserved for future use)
@@ -945,6 +984,7 @@ public:
 class VulkanSampler {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanSampler)
+  VulkanSampler() = delete;
 
   VulkanSampler(std::shared_ptr<VulkanDevice> device, 
                 VkFilter magFilter,
@@ -1000,6 +1040,7 @@ public:
 class VulkanShaderModule {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanShaderModule)
+  VulkanShaderModule() = delete;
 
   VulkanShaderModule(std::shared_ptr<VulkanDevice> device,
                      const std::vector<char> & code)
@@ -1029,6 +1070,7 @@ public:
 class VulkanPipelineCache {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanPipelineCache)
+  VulkanPipelineCache() = delete;
 
   explicit VulkanPipelineCache(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device))
@@ -1056,6 +1098,7 @@ public:
 class VulkanRenderpass {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanRenderpass)
+  VulkanRenderpass() = delete;
 
   VulkanRenderpass(std::shared_ptr<VulkanDevice> device,
                    const std::vector<VkAttachmentDescription> & attachments,
@@ -1087,23 +1130,59 @@ public:
   VkRenderPass renderpass{ nullptr };
 };
 
+class VulkanRenderPassScope {
+public:
+  NO_COPY_OR_ASSIGNMENT(VulkanRenderPassScope)
+  VulkanRenderPassScope() = delete;
+
+  explicit VulkanRenderPassScope(VkRenderPass renderpass,
+                                 VkFramebuffer framebuffer,
+                                 const VkRect2D renderarea,
+                                 const std::vector<VkClearValue> & clearvalues,
+                                 VkCommandBuffer command) :
+    command(command)
+  {
+    VkRenderPassBeginInfo begin_info{
+      VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,        // sType
+      nullptr,                                         // pNext
+      renderpass,                                      // renderPass
+      framebuffer,                                     // framebuffer
+      renderarea,                                      // renderArea
+      static_cast<uint32_t>(clearvalues.size()),       // clearValueCount
+      clearvalues.data()                               // pClearValues
+    };
+
+    vkCmdBeginRenderPass(this->command,
+                         &begin_info,
+                         VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+  }
+    
+  ~VulkanRenderPassScope()
+  {
+    vkCmdEndRenderPass(this->command);
+  }
+
+  VkCommandBuffer command;
+};
 
 class VulkanFramebuffer {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanFramebuffer)
+  VulkanFramebuffer() = delete;
 
   VulkanFramebuffer(std::shared_ptr<VulkanDevice> device,
-                    const std::shared_ptr<VulkanRenderpass> & renderpass,
-                    const std::vector<VkImageView> & attachments, 
+                    std::shared_ptr<VulkanRenderpass> renderpass,
+                    const std::vector<VkImageView> & attachments,
                     VkExtent2D extent,
-                    uint32_t layers)
-    : device(std::move(device))
+                    uint32_t layers) : 
+    device(std::move(device)),
+    renderpass(std::move(renderpass))
   {
-    VkFramebufferCreateInfo create_info {
+    VkFramebufferCreateInfo create_info{
       VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO, // sType
       nullptr,                                   // pNext
       0,                                         // flags (reserved for future use)
-      renderpass->renderpass,                    // renderPass
+      this->renderpass->renderpass,              // renderPass
       static_cast<uint32_t>(attachments.size()), // attachmentCount
       attachments.data(),                        // pAttachments
       extent.width,                              // width
@@ -1120,19 +1199,21 @@ public:
   }
 
   std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanRenderpass> renderpass;
   VkFramebuffer framebuffer{ nullptr };
 };
 
 class VulkanPipelineLayout {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanPipelineLayout)
+  VulkanPipelineLayout() = delete;
 
   VulkanPipelineLayout(std::shared_ptr<VulkanDevice> device, 
                        const std::vector<VkDescriptorSetLayout> & setlayouts,
                        const std::vector<VkPushConstantRange> & pushconstantranges = std::vector<VkPushConstantRange>())
     : device(std::move(device))
   {
-    VkPipelineLayoutCreateInfo create_info {
+    VkPipelineLayoutCreateInfo create_info{
       VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,    // sType
       nullptr,                                          // pNext
       0,                                                // flags (reserved for future use)
@@ -1157,6 +1238,7 @@ public:
 class VulkanComputePipeline {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanComputePipeline)
+  VulkanComputePipeline() = delete;
 
   VulkanComputePipeline(std::shared_ptr<VulkanDevice> device,
                         VkPipelineCache pipelineCache,
@@ -1197,6 +1279,7 @@ public:
 class VulkanGraphicsPipeline {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanGraphicsPipeline)
+  VulkanGraphicsPipeline() = delete;
 
   VulkanGraphicsPipeline(std::shared_ptr<VulkanDevice> device, 
                          VkRenderPass render_pass,
@@ -1204,10 +1287,10 @@ public:
                          VkPipelineLayout pipeline_layout,
                          VkPrimitiveTopology primitive_topology,
                          VkPipelineRasterizationStateCreateInfo rasterization_state,
-                         std::vector<VkDynamicState> dynamic_states,
-                         std::vector<VkPipelineShaderStageCreateInfo> shaderstages,
-                         std::vector<VkVertexInputBindingDescription> binding_descriptions,
-                         std::vector<VkVertexInputAttributeDescription> attribute_descriptions)
+                         const std::vector<VkDynamicState> & dynamic_states,
+                         const std::vector<VkPipelineShaderStageCreateInfo> & shaderstages,
+                         const std::vector<VkVertexInputBindingDescription> & binding_descriptions,
+                         const std::vector<VkVertexInputAttributeDescription> & attribute_descriptions)
     : device(std::move(device))
   {
     VkPipelineVertexInputStateCreateInfo vertex_input_state {
@@ -1269,13 +1352,13 @@ public:
     };
 
     const VkStencilOpState stencil_op_state{
-      VK_STENCIL_OP_KEEP,   // failOp
-      VK_STENCIL_OP_KEEP,   // passOp
-      VK_STENCIL_OP_KEEP,   // depthFailOp
-      VK_COMPARE_OP_ALWAYS, // compareOp
-      0,                    // compareMask
-      0,                    // writeMask
-      0,                    // reference
+      VK_STENCIL_OP_KEEP,                                     // failOp
+      VK_STENCIL_OP_KEEP,                                     // passOp
+      VK_STENCIL_OP_KEEP,                                     // depthFailOp
+      VK_COMPARE_OP_ALWAYS,                                   // compareOp
+      0,                                                      // compareMask
+      0,                                                      // writeMask
+      0,                                                      // reference
     };
 
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state {
@@ -1308,7 +1391,7 @@ public:
     VkGraphicsPipelineCreateInfo create_info {
       VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, // sType
       nullptr,                                         // pNext
-      0,                                               // flags is a bitmask of VkPipelineCreateFlagBits specifying how the pipeline will be generated.
+      0,                                               // flags
       static_cast<uint32_t>(shaderstages.size()),      // stageCount
       shaderstages.data(),                             // pStages
       &vertex_input_state,                             // pVertexInputState
@@ -1333,11 +1416,6 @@ public:
   ~VulkanGraphicsPipeline()
   {
     vkDestroyPipeline(this->device->device, this->pipeline, nullptr);
-  }
-
-  void bind(VkCommandBuffer buffer)
-  {
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
   }
 
   std::shared_ptr<VulkanDevice> device;
