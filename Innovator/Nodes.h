@@ -147,9 +147,9 @@ private:
   void updateState(StateType & state)
   {
     state.descriptor_buffer_info = {
-      this->buffer->buffer->buffer,      // descriptor_buffer_info
-      this->buffer->offset,              // offset
-      this->buffer->range,               // range
+      this->buffer->buffer->buffer,
+      this->buffer->offset,
+      this->buffer->range,
     };
   }
 
@@ -285,9 +285,9 @@ private:
     const auto count = recorder->state.buffer_data_description.size / recorder->state.buffer_data_description.stride;
 
     recorder->state.indices.push_back({
-      this->type,                                               // type
-      recorder->state.descriptor_buffer_info.buffer,                            // descriptor_buffer_info
-      static_cast<uint32_t>(count),                             // count
+      this->type,
+      recorder->state.descriptor_buffer_info.buffer, 
+      static_cast<uint32_t>(count),
     });
   }
 
@@ -378,8 +378,8 @@ private:
       0,                                                                // dstArrayElement
       this->descriptor_set_layout_binding.descriptorCount,              // descriptorCount
       this->descriptor_set_layout_binding.descriptorType,               // descriptorType
-      &recorder->state.descriptor_image_info,                                      // pImageInfo
-      &recorder->state.descriptor_buffer_info,                                          // pBufferInfo
+      &recorder->state.descriptor_image_info,                           // pImageInfo
+      &recorder->state.descriptor_buffer_info,                          // pBufferInfo
       nullptr,                                                          // pTexelBufferView
     });
 

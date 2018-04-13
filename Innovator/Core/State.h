@@ -30,11 +30,7 @@ struct StageState {
 };
 
 struct RenderState {
-  explicit RenderState() :
-    ModelMatrix(glm::mat4(1))
-  {}
-
-  glm::mat4 ModelMatrix;
+  glm::mat4 ModelMatrix{ 1 };
 };
 
 struct RecordState {
@@ -57,8 +53,8 @@ struct RecordState {
   std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
   std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings;
 
-  std::vector<VkVertexInputBindingDescription> vertex_input_bindings;
-  std::vector<VkVertexInputAttributeDescription> vertex_attributes;
   std::vector<VkBuffer> vertex_attribute_buffers;
   std::vector<VkDeviceSize> vertex_attribute_buffer_offsets;
+  std::vector<VkVertexInputBindingDescription> vertex_input_bindings;
+  std::vector<VkVertexInputAttributeDescription> vertex_attributes;
 };
