@@ -4,6 +4,7 @@
 #include <Innovator/Core/VulkanObjects.h>
 #include <Innovator/Actions.h>
 #include <Innovator/Nodes.h>
+#include <Innovator/Camera.h>
 
 #include <QWindow>
 #include <QMouseEvent>
@@ -52,7 +53,8 @@ public:
 
   explicit VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) : 
     QWindow(parent),
-    vulkan(std::move(vulkan))
+    vulkan(std::move(vulkan)),
+    camera(std::make_shared<Camera>())
   {
     this->surface = std::make_shared<::VulkanSurface>(
       this->vulkan,
@@ -180,7 +182,6 @@ public:
   ~VulkanViewer()
   {
     try {
-      // make sure all work submitted to GPU is done before we start deleting stuff...
       THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
     }
     catch (std::exception & e) {
@@ -188,24 +189,14 @@ public:
     }
   }
 
-  void setSceneGraph(std::shared_ptr<Node> scene)
+  void setSceneGraph(std::shared_ptr<Separator> scene)
   {
-    this->root = std::make_shared<Separator>();
-    this->camera = SearchAction<Camera>(scene);
+    this->root = std::move(scene);
+    this->camera->view(box3(glm::vec3(0), glm::vec3(1)));
 
-    if (!this->camera) {
-      this->camera = std::make_shared<Camera>();
-      this->root->children = { this->camera, scene };
-
-      this->camera->view(box3(glm::vec3(0), glm::vec3(1)));
-    }
-    else {
-      this->root->children = { scene };
-    }
-
-    this->renderaction->alloc(this->root);
-    this->renderaction->stage(this->root);
-    this->renderaction->record(this->root, this->framebuffer, this->extent2d);
+    this->renderaction->alloc(this->root.get());
+    this->renderaction->stage(this->root.get());
+    this->renderaction->record(this->root.get(), this->framebuffer->framebuffer, this->extent2d);
   }
 
   void swapBuffers()
@@ -247,8 +238,8 @@ public:
     this->camera->aspectratio = static_cast<float>(this->extent2d.width) / 
                                 static_cast<float>(this->extent2d.height);
 
-    this->renderaction->record(this->root, this->framebuffer, this->extent2d);
-    this->renderaction->submit(this->root);
+    this->renderaction->record(this->root.get(), this->framebuffer->framebuffer, this->extent2d);
+    this->renderaction->submit(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
     this->swapBuffers();
   }
 
@@ -417,18 +408,18 @@ public:
       }
 
       VulkanCommandBuffers command(this->device);
-      command.begin();
+      {
+        VulkanCommandBufferScope command_scope(command.buffer());
 
-      vkCmdPipelineBarrier(
-        command.buffer(),
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(memory_barriers.size()),
-        memory_barriers.data());
+        vkCmdPipelineBarrier(
+          command.buffer(),
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          0, 0, nullptr, 0, nullptr,
+          static_cast<uint32_t>(memory_barriers.size()),
+          memory_barriers.data());
 
-      command.end();
-
+      }
       command.submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
       THROW_ON_ERROR(vkQueueWaitIdle(this->device->default_queue));
     }
@@ -475,7 +466,7 @@ public:
       src_image_barriers[0].image = swapchain_images[i];
       dst_image_barriers[0].image = swapchain_images[i];
 
-      this->swap_buffers_command->begin(i);
+      VulkanCommandBufferScope command_scope(this->swap_buffers_command->buffer(i));
 
       vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -515,8 +506,6 @@ public:
         0, 0, nullptr, 0, nullptr,
         static_cast<uint32_t>(dst_image_barriers.size()),
         dst_image_barriers.data());
-
-      this->swap_buffers_command->end(i);
     }
   }
 
@@ -543,7 +532,7 @@ public:
   void mouseMoveEvent(QMouseEvent * e) override
   {
     if (this->mouse_pressed) {
-      glm::vec2 pos = glm::vec2(e->x(), e->y());
+      const glm::vec2 pos = glm::vec2(e->x(), e->y());
       glm::vec2 dx = this->mouse_pos - pos;
       switch (this->button) {
       case Qt::MiddleButton: this->camera->pan(dx * .01f); break;
@@ -553,12 +542,13 @@ public:
       }
       this->mouse_pos = pos;
 
-      this->renderaction->submit(this->root);
+      this->renderaction->submit(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
       this->swapBuffers();
     }
   }
 
   std::shared_ptr<VulkanInstance> vulkan;
+  std::shared_ptr<Camera> camera;
   std::shared_ptr<::VulkanSurface> surface;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanSemaphore> semaphore;
@@ -574,7 +564,6 @@ public:
   std::unique_ptr<SceneManager> renderaction;
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::shared_ptr<Separator> root;
-  std::shared_ptr<Camera> camera;
 
   VkExtent2D extent2d{ 0, 0 };
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
