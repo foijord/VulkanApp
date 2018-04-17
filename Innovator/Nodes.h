@@ -55,6 +55,12 @@ private:
     Group::doStage(stager);
   }
 
+  void doPipeline(PipelineCreator * creator) override
+  {
+    StateScope<PipelineCreator, PipelineState> scope(creator);
+    Group::doPipeline(creator);
+  }
+
   void doRecord(CommandRecorder * recorder) override
   {
     StateScope<CommandRecorder, RecordState> scope(recorder);
@@ -126,6 +132,11 @@ private:
     this->initState(stager->state);
   }
 
+  void doPipeline(PipelineCreator * creator) override
+  {
+    this->initState(creator->state);
+  }
+
   void doRecord(CommandRecorder * recorder) override
   {
     this->initState(recorder->state);
@@ -170,9 +181,14 @@ private:
     this->buffer->memcpy(stager->state.buffer_data_description.data);
   }
 
+  void doPipeline(PipelineCreator * creator) override
+  {
+    this->updateState(creator->state);
+  }
+
   void doRecord(CommandRecorder * recorder) override
   {
-    this->updateState(recorder->state);
+    recorder->state.buffer = this->buffer->buffer->buffer;
   }
 
   VkBufferUsageFlags buffer_usage_flags;
@@ -216,13 +232,18 @@ private:
                     regions.data());
   }
 
-  void doRecord(CommandRecorder * recorder) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    recorder->state.descriptor_buffer_info = {
+    creator->state.descriptor_buffer_info = {
       this->buffer->buffer->buffer,
       this->buffer->offset,
       this->buffer->range,
     };
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.buffer = this->buffer->buffer->buffer;
   }
 
   VkBufferUsageFlags buffer_usage_flags;
@@ -247,9 +268,9 @@ private:
     allocator->bufferobjects.push_back(this->buffer);
   }
 
-  void doRecord(CommandRecorder * recorder) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    recorder->state.descriptor_buffer_info = {
+    creator->state.descriptor_buffer_info = {
       this->buffer->buffer->buffer,
       this->buffer->offset,
       this->buffer->range,
@@ -286,7 +307,7 @@ private:
 
     recorder->state.indices.push_back({
       this->type,
-      recorder->state.descriptor_buffer_info.buffer, 
+      recorder->state.buffer,
       static_cast<uint32_t>(count),
     });
   }
@@ -310,10 +331,14 @@ public:
   {}
 
 private:
+  void doPipeline(PipelineCreator * creator) override
+  {
+    creator->state.vertex_attributes.push_back(this->vertex_input_attribute_description);
+  }
+
   void doRecord(CommandRecorder * recorder) override
   {
-    recorder->state.vertex_attributes.push_back(this->vertex_input_attribute_description);
-    recorder->state.vertex_attribute_buffers.push_back(recorder->state.descriptor_buffer_info.buffer);
+    recorder->state.vertex_attribute_buffers.push_back(recorder->state.buffer);
     recorder->state.vertex_attribute_buffer_offsets.push_back(0);
   }
 
@@ -335,11 +360,11 @@ public:
   {}
 
 private:
-  void doRecord(CommandRecorder * recorder) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    recorder->state.vertex_input_bindings.push_back({
+    creator->state.vertex_input_bindings.push_back({
       this->binding,
-      static_cast<uint32_t>(recorder->state.buffer_data_description.stride * this->stride),
+      static_cast<uint32_t>(creator->state.buffer_data_description.stride * this->stride),
       this->inputRate,
     });
   }
@@ -368,9 +393,21 @@ public:
   {}
 
 private:
-  void doRecord(CommandRecorder * recorder) override
+  void doStage(MemoryStager * stager) override
   {
-    recorder->state.write_descriptor_sets.push_back({
+    stager->descriptor_pool_sizes.push_back({
+      this->descriptor_set_layout_binding.descriptorType,                // type 
+      this->descriptor_set_layout_binding.descriptorCount,               // descriptorCount
+    });
+  }
+
+  void doPipeline(PipelineCreator * creator) override
+  {
+    creator->state.descriptor_set_layout_bindings.push_back({
+      this->descriptor_set_layout_binding    
+    });
+
+    creator->state.write_descriptor_sets.push_back({
       VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                           // sType
       nullptr,                                                          // pNext
       nullptr,                                                          // dstSet
@@ -378,18 +415,9 @@ private:
       0,                                                                // dstArrayElement
       this->descriptor_set_layout_binding.descriptorCount,              // descriptorCount
       this->descriptor_set_layout_binding.descriptorType,               // descriptorType
-      &recorder->state.descriptor_image_info,                           // pImageInfo
-      &recorder->state.descriptor_buffer_info,                          // pBufferInfo
+      &creator->state.descriptor_image_info,                            // pImageInfo
+      &creator->state.descriptor_buffer_info,                           // pBufferInfo
       nullptr,                                                          // pTexelBufferView
-    });
-
-    recorder->state.descriptor_pool_sizes.push_back({
-      this->descriptor_set_layout_binding.descriptorType,                // type 
-      this->descriptor_set_layout_binding.descriptorCount,               // descriptorCount
-    });
-
-    recorder->state.descriptor_set_layout_bindings.push_back({
-      this->descriptor_set_layout_binding    
     });
   }
 
@@ -416,9 +444,9 @@ private:
     this->shader = std::make_unique<VulkanShaderModule>(allocator->device, this->code);
   }
 
-  void doRecord(CommandRecorder * recorder) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    recorder->state.shader_stage_infos.push_back({
+    creator->state.shader_stage_infos.push_back({
       VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, // sType 
       nullptr,                                             // pNext
       0,                                                   // flags (reserved for future use)
@@ -462,9 +490,9 @@ private:
       VK_FALSE);    
   }
 
-  void doRecord(CommandRecorder * recorder) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    recorder->state.sampler = this->sampler->sampler;
+    creator->state.sampler = this->sampler->sampler;
   }
 
   std::unique_ptr<VulkanSampler> sampler;
@@ -617,10 +645,10 @@ private:
                            regions.data());
   }
 
-  void doRecord(CommandRecorder * recorder) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    recorder->state.descriptor_image_info = {
-      recorder->state.sampler,
+    creator->state.descriptor_image_info = {
+      creator->state.sampler,
       this->view->view,
       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
@@ -662,37 +690,23 @@ private:
   };
 };
 
-class PipelineRasterizationState : public Node {
+class CullMode : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(PipelineRasterizationState)
-  PipelineRasterizationState() = delete;
-  virtual ~PipelineRasterizationState() = default;
+  NO_COPY_OR_ASSIGNMENT(CullMode)
+    CullMode() = delete;
+  virtual ~CullMode() = default;
 
-  explicit PipelineRasterizationState(VkCullModeFlags cullmode) :
-    rasterization_state({
-      VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, // sType
-      nullptr,                                                    // pNext
-      0,                                                          // flags;
-      VK_FALSE,                                                   // depthClampEnable
-      VK_FALSE,                                                   // rasterizerDiscardEnable
-      VK_POLYGON_MODE_FILL,                                       // polygonMode
-      cullmode,                                                   // cullMode
-      VK_FRONT_FACE_COUNTER_CLOCKWISE,                            // frontFace
-      VK_FALSE,                                                   // depthBiasEnable
-      0.0f,                                                       // depthBiasConstantFactor
-      0.0f,                                                       // depthBiasClamp
-      0.0f,                                                       // depthBiasSlopeFactor
-      1.0f,                                                       // lineWidth
-    })
+  explicit CullMode(VkCullModeFlags cullmode) :
+    cullmode(cullmode)
   {}
   
 private:
-  void doRecord(CommandRecorder * recorder) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    recorder->state.rasterization_state = this->rasterization_state;
+    creator->state.rasterization_state.cullMode = this->cullmode;
   }
 
-  VkPipelineRasterizationStateCreateInfo rasterization_state;
+  VkCullModeFlags cullmode;
 };
 
 class ComputeCommand : public Node {
@@ -710,28 +724,13 @@ public:
   {}
 
 private:
+  void doPipeline(PipelineCreator * creator) override
+  {
+    
+  }
+
   void doRecord(CommandRecorder * recorder) override
   {
-    this->descriptor_set_layout = std::make_unique<VulkanDescriptorSetLayout>(
-      recorder->device,
-      recorder->state.descriptor_set_layout_bindings);
-
-    this->descriptor_pool = std::make_unique<VulkanDescriptorPool>(
-      recorder->device,
-      recorder->state.descriptor_pool_sizes);
-
-    this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
-      recorder->device,
-      this->descriptor_pool, 1,
-      descriptor_set_layout->layout);
-
-    this->pipeline = std::make_unique<VulkanComputePipeline>(
-      recorder->device,
-      recorder->pipelinecache,
-      0,
-      recorder->state.shader_stage_infos[0],
-      this->pipeline_layout->layout);
-
     vkCmdBindDescriptorSets(recorder->command,
                             VK_PIPELINE_BIND_POINT_COMPUTE,
                             this->pipeline_layout->layout,
@@ -757,7 +756,6 @@ private:
 
   std::unique_ptr<VulkanComputePipeline> pipeline;
 
-  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
   std::shared_ptr<VulkanDescriptorSetLayout> descriptor_set_layout;
   std::shared_ptr<VulkanDescriptorSets> descriptor_set;
   std::shared_ptr<VulkanPipelineLayout> pipeline_layout;
@@ -776,50 +774,49 @@ public:
   {}
 
 private:
+  void doAlloc(MemoryAllocator * alocator) override
+  {
+    this->command = std::make_unique<VulkanCommandBuffers>(
+      alocator->device,
+      1,
+      VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+  }
+  void doPipeline(PipelineCreator * creator) override
+  {
+    this->descriptor_set_layout = std::make_unique<VulkanDescriptorSetLayout>(
+      creator->device,
+      creator->state.descriptor_set_layout_bindings);
+
+    this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
+      creator->device,
+      creator->descriptor_pool,
+      1,
+      this->descriptor_set_layout->layout);
+
+    this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
+      creator->device,
+      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
+
+    for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
+      write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
+    }
+    this->descriptor_set->update(creator->state.write_descriptor_sets);
+
+    this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
+      creator->device,
+      creator->renderpass,
+      creator->pipelinecache,
+      this->pipeline_layout->layout,
+      this->topology,
+      creator->state.rasterization_state,
+      this->dynamic_states,
+      creator->state.shader_stage_infos,
+      creator->state.vertex_input_bindings,
+      creator->state.vertex_attributes);
+  }
+
   void doRecord(CommandRecorder * recorder) override
   {
-    if (!this->pipeline) {
-      this->descriptor_set_layout = std::make_unique<VulkanDescriptorSetLayout>(
-        recorder->device, 
-        recorder->state.descriptor_set_layout_bindings);
-
-      this->descriptor_pool = std::make_unique<VulkanDescriptorPool>(
-        recorder->device,
-        recorder->state.descriptor_pool_sizes);
-
-      this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
-        recorder->device,
-        this->descriptor_pool, 
-        1,
-        this->descriptor_set_layout->layout);
-
-      this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
-        recorder->device,
-        std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
-
-      for (auto & write_descriptor_set : recorder->state.write_descriptor_sets) {
-        write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
-      }
-      this->descriptor_set->update(recorder->state.write_descriptor_sets);
-
-      this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
-        recorder->device,
-        recorder->renderpass,
-        recorder->pipelinecache,
-        this->pipeline_layout->layout,
-        this->topology,
-        recorder->state.rasterization_state,
-        this->dynamic_states,
-        recorder->state.shader_stage_infos,
-        recorder->state.vertex_input_bindings,
-        recorder->state.vertex_attributes);
-    }
-
-    this->command = std::make_unique<VulkanCommandBuffers>(
-      recorder->device, 
-      1, 
-      VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-
     VulkanCommandBufferScope command_scope(this->command->buffer(),
                                            recorder->renderpass,
                                            0,
@@ -895,11 +892,9 @@ private:
     VK_DYNAMIC_STATE_VIEWPORT,
     VK_DYNAMIC_STATE_SCISSOR
   };
-  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
   std::shared_ptr<VulkanDescriptorSetLayout> descriptor_set_layout;
   std::shared_ptr<VulkanDescriptorSets> descriptor_set;
   std::shared_ptr<VulkanPipelineLayout> pipeline_layout;
-
 };
 
 class Box : public Separator {
@@ -979,8 +974,6 @@ public:
     //};
 
     this->children = {
-      std::make_shared<PipelineRasterizationState>(VK_CULL_MODE_BACK_BIT),
-
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -996,13 +989,13 @@ public:
       std::make_shared<BufferData<float>>(vertices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
       std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
+      std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
 
       std::make_shared<TransformBuffer>(),
       std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
-      std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 36)
+      std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, static_cast<uint32_t>(indices.size()))
     };
   }
 };

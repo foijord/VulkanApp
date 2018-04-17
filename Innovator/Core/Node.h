@@ -19,6 +19,11 @@ public:
     this->doStage(stager);
   }
 
+  void pipeline(class PipelineCreator * creator)
+  {
+    this->doPipeline(creator);
+  }
+
   void record(class CommandRecorder * recorder)
   {
     this->doRecord(recorder);
@@ -32,6 +37,7 @@ public:
 private:
   virtual void doAlloc(class MemoryAllocator *) {}
   virtual void doStage(class MemoryStager *) {}
+  virtual void doPipeline(class PipelineCreator *) {}
   virtual void doRecord(class CommandRecorder *) {}
   virtual void doRender(class SceneRenderer *) {}
 };
@@ -59,6 +65,13 @@ protected:
   {
     for (const auto& node : this->children) {
       node->stage(stager);
+    }
+  }
+
+  void doPipeline(PipelineCreator * creator) override
+  {
+    for (const auto& node : this->children) {
+      node->pipeline(creator);
     }
   }
 

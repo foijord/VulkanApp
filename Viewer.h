@@ -196,6 +196,7 @@ public:
 
     this->renderaction->alloc(this->root.get());
     this->renderaction->stage(this->root.get());
+    this->renderaction->pipeline(this->root.get());
     this->renderaction->record(this->root.get(), this->framebuffer->framebuffer, this->extent2d);
   }
 
@@ -239,7 +240,7 @@ public:
                                 static_cast<float>(this->extent2d.height);
 
     this->renderaction->record(this->root.get(), this->framebuffer->framebuffer, this->extent2d);
-    this->renderaction->submit(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
+    this->renderaction->render(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
     this->swapBuffers();
   }
 
@@ -542,7 +543,7 @@ public:
       }
       this->mouse_pos = pos;
 
-      this->renderaction->submit(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
+      this->renderaction->render(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
       this->swapBuffers();
     }
   }
