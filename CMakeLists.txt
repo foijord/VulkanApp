@@ -22,7 +22,7 @@ add_executable(${TARGET_NAME}
   Viewer.h
   Innovator/Nodes.h
   Innovator/Camera.h
-  Innovator/Actions.h
+  Innovator/RenderManager.h
   Innovator/Core/Node.h
   Innovator/Core/File.h
   Innovator/Core/State.h

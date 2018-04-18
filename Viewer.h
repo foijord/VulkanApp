@@ -2,7 +2,7 @@
 
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/VulkanObjects.h>
-#include <Innovator/Actions.h>
+#include <Innovator/RenderManager.h>
 #include <Innovator/Nodes.h>
 #include <Innovator/Camera.h>
 
@@ -172,7 +172,7 @@ public:
       attachment_descriptions,
       subpass_descriptions);
 
-    this->renderaction = std::make_unique<SceneManager>(
+    this->renderaction = std::make_unique<RenderManager>(
       this->device,
       this->renderpass);
 
@@ -562,7 +562,7 @@ public:
   std::shared_ptr<VulkanImage> depth_buffer;
   std::unique_ptr<ImageObject> depth_buffer_object;
   std::unique_ptr<VulkanImageView> depth_buffer_view;
-  std::unique_ptr<SceneManager> renderaction;
+  std::unique_ptr<RenderManager> renderaction;
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::shared_ptr<Separator> root;
 

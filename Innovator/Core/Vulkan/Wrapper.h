@@ -1242,7 +1242,6 @@ public:
 
   VulkanComputePipeline(std::shared_ptr<VulkanDevice> device,
                         VkPipelineCache pipelineCache,
-                        VkPipelineCreateFlags flags,
                         const VkPipelineShaderStageCreateInfo & stage,
                         VkPipelineLayout layout,
                         VkPipeline basePipelineHandle = nullptr,
@@ -1252,7 +1251,7 @@ public:
     VkComputePipelineCreateInfo create_info {
       VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, // sType
       nullptr,                                        // pNext
-      flags,                                          // flags
+      0,                                              // flags
       stage,                                          // stage
       layout,                                         // layout
       basePipelineHandle,                             // basePipelineHandle
@@ -1265,11 +1264,6 @@ public:
   ~VulkanComputePipeline()
   {
     vkDestroyPipeline(this->device->device, this->pipeline, nullptr);
-  }
-
-  void bind(VkCommandBuffer buffer)
-  {
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->pipeline);
   }
 
   std::shared_ptr<VulkanDevice> device;
@@ -1389,25 +1383,25 @@ public:
     };
 
     VkGraphicsPipelineCreateInfo create_info {
-      VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, // sType
-      nullptr,                                         // pNext
-      0,                                               // flags
-      static_cast<uint32_t>(shaderstages.size()),      // stageCount
-      shaderstages.data(),                             // pStages
-      &vertex_input_state,                             // pVertexInputState
-      &input_assembly_state,                           // pInputAssemblyState
-      nullptr,                                         // pTessellationState
-      &viewport_state,                                 // pViewportState
-      &rasterization_state,                            // pRasterizationState
-      &multi_sample_state,                             // pMultisampleState
-      &depth_stencil_state,                            // pDepthStencilState
-      &color_blend_state,                              // pColorBlendState
-      &dynamic_state,                                  // pDynamicState
-      pipeline_layout,                                 // layout
-      render_pass,                                     // renderPass
-      0,                                               // subpass
-      nullptr,                                         // basePipelineHandle
-      0,                                               // basePipelineIndex
+      VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,          // sType
+      nullptr,                                                  // pNext
+      0,                                                        // flags
+      static_cast<uint32_t>(shaderstages.size()),               // stageCount
+      shaderstages.data(),                                      // pStages
+      &vertex_input_state,                                      // pVertexInputState
+      &input_assembly_state,                                    // pInputAssemblyState
+      nullptr,                                                  // pTessellationState
+      &viewport_state,                                          // pViewportState
+      &rasterization_state,                                     // pRasterizationState
+      &multi_sample_state,                                      // pMultisampleState
+      &depth_stencil_state,                                     // pDepthStencilState
+      &color_blend_state,                                       // pColorBlendState
+      &dynamic_state,                                           // pDynamicState
+      pipeline_layout,                                          // layout
+      render_pass,                                              // renderPass
+      0,                                                        // subpass
+      nullptr,                                                  // basePipelineHandle
+      0,                                                        // basePipelineIndex
     };
 
     THROW_ON_ERROR(vkCreateGraphicsPipelines(this->device->device, pipeline_cache, 1, &create_info, nullptr, &this->pipeline));

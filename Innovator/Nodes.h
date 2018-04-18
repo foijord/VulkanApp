@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Innovator/Core/Node.h>
-#include <Innovator/Actions.h>
+#include <Innovator/RenderManager.h>
 
 #include <gli/load.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -39,8 +39,9 @@ public:
   Separator() = default;
   virtual ~Separator() = default;
 
-  explicit Separator(std::vector<std::shared_ptr<Node>> children)
-    : Group(std::move(children)) {}
+  explicit Separator(std::vector<std::shared_ptr<Node>> children) : 
+    Group(std::move(children)) 
+  {}
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
@@ -81,9 +82,10 @@ public:
   virtual ~Transform() = default;
 
   explicit Transform(const glm::vec3 & translation, 
-                     const glm::vec3 & scalefactor)
-    : translation(translation), 
-      scaleFactor(scalefactor) {}
+                     const glm::vec3 & scalefactor) : 
+    translation(translation), 
+    scaleFactor(scalefactor) 
+  {}
 
 private:
   void doRender(SceneRenderer * renderer) override
@@ -98,49 +100,43 @@ private:
   glm::vec3 scaleFactor;
 };
 
-template <typename T>
 class BufferData : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(BufferData)
-  BufferData() = default;
+  BufferData() = delete;
   virtual ~BufferData() = default;
 
-  explicit BufferData(std::vector<T> values) :
-    values(std::move(values))
+  template <typename T>
+  explicit BufferData(std::vector<T> & values) :
+    buffer_data_description({
+      sizeof(T),                  // stride
+      sizeof(T) * values.size(),  // size
+      values.data(),              // data
+    })
   {}
 
-  std::vector<T> values;
-
 private:
-  template <typename StateType>
-  void initState(StateType & state)
-  {
-    state.buffer_data_description = {
-      sizeof(T),                        // stride
-      sizeof(T) * this->values.size(),  // size
-      this->values.data(),              // data
-    };
-  }
-
   void doAlloc(MemoryAllocator * allocator) override
   {
-    this->initState(allocator->state);
+    allocator->state.buffer_data_description = this->buffer_data_description;
   }
 
   void doStage(MemoryStager * stager) override
   {
-    this->initState(stager->state);
+    stager->state.buffer_data_description = this->buffer_data_description;
   }
 
   void doPipeline(PipelineCreator * creator) override
   {
-    this->initState(creator->state);
+    creator->state.buffer_data_description = this->buffer_data_description;
   }
 
   void doRecord(CommandRecorder * recorder) override
   {
-    this->initState(recorder->state);
+    recorder->state.buffer_data_description = this->buffer_data_description;
   }
+
+  VulkanBufferDataDescription buffer_data_description;
 };
 
 class CpuMemoryBuffer : public Node {
@@ -393,9 +389,9 @@ public:
   {}
 
 private:
-  void doStage(MemoryStager * stager) override
+  void doDescriptorPool(PipelineCreator * creator) override
   {
-    stager->descriptor_pool_sizes.push_back({
+    creator->descriptor_pool_sizes.push_back({
       this->descriptor_set_layout_binding.descriptorType,                // type 
       this->descriptor_set_layout_binding.descriptorCount,               // descriptorCount
     });
@@ -726,7 +722,30 @@ public:
 private:
   void doPipeline(PipelineCreator * creator) override
   {
-    
+    this->descriptor_set_layout = std::make_unique<VulkanDescriptorSetLayout>(
+      creator->device,
+      creator->state.descriptor_set_layout_bindings);
+
+    this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
+      creator->device,
+      creator->descriptor_pool,
+      1,
+      this->descriptor_set_layout->layout);
+
+    this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
+      creator->device,
+      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
+
+    for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
+      write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
+    }
+    this->descriptor_set->update(creator->state.write_descriptor_sets);
+
+    this->pipeline = std::make_unique<VulkanComputePipeline>(
+      creator->device,
+      creator->pipelinecache,
+      creator->state.shader_stage_infos[0],
+      this->pipeline_layout->layout);
   }
 
   void doRecord(CommandRecorder * recorder) override
@@ -761,26 +780,27 @@ private:
   std::shared_ptr<VulkanPipelineLayout> pipeline_layout;
 };
 
-class DrawCommand : public Node {
+class DrawCommandBase : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(DrawCommand)
-  DrawCommand() = delete;
-  virtual ~DrawCommand() = default;
+  NO_COPY_OR_ASSIGNMENT(DrawCommandBase)
+    DrawCommandBase() = delete;
+  virtual ~DrawCommandBase() = default;
 
-  explicit DrawCommand(VkPrimitiveTopology topology, 
-                       uint32_t count) : 
-    count(count),
+  explicit DrawCommandBase(VkPrimitiveTopology topology) : 
     topology(topology)
   {}
 
 private:
-  void doAlloc(MemoryAllocator * alocator) override
+  virtual void execute(VkCommandBuffer command, CommandRecorder * recorder) = 0;
+
+  void doAlloc(MemoryAllocator * allocator) override
   {
     this->command = std::make_unique<VulkanCommandBuffers>(
-      alocator->device,
+      allocator->device,
       1,
       VK_COMMAND_BUFFER_LEVEL_SECONDARY);
   }
+
   void doPipeline(PipelineCreator * creator) override
   {
     this->descriptor_set_layout = std::make_unique<VulkanDescriptorSetLayout>(
@@ -866,15 +886,7 @@ private:
                            recorder->state.vertex_attribute_buffers.data(),
                            recorder->state.vertex_attribute_buffer_offsets.data());
     
-    if (recorder->state.indices.empty()) {
-      vkCmdDraw(this->command->buffer(), this->count, 1, 0, 0);
-    }
-    else {
-      for (const auto& indexbuffer : recorder->state.indices) {
-        vkCmdBindIndexBuffer(this->command->buffer(), indexbuffer.buffer, 0, indexbuffer.type);
-        vkCmdDrawIndexed(this->command->buffer(), indexbuffer.count, 1, 0, 0, 1);
-      }
-    }
+    this->execute(this->command->buffer(), recorder);
   }
 
   void doRender(SceneRenderer * renderer) override
@@ -884,7 +896,6 @@ private:
                          this->command->buffers.data());
   }
 
-  uint32_t count;
   VkPrimitiveTopology topology;
   std::unique_ptr<VulkanCommandBuffers> command;
   std::unique_ptr<VulkanGraphicsPipeline> pipeline;
@@ -895,6 +906,44 @@ private:
   std::shared_ptr<VulkanDescriptorSetLayout> descriptor_set_layout;
   std::shared_ptr<VulkanDescriptorSets> descriptor_set;
   std::shared_ptr<VulkanPipelineLayout> pipeline_layout;
+};
+
+class DrawCommand : public DrawCommandBase {
+public:
+  NO_COPY_OR_ASSIGNMENT(DrawCommand)
+  virtual ~DrawCommand() = default;
+
+  explicit DrawCommand(VkPrimitiveTopology topology, uint32_t count) :
+    DrawCommandBase(topology),
+    count(count)
+  {}
+
+private:
+  void execute(VkCommandBuffer command, CommandRecorder * recorder) override
+  {
+    vkCmdDraw(command, this->count, 1, 0, 0);
+  }
+
+  uint32_t count;  
+};
+
+class IndexedDrawCommand : public DrawCommandBase {
+public:
+  NO_COPY_OR_ASSIGNMENT(IndexedDrawCommand)
+  virtual ~IndexedDrawCommand() = default;
+
+  explicit IndexedDrawCommand(VkPrimitiveTopology topology) :
+    DrawCommandBase(topology)
+  {}
+
+private:
+  void execute(VkCommandBuffer command, CommandRecorder * recorder) override
+  {
+    for (const auto& indexbuffer : recorder->state.indices) {
+      vkCmdBindIndexBuffer(command, indexbuffer.buffer, 0, indexbuffer.type);
+      vkCmdDrawIndexed(command, indexbuffer.count, 1, 0, 0, 1);
+    }
+  }
 };
 
 class Box : public Separator {
@@ -913,13 +962,24 @@ public:
     //  |/     |/
     //  0--y---2
 
-    std::vector<uint32_t> indices {
+    this->indices = {
       0, 1, 3, 3, 2, 0, // -x
       4, 6, 7, 7, 5, 4, // +x
       0, 4, 5, 5, 1, 0, // -y
       6, 2, 3, 3, 7, 6, // +y
       0, 2, 6, 6, 4, 0, // -z
       1, 5, 7, 7, 3, 1, // +z
+    };
+
+    this->vertices = {
+      0, 0, 0, // 0
+      0, 0, 1, // 1
+      0, 1, 0, // 2
+      0, 1, 1, // 3
+      1, 0, 0, // 4
+      1, 0, 1, // 5
+      1, 1, 0, // 6
+      1, 1, 1, // 7
     };
 
     //std::vector<uint32_t> indices{
@@ -944,19 +1004,7 @@ public:
     //  5,  2,  9,
     //  11,  2, 7
     //};
-
-
-    std::vector<float> vertices {
-      0, 0, 0, // 0
-      0, 0, 1, // 1
-      0, 1, 0, // 2
-      0, 1, 1, // 3
-      1, 0, 0, // 4
-      1, 0, 1, // 5
-      1, 1, 0, // 6
-      1, 1, 1, // 7
-    };
-
+    //
     //const float t = float(1 + std::pow(5, 0.5)) / 2;  // golden ratio
     //std::vector<float> vertices{
     //  -1,  0,  t,
@@ -981,12 +1029,12 @@ public:
       std::make_shared<Shader>("Shaders/vertex.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<Shader>("Shaders/fragment.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 
-      std::make_shared<BufferData<uint32_t>>(indices),
+      std::make_shared<BufferData>(this->indices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
 
-      std::make_shared<BufferData<float>>(vertices),
+      std::make_shared<BufferData>(this->vertices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
@@ -995,7 +1043,10 @@ public:
       std::make_shared<TransformBuffer>(),
       std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
-      std::make_shared<DrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, static_cast<uint32_t>(indices.size()))
+      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
     };
   }
+
+  std::vector<uint32_t> indices;
+  std::vector<float> vertices;
 };

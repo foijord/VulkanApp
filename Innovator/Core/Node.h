@@ -19,6 +19,11 @@ public:
     this->doStage(stager);
   }
 
+  void descriptorPool(class PipelineCreator * creator)
+  {
+    this->doDescriptorPool(creator);
+  }
+
   void pipeline(class PipelineCreator * creator)
   {
     this->doPipeline(creator);
@@ -37,6 +42,7 @@ public:
 private:
   virtual void doAlloc(class MemoryAllocator *) {}
   virtual void doStage(class MemoryStager *) {}
+  virtual void doDescriptorPool(class PipelineCreator * creator) {}
   virtual void doPipeline(class PipelineCreator *) {}
   virtual void doRecord(class CommandRecorder *) {}
   virtual void doRender(class SceneRenderer *) {}
@@ -65,6 +71,13 @@ protected:
   {
     for (const auto& node : this->children) {
       node->stage(stager);
+    }
+  }
+
+  void doDescriptorPool(PipelineCreator * creator) override
+  {
+    for (const auto& node : this->children) {
+      node->descriptorPool(creator);
     }
   }
 

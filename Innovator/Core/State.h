@@ -37,10 +37,6 @@ struct StageState {
   };
 };
 
-struct RenderState {
-  glm::mat4 ModelMatrix{ 1 };
-};
-
 struct PipelineState {
   VkPipelineRasterizationStateCreateInfo rasterization_state{
     VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, // sType
@@ -91,4 +87,8 @@ struct RecordState {
   std::vector<VulkanIndexBufferDescription> indices;
   std::vector<VkBuffer> vertex_attribute_buffers;
   std::vector<VkDeviceSize> vertex_attribute_buffer_offsets;
+};
+
+struct RenderState {
+  glm::mat4 ModelMatrix{ 1 };
 };

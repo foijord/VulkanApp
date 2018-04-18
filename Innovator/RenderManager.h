@@ -107,6 +107,27 @@ public:
   std::shared_ptr<VulkanDevice> device;
   VkCommandBuffer command;
   std::unique_ptr<VulkanCommandBufferScope> command_scope;
+};
+
+class PipelineCreator {
+public:
+  NO_COPY_OR_ASSIGNMENT(PipelineCreator)
+  PipelineCreator() = delete;
+  ~PipelineCreator() = default;
+
+  explicit PipelineCreator(std::shared_ptr<VulkanDevice> device, 
+                           VkRenderPass renderpass,
+                           VkPipelineCache pipelinecache) :
+    device(std::move(device)),
+    renderpass(renderpass),
+    pipelinecache(pipelinecache)
+  {}
+
+  PipelineState state;
+  std::shared_ptr<VulkanDevice> device;
+  VkRenderPass renderpass;
+  VkPipelineCache pipelinecache;
+  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
   std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
 };
 
@@ -140,29 +161,6 @@ public:
   VkCommandBuffer command;
 };
 
-class PipelineCreator {
-public:
-  NO_COPY_OR_ASSIGNMENT(PipelineCreator)
-  PipelineCreator() = delete;
-  ~PipelineCreator() = default;
-
-  explicit PipelineCreator(std::shared_ptr<VulkanDevice> device, 
-                           VkRenderPass renderpass,
-                           VkPipelineCache pipelinecache,
-                           std::shared_ptr<VulkanDescriptorPool> descriptor_pool) :
-    device(std::move(device)),
-    renderpass(renderpass),
-    pipelinecache(pipelinecache),
-    descriptor_pool(std::move(descriptor_pool))
-  {}
-
-  PipelineState state;
-  std::shared_ptr<VulkanDevice> device;
-  VkRenderPass renderpass;
-  VkPipelineCache pipelinecache;
-  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
-};
-
 class SceneRenderer {
 public:
   NO_COPY_OR_ASSIGNMENT(SceneRenderer)
@@ -181,12 +179,12 @@ public:
   Camera * camera;
 };
 
-class SceneManager {
+class RenderManager {
 public:
-  NO_COPY_OR_ASSIGNMENT(SceneManager)
-  SceneManager() = delete;
+  NO_COPY_OR_ASSIGNMENT(RenderManager)
+  RenderManager() = delete;
 
-  explicit SceneManager(std::shared_ptr<VulkanDevice> device,
+  explicit RenderManager(std::shared_ptr<VulkanDevice> device,
                         std::shared_ptr<VulkanRenderpass> renderpass)
     : device(std::move(device)), 
       renderpass(std::move(renderpass)),
@@ -195,7 +193,7 @@ public:
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device))
   {}
 
-  virtual ~SceneManager() 
+  virtual ~RenderManager() 
   {
     try {
       THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
@@ -211,16 +209,12 @@ public:
     root->alloc(&allocator);
   }
 
-  void stage(Node * root)
+  void stage(Node * root) const
   {
     VulkanCommandBuffers staging_command(this->device);
     {
       MemoryStager stager(this->device, staging_command.buffer());
       root->stage(&stager);
-
-      this->descriptor_pool = std::make_unique<VulkanDescriptorPool>(
-        this->device,
-        stager.descriptor_pool_sizes);
     }
 
     const VulkanFence fence(this->device);
@@ -231,12 +225,18 @@ public:
                            fence.fence);
   }
 
-  void pipeline(Node * root) const
+  void pipeline(Node * root)
   {
     PipelineCreator creator(this->device,
                             this->renderpass->renderpass,
-                            this->pipelinecache->cache,
-                            this->descriptor_pool);
+                            this->pipelinecache->cache);
+
+    root->descriptorPool(&creator);
+
+    creator.descriptor_pool = std::make_unique<VulkanDescriptorPool>(
+      this->device,
+      creator.descriptor_pool_sizes);
+
     root->pipeline(&creator);
   }
 
@@ -293,5 +293,4 @@ public:
   std::shared_ptr<VulkanFence> render_fence;
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
-  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
 };
