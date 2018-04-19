@@ -486,7 +486,7 @@ public:
       static_cast<uint32_t>(queueFamilyIndices.size()),
       queueFamilyIndices.data(),
       preTransform,
-      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,           // compositeAlpha 
+      compositeAlpha,
       presentMode,
       clipped,
       oldSwapchain
