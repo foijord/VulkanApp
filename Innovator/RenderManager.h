@@ -173,7 +173,6 @@ public:
     camera(camera)
   {}
 
-
   RenderState state;
   VulkanCommandBuffers * command;
   Camera * camera;
@@ -184,10 +183,8 @@ public:
   NO_COPY_OR_ASSIGNMENT(RenderManager)
   RenderManager() = delete;
 
-  explicit RenderManager(std::shared_ptr<VulkanDevice> device,
-                        std::shared_ptr<VulkanRenderpass> renderpass)
+  explicit RenderManager(std::shared_ptr<VulkanDevice> device)
     : device(std::move(device)), 
-      renderpass(std::move(renderpass)),
       render_fence(std::make_unique<VulkanFence>(this->device)),
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device))
@@ -205,7 +202,7 @@ public:
 
   void alloc(Node * root) const
   {
-    MemoryAllocator allocator(device);
+    MemoryAllocator allocator(this->device);
     root->alloc(&allocator);
   }
 
@@ -225,10 +222,10 @@ public:
                            fence.fence);
   }
 
-  void pipeline(Node * root)
+  void pipeline(Node * root, const VkRenderPass renderpass)
   {
     PipelineCreator creator(this->device,
-                            this->renderpass->renderpass,
+                            renderpass,
                             this->pipelinecache->cache);
 
     root->descriptorPool(&creator);
@@ -240,10 +237,13 @@ public:
     root->pipeline(&creator);
   }
 
-  void record(Node * root, const VkFramebuffer framebuffer, const VkExtent2D extent) const
+  void record(Node * root, 
+              const VkFramebuffer framebuffer, 
+              const VkRenderPass renderpass,
+              const VkExtent2D extent) const
   {
     CommandRecorder recorder(this->device,
-                             this->renderpass->renderpass,
+                             renderpass,
                              framebuffer,
                              this->pipelinecache->cache,
                              extent,
@@ -252,7 +252,11 @@ public:
     root->record(&recorder);
   }
 
-  void render(Node * root, const VkFramebuffer framebuffer, Camera * camera, const VkExtent2D extent) const
+  void render(Node * root, 
+              const VkFramebuffer framebuffer, 
+              const VkRenderPass renderpass, 
+              Camera * camera, 
+              const VkExtent2D extent) const
   {
     camera->updateMatrices();
 
@@ -269,11 +273,11 @@ public:
     {
       VulkanCommandBufferScope commandbuffer(this->render_command->buffer());
 
-      VulkanRenderPassScope renderpass(this->renderpass->renderpass,
-                                       framebuffer,
-                                       renderarea,
-                                       clearvalues,
-                                       this->render_command->buffer());
+      VulkanRenderPassScope renderpass_scope(renderpass,
+                                             framebuffer,
+                                             renderarea,
+                                             clearvalues,
+                                             this->render_command->buffer());
 
       SceneRenderer renderer(this->render_command.get(), camera);
       root->render(&renderer);
@@ -288,7 +292,6 @@ public:
   }
 
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanRenderpass> renderpass;
 
   std::shared_ptr<VulkanFence> render_fence;
   std::unique_ptr<VulkanCommandBuffers> render_command;

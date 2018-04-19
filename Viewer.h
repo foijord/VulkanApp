@@ -86,7 +86,7 @@ public:
         queue_index,                                  // queueFamilyIndex
         1,                                            // queueCount   
         queue_priorities                              // pQueuePriorities
-      } };
+    } };
 
     std::vector<const char *> device_layers{
 #ifdef _DEBUG
@@ -144,7 +144,7 @@ public:
         VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,     // initialLayout
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
-      } };
+    } };
 
     VkAttachmentReference depth_stencil_attachment{
       1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
@@ -165,16 +165,14 @@ public:
         &depth_stencil_attachment,                              // pDepthStencilAttachment
         0,                                                      // preserveAttachmentCount
         nullptr                                                 // pPreserveAttachments
-      } };
+    } };
 
     this->renderpass = std::make_unique<VulkanRenderpass>(
       this->device,
       attachment_descriptions,
       subpass_descriptions);
 
-    this->renderaction = std::make_unique<RenderManager>(
-      this->device,
-      this->renderpass);
+    this->renderaction = std::make_unique<RenderManager>(this->device);
 
     this->rebuildSwapchain();
   }
@@ -196,8 +194,14 @@ public:
 
     this->renderaction->alloc(this->root.get());
     this->renderaction->stage(this->root.get());
-    this->renderaction->pipeline(this->root.get());
-    this->renderaction->record(this->root.get(), this->framebuffer->framebuffer, this->extent2d);
+
+    this->renderaction->pipeline(this->root.get(), 
+                                 this->renderpass->renderpass);
+
+    this->renderaction->record(this->root.get(), 
+                               this->framebuffer->framebuffer, 
+                               this->renderpass->renderpass, 
+                               this->extent2d);
   }
 
   void swapBuffers()
@@ -239,8 +243,17 @@ public:
     this->camera->aspectratio = static_cast<float>(this->extent2d.width) / 
                                 static_cast<float>(this->extent2d.height);
 
-    this->renderaction->record(this->root.get(), this->framebuffer->framebuffer, this->extent2d);
-    this->renderaction->render(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
+    this->renderaction->record(this->root.get(),
+                               this->framebuffer->framebuffer,
+                               this->renderpass->renderpass,
+                               this->extent2d);
+
+    this->renderaction->render(this->root.get(), 
+                               this->framebuffer->framebuffer,
+                               this->renderpass->renderpass,
+                               this->camera.get(), 
+                               this->extent2d);
+
     this->swapBuffers();
   }
 
@@ -405,22 +418,21 @@ public:
           this->device->default_queue_index,                             // dstQueueFamilyIndex
           swapchain_image,                                               // image
           { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }                      // subresourceRange
-          });
+        });
       }
 
       VulkanCommandBuffers command(this->device);
       {
         VulkanCommandBufferScope command_scope(command.buffer());
 
-        vkCmdPipelineBarrier(
-          command.buffer(),
-          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-          0, 0, nullptr, 0, nullptr,
-          static_cast<uint32_t>(memory_barriers.size()),
-          memory_barriers.data());
-
+        vkCmdPipelineBarrier(command.buffer(),
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                             0, 0, nullptr, 0, nullptr,
+                             static_cast<uint32_t>(memory_barriers.size()),
+                             memory_barriers.data());
       }
+
       command.submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
       THROW_ON_ERROR(vkQueueWaitIdle(this->device->default_queue));
     }
@@ -451,7 +463,7 @@ public:
         this->device->default_queue_index,                             // dstQueueFamilyIndex
         nullptr,                                                       // image
         subresource_range,                                             // subresourceRange
-      } };
+    } };
 
     auto dst_image_barriers = src_image_barriers;
     std::swap(dst_image_barriers[0].oldLayout, dst_image_barriers[0].newLayout);
@@ -495,18 +507,18 @@ public:
       };
 
       vkCmdCopyImage(this->swap_buffers_command->buffer(i),
-        this->color_buffer->image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        swapchain_images[i],
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &image_copy);
+                     this->color_buffer->image,
+                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                     swapchain_images[i],
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                     1,
+                     &image_copy);
 
       vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(dst_image_barriers.size()),
-        dst_image_barriers.data());
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr,
+                           static_cast<uint32_t>(dst_image_barriers.size()),
+                           dst_image_barriers.data());
     }
   }
 
@@ -543,7 +555,12 @@ public:
       }
       this->mouse_pos = pos;
 
-      this->renderaction->render(this->root.get(), this->framebuffer->framebuffer, this->camera.get(), this->extent2d);
+      this->renderaction->render(this->root.get(), 
+                                 this->framebuffer->framebuffer,
+                                 this->renderpass->renderpass,
+                                 this->camera.get(), 
+                                 this->extent2d);
+
       this->swapBuffers();
     }
   }
