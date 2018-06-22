@@ -1,3 +1,5 @@
+# cmake.exe -G "Visual Studio 15 2017 Win64" ../../code/VulkanApp/ -DCMAKE_PREFIX_PATH=D:/Qt/5.10.1/msvc2017_64
+
 cmake_minimum_required(VERSION 3.10)
 
 project(VulkanApp)

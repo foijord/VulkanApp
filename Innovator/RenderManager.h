@@ -56,11 +56,11 @@ public:
 private:
   void allocate()
   {
-    for (auto & image : imageobjects) {
+    for (auto & image : this->imageobjects) {
       image->bind();
     }
 
-    for (auto & buffer_object : bufferobjects) {
+    for (auto & buffer_object : this->bufferobjects) {
       const auto buffer = std::make_shared<VulkanBuffer>(
         this->device,
         buffer_object->flags,
