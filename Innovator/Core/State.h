@@ -1,9 +1,7 @@
 #pragma once
 
 #include <Innovator/Core/Vulkan/Wrapper.h>
-
-#include <glm/mat4x4.hpp>
-#include <gli/load.hpp>
+#include <Innovator/Core/Math/Matrix.h>
 
 #include <vector>
 
@@ -90,5 +88,5 @@ struct RecordState {
 };
 
 struct RenderState {
-  glm::mat4 ModelMatrix{ 1 };
+  Innovator::Core::Math::mat4 ModelMatrix = Innovator::Core::Math::identity();
 };

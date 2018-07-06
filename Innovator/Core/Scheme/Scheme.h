@@ -344,7 +344,7 @@ public:
     if (dargs.empty()) {
       throw std::logic_error("logic error: no arguments to function call");
     }
-    return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs.front(), op));
+    return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs.front(), this->op));
   }
   
   T op;

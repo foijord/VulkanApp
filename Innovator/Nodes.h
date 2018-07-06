@@ -1,11 +1,10 @@
 #pragma once
 
-#include <Innovator/Core/Node.h>
 #include <Innovator/RenderManager.h>
+#include <Innovator/Core/Node.h>
+#include <Innovator/Core/Math/Matrix.h>
 
 #include <gli/load.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
 #include <vulkan/vulkan.h>
 
 #include <map>
@@ -81,8 +80,8 @@ public:
   Transform() = default;
   virtual ~Transform() = default;
 
-  explicit Transform(const glm::vec3 & translation, 
-                     const glm::vec3 & scalefactor) : 
+  explicit Transform(const Innovator::Core::Math::vec4 & translation,
+                     const Innovator::Core::Math::vec4 & scalefactor) :
     translation(translation), 
     scaleFactor(scalefactor) 
   {}
@@ -90,28 +89,28 @@ public:
 private:
   void doRender(SceneRenderer * renderer) override
   {
-    glm::mat4 matrix(1.0);
-    matrix = glm::translate(matrix, this->translation);
-    matrix = glm::scale(matrix, this->scaleFactor);
-    renderer->state.ModelMatrix *= matrix;
+    Innovator::Core::Math::mat4 matrix = Innovator::Core::Math::translate(Innovator::Core::Math::identity(), this->translation);
+    matrix = Innovator::Core::Math::scale(matrix, this->scaleFactor);
+    renderer->state.ModelMatrix = Innovator::Core::Math::mult(renderer->state.ModelMatrix, matrix);
   }
 
-  glm::vec3 translation;
-  glm::vec3 scaleFactor;
+  Innovator::Core::Math::vec4 translation;
+  Innovator::Core::Math::vec4 scaleFactor;
 };
 
+template <typename T>
 class BufferData : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(BufferData)
   BufferData() = delete;
   virtual ~BufferData() = default;
 
-  template <typename T>
-  explicit BufferData(std::vector<T> & values) :
+  explicit BufferData(std::vector<T> values) :
+    values(std::move(values)),
     buffer_data_description({
-      sizeof(T),                  // stride
-      sizeof(T) * values.size(),  // size
-      values.data(),              // data
+      sizeof(T),                        // stride
+      sizeof(T) * this->values.size(),  // size
+      this->values.data(),              // data
     })
   {}
 
@@ -136,6 +135,7 @@ private:
     recorder->state.buffer_data_description = this->buffer_data_description;
   }
 
+  std::vector<T> values;
   VulkanBufferDataDescription buffer_data_description;
 };
 
@@ -275,9 +275,13 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    glm::mat4 data[2] = {
-      renderer->camera->ViewMatrix * renderer->state.ModelMatrix,
-      renderer->camera->ProjMatrix
+    const Innovator::Core::Math::mat4 ViewMatrix = convert(renderer->camera->ViewMatrix);
+    const Innovator::Core::Math::mat4 ModelViewMatrix = Innovator::Core::Math::mult(ViewMatrix, renderer->state.ModelMatrix);
+    const Innovator::Core::Math::mat4 ProjectionMatrix = convert(renderer->camera->ProjMatrix);
+
+    Innovator::Core::Math::mat4 data[2] = {
+      ModelViewMatrix,
+      ProjectionMatrix
     };
 
     this->buffer->memcpy(data);
@@ -962,7 +966,8 @@ public:
     //  |/     |/
     //  0--y---2
 
-    this->indices = {
+
+    std::vector<uint32_t> indices = {
       0, 1, 3, 3, 2, 0, // -x
       4, 6, 7, 7, 5, 4, // +x
       0, 4, 5, 5, 1, 0, // -y
@@ -971,7 +976,7 @@ public:
       1, 5, 7, 7, 3, 1, // +z
     };
 
-    this->vertices = {
+    std::vector<float> vertices = {
       0, 0, 0, // 0
       0, 0, 1, // 1
       0, 1, 0, // 2
@@ -1022,6 +1027,7 @@ public:
     //};
 
     this->children = {
+      std::make_shared<Transform>(Innovator::Core::Math::vec4{ 0, 1, 0, 0 }, Innovator::Core::Math::vec4{ 1, 1, 1, 0 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -1029,12 +1035,12 @@ public:
       std::make_shared<Shader>("Shaders/vertex.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<Shader>("Shaders/fragment.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 
-      std::make_shared<BufferData>(this->indices),
+      std::make_shared<BufferData<uint32_t>>(indices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
 
-      std::make_shared<BufferData>(this->vertices),
+      std::make_shared<BufferData<float>>(vertices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
@@ -1046,7 +1052,4 @@ public:
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
     };
   }
-
-  std::vector<uint32_t> indices;
-  std::vector<float> vertices;
 };

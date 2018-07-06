@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Math/Box.h>
 
 #include <glm/gtc/matrix_transform.hpp>
