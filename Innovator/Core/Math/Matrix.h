@@ -7,28 +7,50 @@
 
 namespace Innovator::Core::Math {
 
-  typedef std::array<float, 4> vec4;
-  typedef std::array<vec4, 4> mat4;
+  template <typename T, int N>
+  using vec = std::array<T, N>;
 
-  inline vec4 add(const vec4 & v0, const vec4 & v1)
+  template <typename T, int N>
+  using mat = vec<vec<T, N>, N>;
+
+  template <typename T>
+  using vec4 = vec<T, 4>;
+
+  template <typename T>
+  using vec3 = vec<T, 3>;
+
+  template <typename T>
+  using mat3 = mat<T, 3>;
+
+  template <typename T>
+  using mat4 = mat<T, 4>;
+
+  using vec3f = vec3<float>;
+  using vec4f = vec4<float>;
+  using mat3f = mat3<float>;
+  using mat4f = mat4<float>;
+  
+  template <typename T, int N>
+  vec<T, N> operator+(vec<T, N> v0, const vec<T, N> & v1)
   {
-    vec4 v;
-    for (auto i = 0; i < 4; i++) {
-      v[i] = v0[i] + v1[i];
+    for (auto i = 0; i < N; i++) {
+      v0[i] += v1[i];
     }
-    return v;
+    return v0;
   }
 
-  inline float dot(const vec4 & v0, const vec4 & v1)
+  template <typename T, int N>
+  T operator * (const vec<T, N> & v0, const vec<T, N> & v1)
   {
-    float d = 0;
-    for (auto i = 0; i < 4; i++) {
+    T d = 0;
+    for (auto i = 0; i < N; i++) {
       d += v0[i] * v1[i];
     }
     return d;
   }
 
-  inline mat4 identity()
+  template <typename T>
+  mat4<T> new_mat4()
   {
     return {
        1, 0, 0, 0,
@@ -38,13 +60,15 @@ namespace Innovator::Core::Math {
     };
   }
 
-  inline mat4 translate(mat4 m, const vec4 & v)
+  template <typename T>
+  mat4<T> translate(mat4<T> m, const vec4<T> & v)
   {
-    m[3] = add(m[3], v);
+    m[3] = m[3] + v;
     return m;
   }
 
-  inline mat4 scale(mat4 m, const vec4 & v)
+  template <typename T, int N>
+  mat<T, N> scale(mat<T, N> m, const vec<T, N> & v)
   {
     m[0][0] *= v[0];
     m[1][1] *= v[1];
@@ -53,34 +77,37 @@ namespace Innovator::Core::Math {
     return m;
   }
 
-  inline mat4 transpose(const mat4 & m)
+  template <typename T, int N>
+  mat<T, N> transpose(const mat<T, N> & m)
   {
-    mat4 t;
-    for (auto i = 0; i < 4; i++) {
-      for (auto j = 0; j < 4; j++) {
+    mat<T, N> t;
+    for (auto i = 0; i < N; i++) {
+      for (auto j = 0; j < N; j++) {
         t[i][j] = m[j][i];
       }
     }
     return t;
   }
 
-  inline mat4 mult(const mat4 & m0, const mat4 & m1)
+  template <typename T, int N>
+  mat<T, N> mult(const mat<T, N> & m0, const mat<T, N> & m1)
   {
-    mat4 t = transpose(m1);
-    mat4 m;
-    for (auto i = 0; i < 4; i++) {
-      for (auto j = 0; j < 4; j++) {
-        m[i][j] = dot(m0[i], t[j]);
+    mat<T, N> t = transpose(m1);
+    mat<T, N> m;
+    for (auto i = 0; i < N; i++) {
+      for (auto j = 0; j < N; j++) {
+        m[i][j] = m0[i] * t[j];
       }
     }
     return m;
   }
 }
 
-inline Innovator::Core::Math::mat4 convert(const glm::mat4 & m)
+template <typename T>
+Innovator::Core::Math::mat4<T> convert(const glm::mat4 & m)
 {
-  Innovator::Core::Math::mat4 mat;
-  memcpy(mat.data(), glm::value_ptr(m), sizeof(float) * 16);
+  Innovator::Core::Math::mat4<T> mat;
+  memcpy(mat.data(), glm::value_ptr(m), sizeof(T) * 16);
   return mat;
 }
 

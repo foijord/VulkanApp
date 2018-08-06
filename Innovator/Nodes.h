@@ -80,8 +80,8 @@ public:
   Transform() = default;
   virtual ~Transform() = default;
 
-  explicit Transform(const Innovator::Core::Math::vec4 & translation,
-                     const Innovator::Core::Math::vec4 & scalefactor) :
+  explicit Transform(const Innovator::Core::Math::vec4f & translation,
+                     const Innovator::Core::Math::vec4f & scalefactor) :
     translation(translation), 
     scaleFactor(scalefactor) 
   {}
@@ -89,13 +89,13 @@ public:
 private:
   void doRender(SceneRenderer * renderer) override
   {
-    Innovator::Core::Math::mat4 matrix = Innovator::Core::Math::translate(Innovator::Core::Math::identity(), this->translation);
+    Innovator::Core::Math::mat4f matrix = Innovator::Core::Math::translate(Innovator::Core::Math::new_mat4<float>(), this->translation);
     matrix = Innovator::Core::Math::scale(matrix, this->scaleFactor);
     renderer->state.ModelMatrix = Innovator::Core::Math::mult(renderer->state.ModelMatrix, matrix);
   }
 
-  Innovator::Core::Math::vec4 translation;
-  Innovator::Core::Math::vec4 scaleFactor;
+  Innovator::Core::Math::vec4f translation;
+  Innovator::Core::Math::vec4f scaleFactor;
 };
 
 template <typename T>
@@ -256,7 +256,7 @@ private:
   void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      sizeof(glm::mat4) * 2,
+      sizeof(Innovator::Core::Math::mat4f) * 2,
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -275,11 +275,11 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    const Innovator::Core::Math::mat4 ViewMatrix = convert(renderer->camera->ViewMatrix);
-    const Innovator::Core::Math::mat4 ModelViewMatrix = Innovator::Core::Math::mult(ViewMatrix, renderer->state.ModelMatrix);
-    const Innovator::Core::Math::mat4 ProjectionMatrix = convert(renderer->camera->ProjMatrix);
+    const auto ViewMatrix = convert<float>(renderer->camera->ViewMatrix);
+    const auto ModelViewMatrix = Innovator::Core::Math::mult(ViewMatrix, renderer->state.ModelMatrix);
+    const auto ProjectionMatrix = convert<float>(renderer->camera->ProjMatrix);
 
-    Innovator::Core::Math::mat4 data[2] = {
+    Innovator::Core::Math::mat4f data[2] = {
       ModelViewMatrix,
       ProjectionMatrix
     };
@@ -1027,7 +1027,7 @@ public:
     //};
 
     this->children = {
-      std::make_shared<Transform>(Innovator::Core::Math::vec4{ 0, 1, 0, 0 }, Innovator::Core::Math::vec4{ 1, 1, 1, 0 }),
+      std::make_shared<Transform>(Innovator::Core::Math::vec4f{ 0, 1, 0, 0 }, Innovator::Core::Math::vec4f{ 1, 1, 1, 0 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),

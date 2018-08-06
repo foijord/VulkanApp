@@ -88,5 +88,5 @@ struct RecordState {
 };
 
 struct RenderState {
-  Innovator::Core::Math::mat4 ModelMatrix = Innovator::Core::Math::identity();
+  Innovator::Core::Math::mat4<float> ModelMatrix = Innovator::Core::Math::new_mat4<float>();
 };
