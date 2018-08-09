@@ -5,6 +5,8 @@
 
 #include <vector>
 
+using namespace Innovator::Core::Math;
+
 struct VulkanIndexBufferDescription {
   VkIndexType type;
   VkBuffer buffer;
@@ -88,5 +90,10 @@ struct RecordState {
 };
 
 struct RenderState {
-  Innovator::Core::Math::mat4<float> ModelMatrix = Innovator::Core::Math::new_mat4<float>();
+  mat4f ModelMatrix = {
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1
+  };
 };

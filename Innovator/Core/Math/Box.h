@@ -4,8 +4,6 @@
 #include <limits>
 #include <algorithm>
 
-using namespace glm;
-
 class box3 {
 public:
   box3()
@@ -13,7 +11,7 @@ public:
       max(-std::numeric_limits<float>::max())
   {}
 
-  box3(vec3 min, vec3 max)
+  box3(glm::vec3 min, glm::vec3 max)
     : min(min), max(max) {}
 
   ~box3() {}
@@ -24,16 +22,16 @@ public:
     this->extendBy(b.max);
   }
 
-  void extendBy(const vec3 & v)
+  void extendBy(const glm::vec3 & v)
   {
     this->min = glm::min(v, this->min);
     this->max = glm::max(v, this->max);
   }
 
-  void transform(const mat4 & mat)
+  void transform(const glm::mat4 & mat)
   {
-    this->min = vec3(mat * vec4(this->min, 1.0));
-    this->max = vec3(mat * vec4(this->max, 1.0));
+    this->min = glm::vec3(mat * glm::vec4(this->min, 1.0));
+    this->max = glm::vec3(mat * glm::vec4(this->max, 1.0));
   }
 
   float size() const
@@ -41,15 +39,15 @@ public:
     return glm::length(this->span());
   }
 
-  vec3 span() const
+  glm::vec3 span() const
   {
     return this->max - this->min;
   }
 
-  vec3 center() const
+  glm::vec3 center() const
   {
     return this->min + this->span() / 2.0f;
   }
 
-  vec3 min, max;
+  glm::vec3 min, max;
 };

@@ -12,6 +12,8 @@
 #include <vector>
 #include <memory>
 
+using namespace Innovator::Core::Math;
+
 template <typename Traverser, typename State>
 class StateScope {
 public:
@@ -80,22 +82,27 @@ public:
   Transform() = default;
   virtual ~Transform() = default;
 
-  explicit Transform(const Innovator::Core::Math::vec4f & translation,
-                     const Innovator::Core::Math::vec4f & scalefactor) :
-    translation(translation), 
-    scaleFactor(scalefactor) 
-  {}
+  explicit Transform(const vec3f & t,
+                     const vec3f & s)
+  {
+    for (auto i = 0; i < 3; i++) {
+      this->matrix[i][i] = s[i];
+      this->matrix[3][i] = t[i];
+    }
+  }
 
 private:
   void doRender(SceneRenderer * renderer) override
   {
-    Innovator::Core::Math::mat4f matrix = Innovator::Core::Math::translate(Innovator::Core::Math::new_mat4<float>(), this->translation);
-    matrix = Innovator::Core::Math::scale(matrix, this->scaleFactor);
-    renderer->state.ModelMatrix = Innovator::Core::Math::mult(renderer->state.ModelMatrix, matrix);
+    renderer->state.ModelMatrix = renderer->state.ModelMatrix * this->matrix;
   }
 
-  Innovator::Core::Math::vec4f translation;
-  Innovator::Core::Math::vec4f scaleFactor;
+  mat4f matrix = {
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1
+  };
 };
 
 template <typename T>
@@ -276,10 +283,10 @@ private:
   void doRender(SceneRenderer * renderer) override
   {
     const auto ViewMatrix = convert<float>(renderer->camera->ViewMatrix);
-    const auto ModelViewMatrix = Innovator::Core::Math::mult(ViewMatrix, renderer->state.ModelMatrix);
+    const auto ModelViewMatrix = ViewMatrix * renderer->state.ModelMatrix;
     const auto ProjectionMatrix = convert<float>(renderer->camera->ProjMatrix);
 
-    Innovator::Core::Math::mat4f data[2] = {
+    mat4f data[2] = {
       ModelViewMatrix,
       ProjectionMatrix
     };
@@ -1027,7 +1034,7 @@ public:
     //};
 
     this->children = {
-      std::make_shared<Transform>(Innovator::Core::Math::vec4f{ 0, 1, 0, 0 }, Innovator::Core::Math::vec4f{ 1, 1, 1, 0 }),
+      std::make_shared<Transform>(vec3f{ 0, 1, 0 }, vec3f{ 1, 1, 1 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),

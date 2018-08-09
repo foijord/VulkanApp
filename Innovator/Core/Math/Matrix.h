@@ -31,7 +31,7 @@ namespace Innovator::Core::Math {
   using mat4f = mat4<float>;
   
   template <typename T, int N>
-  vec<T, N> operator+(vec<T, N> v0, const vec<T, N> & v1)
+  vec<T, N> operator + (vec<T, N> v0, const vec<T, N> & v1)
   {
     for (auto i = 0; i < N; i++) {
       v0[i] += v1[i];
@@ -50,17 +50,6 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T>
-  mat4<T> new_mat4()
-  {
-    return {
-       1, 0, 0, 0,
-       0, 1, 0, 0,
-       0, 0, 1, 0,
-       0, 0, 0, 1 
-    };
-  }
-
-  template <typename T>
   mat4<T> translate(mat4<T> m, const vec4<T> & v)
   {
     m[3] = m[3] + v;
@@ -68,7 +57,7 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T, int N>
-  mat<T, N> scale(mat<T, N> m, const vec<T, N> & v)
+  mat<T, N> operator * (mat<T, N> m, const vec<T, N> & v)
   {
     m[0][0] *= v[0];
     m[1][1] *= v[1];
@@ -90,7 +79,7 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T, int N>
-  mat<T, N> mult(const mat<T, N> & m0, const mat<T, N> & m1)
+  mat<T, N> operator * (const mat<T, N> & m0, const mat<T, N> & m1)
   {
     mat<T, N> t = transpose(m1);
     mat<T, N> m;
