@@ -4,6 +4,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <array>
+#include <cmath>
 
 namespace Innovator::Core::Math {
 
@@ -14,10 +15,13 @@ namespace Innovator::Core::Math {
   using mat = vec<vec<T, N>, N>;
 
   template <typename T>
-  using vec4 = vec<T, 4>;
+  using vec2 = vec<T, 2>;
 
   template <typename T>
   using vec3 = vec<T, 3>;
+
+  template <typename T>
+  using vec4 = vec<T, 4>;
 
   template <typename T>
   using mat3 = mat<T, 3>;
@@ -25,16 +29,35 @@ namespace Innovator::Core::Math {
   template <typename T>
   using mat4 = mat<T, 4>;
 
+  using vec2f = vec2<float>;
   using vec3f = vec3<float>;
   using vec4f = vec4<float>;
   using mat3f = mat3<float>;
   using mat4f = mat4<float>;
-  
+
   template <typename T, int N>
   vec<T, N> operator + (vec<T, N> v0, const vec<T, N> & v1)
   {
     for (auto i = 0; i < N; i++) {
       v0[i] += v1[i];
+    }
+    return v0;
+  }
+
+  template <typename T, int N>
+  vec<T, N> operator + (vec<T, N> v0, const vec<T, N + 1> & v1)
+  {
+    for (auto i = 0; i < N; i++) {
+      v0[i] += v1[i];
+    }
+    return v0;
+  }
+
+  template <typename T, int N>
+  vec<T, N> operator - (vec<T, N> v0, const vec<T, N> & v1)
+  {
+    for (auto i = 0; i < N; i++) {
+      v0[i] -= v1[i];
     }
     return v0;
   }
@@ -49,6 +72,36 @@ namespace Innovator::Core::Math {
     return d;
   }
 
+  template <typename T, int N>
+  vec<T, N> scale(vec<T, N> v, T s)
+  {
+    for (auto i = 0; i < N; i++) {
+      v[i] *= s;
+    }
+    return v;
+  }
+
+  template <typename T, int N>
+  vec<T, N> operator * (vec<T, N> v, T s)
+  {
+    for (auto i = 0; i < N; i++) {
+      v[i] *= s;
+    }
+    return v;
+  }
+
+  template <typename T, int N>
+  T length(const vec<T, N> & v)
+  {
+    return sqrt(v * v);
+  }
+
+  template <typename T, int N>
+  vec<T, N> normalize(const vec<T, N> & v)
+  {
+    return scale(v, T(1) / length(v));
+  }
+
   template <typename T>
   mat4<T> translate(mat4<T> m, const vec4<T> & v)
   {
@@ -57,7 +110,7 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T, int N>
-  mat<T, N> operator * (mat<T, N> m, const vec<T, N> & v)
+  mat<T, N> scale(mat<T, N> m, const vec<T, N> & v)
   {
     m[0][0] *= v[0];
     m[1][1] *= v[1];
@@ -66,6 +119,15 @@ namespace Innovator::Core::Math {
     return m;
   }
 
+  template <typename T>
+  vec3f cross(const vec3f & v0, const vec3f & v1)
+  {
+    return vec3<T>{
+      v0[1] * v1[2] - v0[2] * v1[1],
+      v0[2] * v1[0] - v0[0] * v1[2],
+      v0[0] * v1[1] - v0[1] * v1[0],
+    };
+  }
   template <typename T, int N>
   mat<T, N> transpose(const mat<T, N> & m)
   {
@@ -76,6 +138,16 @@ namespace Innovator::Core::Math {
       }
     }
     return t;
+  }
+
+  template <typename T, int N>
+  vec<T, N> mult (mat<T, N> m, const vec<T, N> & v)
+  {
+    vec<T, N> result;
+    for (auto i = 0; i < N; i++) {
+      result[i] = v * m[i];
+    }
+    return result;
   }
 
   template <typename T, int N>
@@ -90,6 +162,90 @@ namespace Innovator::Core::Math {
     }
     return m;
   }
+
+  template <typename T>
+  mat4<T> rotate(const mat4<T> & m, T a, const vec3<T> & v)
+  {
+    T const c = cos(a);
+    T const s = sin(a);
+
+    vec3<T> axis = normalize(v);
+    vec3<T> temp = scale<T, 3>(axis, (T(1) - c));
+
+    mat4<T> rot;
+    rot[0][0] = c + temp[0] * axis[0];
+    rot[0][1] = temp[0] * axis[1] + s * axis[2];
+    rot[0][2] = temp[0] * axis[2] - s * axis[1];
+
+    rot[1][0] = temp[1] * axis[0] - s * axis[2];
+    rot[1][1] = c + temp[1] * axis[1];
+    rot[1][2] = temp[1] * axis[2] + s * axis[0];
+
+    rot[2][0] = temp[2] * axis[0] + s * axis[1];
+    rot[2][1] = temp[2] * axis[1] - s * axis[0];
+    rot[2][2] = c + temp[2] * axis[2];
+
+    mat4<T> result;
+    result[0] = m[0] * rot[0][0] + m[1] * rot[0][1] + m[2] * rot[0][2];
+    result[1] = m[0] * rot[1][0] + m[1] * rot[1][1] + m[2] * rot[1][2];
+    result[2] = m[0] * rot[2][0] + m[1] * rot[2][1] + m[2] * rot[2][2];
+    result[3] = m[3];
+
+    return result;
+  }
+
+  template <typename T>
+  mat4<T> frustum(T l, T r, T b, T t, T n, T f)
+  {
+    auto m00 = (2 * n) / (r - l);
+    auto m11 = (2 * n) / (t - b);
+    auto m22 = -(f + n) / (f - n);
+    auto m02 = (r + l) / (r - l);
+    auto m12 = (t + b) / (t - b);
+    auto m23 = -(2 * f*n) / (f - n);
+
+    return mat4<T>{
+      m00, 0, m02, 0,
+      0, m11, m12, 0,
+      0, 0, m22, m23,
+      0, 0, -1, 0
+    };
+  }
+
+  template <typename T>
+  mat4<T> perspective(T fovy, T aspect, T n, T f)
+  {
+    auto top = n * tan(fovy / 2);
+    auto right = top * aspect;
+    return frustum(-right, right, -top, top, n, f);
+  }
+}
+
+template <typename T>
+Innovator::Core::Math::vec4<T> vec3_to_vec4(const Innovator::Core::Math::vec3<T> & v)
+{
+  return { v[0], v[1], v[2], 0 };
+}
+
+template <typename T>
+Innovator::Core::Math::mat3<T> mat4_to_mat3(const Innovator::Core::Math::mat4<T> & m)
+{
+  return {
+    m[0][0], m[1][0], m[2][0],
+    m[0][1], m[1][1], m[2][1],
+    m[0][2], m[1][2], m[2][2]
+  };
+}
+
+template <typename T>
+Innovator::Core::Math::mat4<T> mat3_to_mat4(const Innovator::Core::Math::mat3<T> & m)
+{
+  return {
+    m[0][0], m[1][0], m[2][0], 0,
+    m[0][1], m[1][1], m[2][1], 0,
+    m[0][2], m[1][2], m[2][2], 0,
+          0,       0,       0, 0,
+  };
 }
 
 template <typename T>
@@ -100,3 +256,50 @@ Innovator::Core::Math::mat4<T> convert(const glm::mat4 & m)
   return mat;
 }
 
+template <typename T>
+Innovator::Core::Math::mat3<T> convert(const glm::mat3 & m)
+{
+  Innovator::Core::Math::mat3<T> mat;
+  memcpy(mat.data(), glm::value_ptr(m), sizeof(T) * 9);
+  return mat;
+}
+
+template <typename T>
+Innovator::Core::Math::vec4<T> convert(const glm::vec4 & m)
+{
+  Innovator::Core::Math::vec4<T> vec;
+  memcpy(vec.data(), glm::value_ptr(m), sizeof(T) * 4);
+  return vec;
+}
+
+template <typename T>
+Innovator::Core::Math::vec3<T> convert(const glm::vec3 & m)
+{
+  Innovator::Core::Math::vec3<T> vec;
+  memcpy(vec.data(), glm::value_ptr(m), sizeof(T) * 3);
+  return vec;
+}
+
+template <typename T>
+glm::vec3 convert(const Innovator::Core::Math::vec3<T> & v)
+{
+  glm::vec3 vec;
+  memcpy(glm::value_ptr(vec), v.data(), sizeof(T) * 3);
+  return vec;
+}
+
+template <typename T>
+glm::mat3 convert(const Innovator::Core::Math::mat3<T> & m)
+{
+  glm::mat3 mat;
+  memcpy(glm::value_ptr(mat), m.data(), sizeof(T) * 9);
+  return mat;
+}
+
+template <typename T>
+glm::mat4 convert(const Innovator::Core::Math::mat4<T> & m)
+{
+  glm::mat4 mat;
+  memcpy(glm::value_ptr(mat), m.data(), sizeof(T) * 16);
+  return mat;
+}

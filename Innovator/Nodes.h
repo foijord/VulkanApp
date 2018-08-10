@@ -282,9 +282,9 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    const auto ViewMatrix = convert<float>(renderer->camera->ViewMatrix);
+    const auto ViewMatrix = renderer->camera->ViewMatrix;
     const auto ModelViewMatrix = ViewMatrix * renderer->state.ModelMatrix;
-    const auto ProjectionMatrix = convert<float>(renderer->camera->ProjMatrix);
+    const auto ProjectionMatrix = renderer->camera->ProjMatrix;
 
     mat4f data[2] = {
       ModelViewMatrix,

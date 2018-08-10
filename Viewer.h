@@ -533,7 +533,7 @@ public:
   void mousePressEvent(QMouseEvent * e) override
   {
     this->button = e->button();
-    this->mouse_pos = glm::vec2(e->x(), e->y());
+    this->mouse_pos = { static_cast<float>(e->x()), static_cast<float>(e->y()) };
     this->mouse_pressed = true;
   }
 
@@ -545,12 +545,12 @@ public:
   void mouseMoveEvent(QMouseEvent * e) override
   {
     if (this->mouse_pressed) {
-      const glm::vec2 pos = glm::vec2(e->x(), e->y());
-      glm::vec2 dx = this->mouse_pos - pos;
+      const vec2f pos = { static_cast<float>(e->x()), static_cast<float>(e->y()) };
+      vec2f dx = scale(this->mouse_pos - pos, .01f);
       switch (this->button) {
-      case Qt::MiddleButton: this->camera->pan(dx * .01f); break;
-      case Qt::LeftButton: this->camera->orbit(dx * .01f); break;
-      case Qt::RightButton: this->camera->zoom(dx[1] * .01f); break;
+      case Qt::MiddleButton: this->camera->pan(dx); break;
+      case Qt::LeftButton: this->camera->orbit(dx); break;
+      case Qt::RightButton: this->camera->zoom(dx[1]); break;
       default: break;
       }
       this->mouse_pos = pos;
@@ -592,5 +592,5 @@ public:
 
   Qt::MouseButton button{ Qt::MouseButton::NoButton };
   bool mouse_pressed{ false };
-  glm::vec2 mouse_pos{};
+  vec2f mouse_pos{};
 };
