@@ -58,9 +58,9 @@ public:
   void lookAt(const vec3f & focalpoint)
   {
     this->orientation[2] = convert(normalize(this->position - focalpoint));
-    this->orientation[0] = glm::normalize(glm::cross(this->orientation[1], this->orientation[2]));
-    this->orientation[1] = glm::normalize(glm::cross(this->orientation[2], this->orientation[0]));
-    this->focaldistance = glm::length(convert(this->position) - convert(focalpoint));
+    this->orientation[0] = convert<float>(normalize<float>(cross<float>(convert<float>(this->orientation[1]), convert<float>(this->orientation[2]))));
+    this->orientation[1] = convert<float>(normalize<float>(cross<float>(convert<float>(this->orientation[2]), convert<float>(this->orientation[0]))));
+    this->focaldistance = length(this->position - focalpoint);
   }
 
   void view(const box3 & box)
@@ -84,9 +84,9 @@ public:
 
   void updateMatrices()
   {
-    this->ViewMatrix = convert<float>(glm::transpose(glm::mat4(this->orientation)));
-    this->ViewMatrix = convert<float>(glm::translate(convert(this->ViewMatrix), -convert(this->position)));
-    this->ProjMatrix = convert<float>(glm::perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane));
+    this->ViewMatrix = mat3_to_mat4(convert<float>(this->orientation));
+    this->ViewMatrix = translate(this->ViewMatrix, vec3f{ -this->position[0], -this->position[1], -this->position[2] });
+    this->ProjMatrix = perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
   }
 };
 

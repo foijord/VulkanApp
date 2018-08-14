@@ -103,10 +103,11 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T>
-  mat4<T> translate(mat4<T> m, const vec4<T> & v)
+  mat4<T> translate(const mat4<T> & m, const vec3<T> & v)
   {
-    m[3] = m[3] + v;
-    return m;
+    mat4f Result = m;
+    Result[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
+    return Result;
   }
 
   template <typename T, int N>
@@ -195,29 +196,41 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T>
-  mat4<T> frustum(T l, T r, T b, T t, T n, T f)
+  mat4<T> frustum(T left, T right, T bottom, T top, T nearVal, T farVal)
   {
-    auto m00 = (2 * n) / (r - l);
-    auto m11 = (2 * n) / (t - b);
-    auto m22 = -(f + n) / (f - n);
-    auto m02 = (r + l) / (r - l);
-    auto m12 = (t + b) / (t - b);
-    auto m23 = -(2 * f*n) / (f - n);
+    mat4f Result;
+    Result[0][0] = (static_cast<T>(2) * nearVal) / (right - left);
+    Result[1][1] = (static_cast<T>(2) * nearVal) / (top - bottom);
+    Result[2][0] = (right + left) / (right - left);
+    Result[2][1] = (top + bottom) / (top - bottom);
+    Result[2][3] = static_cast<T>(-1);
+    Result[2][2] = -(farVal + nearVal) / (farVal - nearVal);
+    Result[3][2] = -(static_cast<T>(2) * farVal * nearVal) / (farVal - nearVal);
 
-    return mat4<T>{
-      m00, 0, m02, 0,
-      0, m11, m12, 0,
-      0, 0, m22, m23,
-      0, 0, -1, 0
-    };
+    return Result;
   }
 
   template <typename T>
-  mat4<T> perspective(T fovy, T aspect, T n, T f)
+  mat4<T> perspective(T fovy, T aspect, T zNear, T zFar)
   {
-    auto top = n * tan(fovy / 2);
-    auto right = top * aspect;
-    return frustum(-right, right, -top, top, n, f);
+    assert(abs(aspect - std::numeric_limits<T>::epsilon()) > static_cast<T>(0));
+
+    T const tanHalfFovy = tan(fovy / static_cast<T>(2));
+
+    mat4f Result = {
+      0, 0, 0, 0,
+      0, 0, 0, 0,
+      0, 0, 0, 0,
+      0, 0, 0, 0,
+    };
+
+    Result[0][0] = static_cast<T>(1) / (aspect * tanHalfFovy);
+    Result[1][1] = static_cast<T>(1) / (tanHalfFovy);
+    Result[2][3] = -static_cast<T>(1);
+    Result[2][2] = -(zFar + zNear) / (zFar - zNear);
+    Result[3][2] = -(static_cast<T>(2) * zFar * zNear) / (zFar - zNear);
+
+    return Result;
   }
 }
 
@@ -244,7 +257,7 @@ Innovator::Core::Math::mat4<T> mat3_to_mat4(const Innovator::Core::Math::mat3<T>
     m[0][0], m[1][0], m[2][0], 0,
     m[0][1], m[1][1], m[2][1], 0,
     m[0][2], m[1][2], m[2][2], 0,
-          0,       0,       0, 0,
+          0,       0,       0, 1,
   };
 }
 
