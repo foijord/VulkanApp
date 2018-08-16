@@ -37,7 +37,7 @@ public:
     //const auto focaldistance = length(this->position - this->focalpoint);
     this->pan(dx);
 
-    this->z = normalize(this->focalpoint - this->position);
+    this->z = normalize(this->position - this->focalpoint);
     this->x = normalize<float>(cross<float>(this->y, this->z));
     this->y = normalize<float>(cross<float>(this->z, this->x));
 
