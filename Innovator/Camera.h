@@ -17,76 +17,64 @@ public:
     farplane(1000.0f),
     nearplane(0.1f),
     aspectratio(4.0f / 3.0f),
-    fieldofview(0.7f),
-    focaldistance(1.0f),
-    position({ 0, 0, 1 }),
-    orientation(glm::mat3(1.0))
-  {}
+    fieldofview(0.7f)
+  {
+    this->lookAt({ 0, 0, 0 }, { 0, 0, -1 }, { 0, 1, 0 });
+  }
 
   void zoom(float dy)
   {
-    const auto direction = convert<float>(this->orientation[2]);
-
-    const auto focalpoint = this->position - scale(direction, this->focaldistance);
-    this->position = this->position + scale(direction, dy);
-    this->focaldistance = length(this->position - focalpoint);
+    this->position = this->position + scale(this->z, dy);
   }
 
   void pan(const vec2f & dx)
   {
-    const auto x = convert<float>(this->orientation[0]);
-    const auto y = convert<float>(this->orientation[1]);
-
-    this->position = this->position + scale(x, dx[0]) + scale(y, -dx[1]);
+    this->position = this->position + scale(this->x, dx[0]) + scale(this->y, -dx[1]);
   }
 
   void orbit(const vec2f & dx)
   {
-    const auto direction = convert<float>(this->orientation[2]);
+    //const auto focaldistance = length(this->position - this->focalpoint);
+    this->pan(dx);
 
-    const auto focalpoint = this->position - scale(direction, this->focaldistance);
+    this->z = normalize(this->focalpoint - this->position);
+    this->x = normalize<float>(cross<float>(this->y, this->z));
+    this->y = normalize<float>(cross<float>(this->z, this->x));
 
-    mat4f rot = convert<float>(glm::mat4(this->orientation));
-    rot = rotate(rot, dx[1], vec3f{ 1, 0, 0 });
-    rot = rotate(rot, dx[0], vec3f{ 0, 1, 0 });
-    vec3f look = mult(mat4_to_mat3<float>(rot), vec3f { 0, 0, this->focaldistance });
-
-    this->position = focalpoint + look;
-    this->lookAt(focalpoint);
+    //this->position = this->focalpoint + scale(this->z, focaldistance);
   }
 
-  void lookAt(const vec3f & focalpoint)
+  void lookAt(const vec3f & position, const vec3f & focalpoint, const vec3f & up)
   {
-    this->orientation[2] = convert(normalize(this->position - focalpoint));
-    this->orientation[0] = convert<float>(normalize<float>(cross<float>(convert<float>(this->orientation[1]), convert<float>(this->orientation[2]))));
-    this->orientation[1] = convert<float>(normalize<float>(cross<float>(convert<float>(this->orientation[2]), convert<float>(this->orientation[0]))));
-    this->focaldistance = length(this->position - focalpoint);
+    this->position = position;
+    this->focalpoint = focalpoint;
+    this->z = normalize(this->position - this->focalpoint);
+    this->x = normalize<float>(cross<float>(up, this->z));
+    this->y = normalize<float>(cross<float>(this->z, this->x));
   }
 
-  void view(const box3 & box)
+  mat4f viewmatrix() const
   {
-    const auto focalpoint = box.center();
-    this->focaldistance = glm::length(box.span());
+    return transpose(mat4f{
+      x[0], x[1], x[2], -position[0],
+      y[0], y[1], y[2], -position[1],
+      z[0], z[1], z[2], -position[2],
+         0,    0,    0,            1,
+    });
+  }
 
-    this->position = convert<float>(focalpoint + this->orientation[2] * this->focaldistance);
-    this->lookAt(convert<float>(focalpoint));
+  mat4f projmatrix() const
+  {
+    return perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
   }
 
   float farplane;
   float nearplane;
   float aspectratio;
   float fieldofview;
-  float focaldistance;
-  vec3f position;
-  glm::mat3 orientation;
-  mat4f ViewMatrix;
-  mat4f ProjMatrix;
 
-  void updateMatrices()
-  {
-    this->ViewMatrix = mat3_to_mat4(convert<float>(this->orientation));
-    this->ViewMatrix = translate(this->ViewMatrix, vec3f{ -this->position[0], -this->position[1], -this->position[2] });
-    this->ProjMatrix = perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
-  }
+  vec3f position;
+  vec3f focalpoint;
+  vec3f x, y, z;
 };
 

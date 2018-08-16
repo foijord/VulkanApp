@@ -258,8 +258,6 @@ public:
               Camera * camera, 
               const VkExtent2D extent) const
   {
-    camera->updateMatrices();
-
     const VkRect2D renderarea{
       { 0, 0 },             // offset
       extent                // extent

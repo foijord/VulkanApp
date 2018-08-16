@@ -282,13 +282,9 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    const auto ViewMatrix = renderer->camera->ViewMatrix;
-    const auto ModelViewMatrix = ViewMatrix * renderer->state.ModelMatrix;
-    const auto ProjectionMatrix = renderer->camera->ProjMatrix;
-
     mat4f data[2] = {
-      ModelViewMatrix,
-      ProjectionMatrix
+      renderer->camera->viewmatrix() * renderer->state.ModelMatrix,
+      renderer->camera->projmatrix()
     };
 
     this->buffer->memcpy(data);
@@ -1034,7 +1030,7 @@ public:
     //};
 
     this->children = {
-      std::make_shared<Transform>(vec3f{ 0, 1, 0 }, vec3f{ 1, 1, 1 }),
+      std::make_shared<Transform>(vec3f{ 0, 0, 0 }, vec3f{ 1, 1, 1 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
