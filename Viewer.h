@@ -190,7 +190,7 @@ public:
   void setSceneGraph(std::shared_ptr<Separator> scene)
   {
     this->root = std::move(scene);
-    this->camera->lookAt(vec3f{ 0.5, 0.5, 5.0 }, vec3f{ 0.5, 0.5, 0.5 }, vec3f{ 0, 1, 0 });
+    this->camera->lookAt(vec3f{ 0, 0, 5 }, vec3f{ 0, 0, 0 }, vec3f{ 0, 1, 0 });
 
     this->renderaction->alloc(this->root.get());
     this->renderaction->stage(this->root.get());

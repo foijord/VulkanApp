@@ -1,8 +1,5 @@
 #pragma once
 
-#include <glm/mat4x4.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
 #include <array>
 #include <cmath>
 
@@ -164,41 +161,19 @@ namespace Innovator::Core::Math {
     return m;
   }
 
-  template <typename T>
-  mat4<T> frustum(T left, T right, T bottom, T top, T nearVal, T farVal)
+  inline mat4f perspective(float fovy, float aspect, float znear, float zfar)
   {
-    mat4f m;
-    m[0][0] = (static_cast<T>(2) * nearVal) / (right - left);
-    m[1][1] = (static_cast<T>(2) * nearVal) / (top - bottom);
-    m[2][0] = (right + left) / (right - left);
-    m[2][1] = (top + bottom) / (top - bottom);
-    m[2][3] = static_cast<T>(-1);
-    m[2][2] = -(farVal + nearVal) / (farVal - nearVal);
-    m[3][2] = -(static_cast<T>(2) * farVal * nearVal) / (farVal - nearVal);
+    const auto m00 = 1.0f / (aspect * tan(fovy / 2));
+    const auto m11 = 1.0f / tan(fovy / 2);
+    const auto m23 = -1.0f;
+    const auto m22 = -(zfar + znear) / (zfar - znear);
+    const auto m32 = -(2 * zfar * znear) / (zfar - znear);
 
-    return m;
-  }
-
-  template <typename T>
-  mat4<T> perspective(T fovy, T aspect, T zNear, T zFar)
-  {
-    assert(abs(aspect - std::numeric_limits<T>::epsilon()) > static_cast<T>(0));
-
-    T const tanHalfFovy = tan(fovy / static_cast<T>(2));
-
-    mat4f m = {
-      0, 0, 0, 0,
-      0, 0, 0, 0,
-      0, 0, 0, 0,
-      0, 0, 0, 0,
+    return {
+      m00, 0, 0, 0,
+      0, m11, 0, 0,
+      0, 0, m22, m23,
+      0, 0, m32, 0,
     };
-
-    m[0][0] = static_cast<T>(1) / (aspect * tanHalfFovy);
-    m[1][1] = static_cast<T>(1) / (tanHalfFovy);
-    m[2][3] = -static_cast<T>(1);
-    m[2][2] = -(zFar + zNear) / (zFar - zNear);
-    m[3][2] = -(static_cast<T>(2) * zFar * zNear) / (zFar - zNear);
-
-    return m;
   }
 }

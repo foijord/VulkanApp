@@ -1,10 +1,7 @@
 #pragma once
 
 #include <Innovator/Core/Misc/Defines.h>
-#include <Innovator/Core/Math/Box.h>
 #include <Innovator/Core/Math/Matrix.h>
-
-#include <glm/gtc/matrix_transform.hpp>
 
 using namespace Innovator::Core::Math;
 
@@ -34,14 +31,11 @@ public:
 
   void orbit(const vec2f & dx)
   {
-    //const auto focaldistance = length(this->position - this->focalpoint);
     this->pan(dx);
 
     this->z = normalize(this->position - this->focalpoint);
     this->x = normalize<float>(cross<float>(this->y, this->z));
     this->y = normalize<float>(cross<float>(this->z, this->x));
-
-    //this->position = this->focalpoint + scale(this->z, focaldistance);
   }
 
   void lookAt(const vec3f & position, const vec3f & focalpoint, const vec3f & up)
