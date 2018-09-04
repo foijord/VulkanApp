@@ -99,6 +99,13 @@ namespace Innovator::Core::Math {
     return scale(v, T(1) / length(v));
   }
 
+  template <typename T, int N>
+  vec<T, N> negate(const vec<T, N> & v)
+  {
+    return scale(v, T(-1));
+  }
+
+
   template <typename T>
   mat4<T> translate(const mat4<T> & m, const vec3<T> & v)
   {
@@ -117,10 +124,10 @@ namespace Innovator::Core::Math {
     return m;
   }
 
-  template <typename T>
+  inline
   vec3f cross(const vec3f & v0, const vec3f & v1)
   {
-    return vec3<T>{
+    return vec3f{
       v0[1] * v1[2] - v0[2] * v1[1],
       v0[2] * v1[0] - v0[0] * v1[2],
       v0[0] * v1[1] - v0[1] * v1[0],
@@ -159,21 +166,5 @@ namespace Innovator::Core::Math {
       }
     }
     return m;
-  }
-
-  inline mat4f perspective(float fovy, float aspect, float znear, float zfar)
-  {
-    const auto m00 = 1.0f / (aspect * tan(fovy / 2));
-    const auto m11 = 1.0f / tan(fovy / 2);
-    const auto m23 = -1.0f;
-    const auto m22 = -(zfar + znear) / (zfar - znear);
-    const auto m32 = -(2 * zfar * znear) / (zfar - znear);
-
-    return {
-      m00, 0, 0, 0,
-      0, m11, 0, 0,
-      0, 0, m22, m23,
-      0, 0, m32, 0,
-    };
   }
 }

@@ -10,65 +10,72 @@ public:
   NO_COPY_OR_ASSIGNMENT(Camera)
   ~Camera() = default;
 
-  explicit Camera() :
-    farplane(1000.0f),
-    nearplane(0.1f),
-    aspectratio(4.0f / 3.0f),
-    fieldofview(0.7f)
+  Camera()
   {
-    this->lookAt({ 0, 0, 0 }, { 0, 0, -1 }, { 0, 1, 0 });
+    this->farplane = 1000.0f;
+    this->nearplane = 0.1f;
+    this->aspectratio = 4.0f / 3;
+    this->fieldofview = 0.7f;
+
+    this->lookAt({ 5, 0, 5 }, { 0, 0, 0 }, { 0, 1, 0 });
   }
 
   void zoom(float dy)
   {
-    this->position = this->position + scale(this->z, dy);
+    this->p = this->p + mult({ this->x, this->y, this->z }, scale(this->z, dy));
   }
 
   void pan(const vec2f & dx)
   {
-    this->position = this->position + scale(this->x, dx[0]) + scale(this->y, -dx[1]);
+    this->p = this->p + mult({ this->x, this->y, this->z }, scale(this->x,  dx[0])) + 
+                        mult({ this->x, this->y, this->z }, scale(this->y, -dx[1]));
   }
 
   void orbit(const vec2f & dx)
   {
     this->pan(dx);
-
-    this->z = normalize(this->position - this->focalpoint);
-    this->x = normalize<float>(cross<float>(this->y, this->z));
-    this->y = normalize<float>(cross<float>(this->z, this->x));
+    const auto r = transpose(mat3f{ this->x, this->y, this->z });
+    this->lookAt(mult(r, this->p), { 0, 0, 0 }, this->y);
   }
 
-  void lookAt(const vec3f & position, const vec3f & focalpoint, const vec3f & up)
+  void lookAt(const vec3f & eye, const vec3f & target, const vec3f & up)
   {
-    this->position = position;
-    this->focalpoint = focalpoint;
-    this->z = normalize(this->position - this->focalpoint);
-    this->x = normalize<float>(cross<float>(up, this->z));
-    this->y = normalize<float>(cross<float>(this->z, this->x));
+    this->z = normalize(eye - target);
+    this->x = normalize(cross(up, this->z));
+    this->y = normalize(cross(this->z, this->x));
+    this->p = mult({ this->x, this->y, this->z }, eye);
   }
 
   mat4f viewmatrix() const
   {
-    return transpose(mat4f{
-      x[0], x[1], x[2], -position[0],
-      y[0], y[1], y[2], -position[1],
-      z[0], z[1], z[2], -position[2],
-         0,    0,    0,            1,
-    });
+    return {
+       this->x[0],  this->y[0],  this->z[0],  0,
+       this->x[1],  this->y[1],  this->z[1],  0,
+       this->x[2],  this->y[2],  this->z[2],  0,
+      -this->p[0], -this->p[1], -this->p[2],  1,
+    };
   }
 
   mat4f projmatrix() const
   {
-    return perspective(this->fieldofview, this->aspectratio, this->nearplane, this->farplane);
+    const auto m00 = 1.0f / (this->aspectratio * tan(this->fieldofview / 2));
+    const auto m11 = 1.0f / tan(this->fieldofview / 2);
+    const auto m23 = -1.0f;
+    const auto m22 = -(this->farplane + this->nearplane) / (this->farplane - this->nearplane);
+    const auto m32 = -(2 * this->farplane * this->nearplane) / (this->farplane - this->nearplane);
+
+    return {
+      m00, 0, 0, 0,
+      0, m11, 0, 0,
+      0, 0, m22, m23,
+      0, 0, m32, 0,
+    };
   }
 
+  vec3f x, y, z, p;
   float farplane;
   float nearplane;
   float aspectratio;
   float fieldofview;
-
-  vec3f position;
-  vec3f focalpoint;
-  vec3f x, y, z;
 };
 

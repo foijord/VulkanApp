@@ -54,7 +54,7 @@ public:
   explicit VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) : 
     QWindow(parent),
     vulkan(std::move(vulkan)),
-    camera(std::make_shared<Camera>())
+    camera(std::make_unique<Camera>())
   {
     this->surface = std::make_shared<::VulkanSurface>(
       this->vulkan,
@@ -190,7 +190,6 @@ public:
   void setSceneGraph(std::shared_ptr<Separator> scene)
   {
     this->root = std::move(scene);
-    this->camera->lookAt(vec3f{ 0, 0, 5 }, vec3f{ 0, 0, 0 }, vec3f{ 0, 1, 0 });
 
     this->renderaction->alloc(this->root.get());
     this->renderaction->stage(this->root.get());
@@ -240,7 +239,7 @@ public:
     QWindow::resizeEvent(e);
     this->rebuildSwapchain();
 
-    this->camera->aspectratio = static_cast<float>(this->extent2d.width) / 
+    this->camera->aspectratio = static_cast<float>(this->extent2d.width) /
                                 static_cast<float>(this->extent2d.height);
 
     this->renderaction->record(this->root.get(),
@@ -566,7 +565,7 @@ public:
   }
 
   std::shared_ptr<VulkanInstance> vulkan;
-  std::shared_ptr<Camera> camera;
+  std::unique_ptr<Camera> camera;
   std::shared_ptr<::VulkanSurface> surface;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanSemaphore> semaphore;
