@@ -12,6 +12,4 @@ void main()
 {
   vertex = Position;
   gl_Position = ProjectionMatrix * ModelViewMatrix * vec4(Position, 1.0);
-  // GL->VK conventions
-  gl_Position.y = -gl_Position.y;
 }

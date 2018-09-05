@@ -54,7 +54,7 @@ public:
   explicit VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) : 
     QWindow(parent),
     vulkan(std::move(vulkan)),
-    camera(std::make_unique<Camera>())
+    camera(std::make_unique<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f))
   {
     this->surface = std::make_shared<::VulkanSurface>(
       this->vulkan,
@@ -190,6 +190,8 @@ public:
   void setSceneGraph(std::shared_ptr<Separator> scene)
   {
     this->root = std::move(scene);
+
+    this->camera->lookAt({ 5, 0, 5 }, { 0, 0, 0 }, { 0, 1, 0 });
 
     this->renderaction->alloc(this->root.get());
     this->renderaction->stage(this->root.get());
@@ -544,8 +546,9 @@ public:
   void mouseMoveEvent(QMouseEvent * e) override
   {
     if (this->mouse_pressed) {
-      const vec2f pos = { static_cast<float>(e->x()), static_cast<float>(e->y()) };
-      vec2f dx = scale(this->mouse_pos - pos, .01f);
+      const vec2d pos = { static_cast<double>(e->x()), static_cast<double>(e->y()) };
+      vec2d dx = (this->mouse_pos - pos) * .01;
+      dx[1] = -dx[1];
       switch (this->button) {
       case Qt::MiddleButton: this->camera->pan(dx); break;
       case Qt::LeftButton: this->camera->orbit(dx); break;
@@ -591,5 +594,5 @@ public:
 
   Qt::MouseButton button{ Qt::MouseButton::NoButton };
   bool mouse_pressed{ false };
-  vec2f mouse_pos{};
+  vec2d mouse_pos{};
 };

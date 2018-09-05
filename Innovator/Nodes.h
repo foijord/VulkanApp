@@ -82,8 +82,8 @@ public:
   Transform() = default;
   virtual ~Transform() = default;
 
-  explicit Transform(const vec3f & t,
-                     const vec3f & s)
+  explicit Transform(const vec3d & t,
+                     const vec3d & s)
   {
     for (auto i = 0; i < 3; i++) {
       this->matrix[i][i] = s[i];
@@ -97,7 +97,7 @@ private:
     renderer->state.ModelMatrix = renderer->state.ModelMatrix * this->matrix;
   }
 
-  mat4f matrix = {
+  mat4d matrix = {
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
@@ -282,9 +282,9 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    mat4f data[2] = {
-      renderer->camera->viewmatrix() * renderer->state.ModelMatrix,
-      renderer->camera->projmatrix()
+    mat4f data[] = {
+      cast<float>(renderer->camera->viewmatrix() * renderer->state.ModelMatrix),
+      cast<float>(renderer->camera->projmatrix())
     };
 
     this->buffer->memcpy(data);
@@ -1030,7 +1030,7 @@ public:
     //};
 
     this->children = {
-      std::make_shared<Transform>(vec3f{ 0, 0, 0 }, vec3f{ 1, 1, 1 }),
+      std::make_shared<Transform>(vec3d{ 0, 0, 0 }, vec3d{ 1, 1, 1 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),

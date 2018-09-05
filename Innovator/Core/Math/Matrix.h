@@ -32,17 +32,14 @@ namespace Innovator::Core::Math {
   using mat3f = mat3<float>;
   using mat4f = mat4<float>;
 
-  template <typename T, int N>
-  vec<T, N> operator + (vec<T, N> v0, const vec<T, N> & v1)
-  {
-    for (auto i = 0; i < N; i++) {
-      v0[i] += v1[i];
-    }
-    return v0;
-  }
+  using vec2d = vec2<double>;
+  using vec3d = vec3<double>;
+  using vec4d = vec4<double>;
+  using mat3d = mat3<double>;
+  using mat4d = mat4<double>;
 
   template <typename T, int N>
-  vec<T, N> operator + (vec<T, N> v0, const vec<T, N + 1> & v1)
+  vec<T, N> operator + (vec<T, N> v0, const vec<T, N> & v1)
   {
     for (auto i = 0; i < N; i++) {
       v0[i] += v1[i];
@@ -70,15 +67,6 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T, int N>
-  vec<T, N> scale(vec<T, N> v, T s)
-  {
-    for (auto i = 0; i < N; i++) {
-      v[i] *= s;
-    }
-    return v;
-  }
-
-  template <typename T, int N>
   vec<T, N> operator * (vec<T, N> v, T s)
   {
     for (auto i = 0; i < N; i++) {
@@ -96,7 +84,7 @@ namespace Innovator::Core::Math {
   template <typename T, int N>
   vec<T, N> normalize(const vec<T, N> & v)
   {
-    return scale(v, T(1) / length(v));
+    return v * (T(1) / length(v));
   }
 
   template <typename T, int N>
@@ -105,34 +93,16 @@ namespace Innovator::Core::Math {
     return scale(v, T(-1));
   }
 
-
   template <typename T>
-  mat4<T> translate(const mat4<T> & m, const vec3<T> & v)
+  vec3<T> operator^(const vec3<T> & v0, const vec3<T> & v1)
   {
-    mat4f Result = m;
-    Result[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
-    return Result;
-  }
-
-  template <typename T, int N>
-  mat<T, N> scale(mat<T, N> m, const vec<T, N> & v)
-  {
-    m[0][0] *= v[0];
-    m[1][1] *= v[1];
-    m[2][2] *= v[2];
-
-    return m;
-  }
-
-  inline
-  vec3f cross(const vec3f & v0, const vec3f & v1)
-  {
-    return vec3f{
+    return {
       v0[1] * v1[2] - v0[2] * v1[1],
       v0[2] * v1[0] - v0[0] * v1[2],
       v0[0] * v1[1] - v0[1] * v1[0],
     };
   }
+
   template <typename T, int N>
   mat<T, N> transpose(const mat<T, N> & m)
   {
@@ -146,7 +116,7 @@ namespace Innovator::Core::Math {
   }
 
   template <typename T, int N>
-  vec<T, N> mult (mat<T, N> m, const vec<T, N> & v)
+  vec<T, N> operator * (const mat<T, N> & m, const vec<T, N> & v)
   {
     vec<T, N> result;
     for (auto i = 0; i < N; i++) {
@@ -166,5 +136,25 @@ namespace Innovator::Core::Math {
       }
     }
     return m;
+  }
+
+  template <typename T0, typename T1, int N>
+  vec<T0, N> cast(const vec<T1, N> & v)
+  {
+    vec<T0, N> vec;
+    for (auto i = 0; i < N; i++) {
+      vec[i] = static_cast<T0>(v[i]);
+    }
+    return vec;
+  }
+
+  template <typename T0, typename T1, int N>
+  mat<T0, N> cast(const mat<T1, N> & m)
+  {
+    mat<T0, N> mat;
+    for (auto i = 0; i < N; i++) {
+      mat[i] = cast<T0, T1, N>(m[i]);
+    }
+    return mat;
   }
 }

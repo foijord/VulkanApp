@@ -90,7 +90,7 @@ struct RecordState {
 };
 
 struct RenderState {
-  mat4f ModelMatrix = {
+  mat4d ModelMatrix = {
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
