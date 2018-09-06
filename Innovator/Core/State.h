@@ -90,10 +90,10 @@ struct RecordState {
 };
 
 struct RenderState {
-  mat4d ModelMatrix = {
+  mat4d ModelMatrix{
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
-    0, 0, 0, 1
+    0, 0, 0, 1,
   };
 };

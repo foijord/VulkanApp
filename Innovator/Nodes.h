@@ -97,7 +97,7 @@ private:
     renderer->state.ModelMatrix = renderer->state.ModelMatrix * this->matrix;
   }
 
-  mat4d matrix = {
+  mat4d matrix{
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
@@ -581,7 +581,7 @@ private:
         this->usage_flags,
         this->sharing_mode,
         this->create_flags),
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     allocator->imageobjects.push_back(this->image);
   }
@@ -1030,7 +1030,7 @@ public:
     //};
 
     this->children = {
-      std::make_shared<Transform>(vec3d{ 0, 0, 0 }, vec3d{ 1, 1, 1 }),
+      std::make_shared<Transform>(vec3d{ 20, 2, 0 }, vec3d{ 1, 1, 1 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
