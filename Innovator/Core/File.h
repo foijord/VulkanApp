@@ -59,7 +59,7 @@ public:
 
 class BoxFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  std::shared_ptr<Expression> operator()(const Expression *) const override
   {
     auto node = std::make_shared<Box>();
     return std::make_shared<NodeExpression>(node);

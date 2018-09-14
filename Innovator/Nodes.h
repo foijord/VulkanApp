@@ -501,22 +501,107 @@ private:
   std::unique_ptr<VulkanSampler> sampler;
 };
 
+
+class VulkanTextureImage {
+public:
+  VulkanTextureImage() = default;
+  VulkanTextureImage(VulkanTextureImage&&) = delete;
+  VulkanTextureImage(const VulkanTextureImage&) = default;
+  VulkanTextureImage & operator=(VulkanTextureImage&&) = delete;
+  VulkanTextureImage & operator=(const VulkanTextureImage&) = delete;
+
+  explicit VulkanTextureImage(const std::string & filename)
+    : texture(gli::load(filename))
+  {}
+  ~VulkanTextureImage() = default;
+
+  VkExtent3D extent(size_t mip_level = 0) const
+  {
+    return {
+      static_cast<uint32_t>(this->texture.extent(mip_level).x),
+      static_cast<uint32_t>(this->texture.extent(mip_level).y),
+      static_cast<uint32_t>(this->texture.extent(mip_level).z)
+    };
+  }
+
+  uint32_t base_level() const
+  {
+    return static_cast<uint32_t>(this->texture.base_level());
+  }
+
+  uint32_t levels() const
+  {
+    return static_cast<uint32_t>(this->texture.levels());
+  }
+
+  uint32_t base_layer() const
+  {
+    return static_cast<uint32_t>(this->texture.base_layer());
+  }
+
+  uint32_t layers() const
+  {
+    return static_cast<uint32_t>(this->texture.layers());
+  }
+
+  size_t size() const
+  {
+    return this->texture.size();
+  }
+
+  size_t size(size_t level) const
+  {
+    return this->texture.size(level);
+  }
+
+  const void * data() const
+  {
+    return this->texture.data();
+  }
+
+  VkFormat format() const
+  {
+    return vulkan_format[this->texture.format()];
+  }
+
+  VkImageType image_type() const
+  {
+    return vulkan_image_type[this->texture.target()];
+  }
+
+  VkImageViewType image_view_type() const
+  {
+    return vulkan_image_view_type[this->texture.target()];
+  }
+
+  inline static std::map<gli::format, VkFormat> vulkan_format{
+    { gli::format::FORMAT_R8_UNORM_PACK8, VkFormat::VK_FORMAT_R8_UNORM },
+    { gli::format::FORMAT_RGBA_DXT5_UNORM_BLOCK16, VkFormat::VK_FORMAT_BC3_UNORM_BLOCK },
+  };
+
+  inline static std::map<gli::target, VkImageViewType> vulkan_image_view_type{
+    { gli::target::TARGET_2D, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D },
+    { gli::target::TARGET_3D, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D },
+  };
+
+  inline static std::map<gli::target, VkImageType> vulkan_image_type{
+    { gli::target::TARGET_2D, VkImageType::VK_IMAGE_TYPE_2D },
+    { gli::target::TARGET_3D, VkImageType::VK_IMAGE_TYPE_3D },
+  };
+
+  gli::texture texture;
+};
+
 class Image : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Image)
 
   explicit Image(const std::string & filename) :
-    Image(gli::load(filename)) 
+    Image(VulkanTextureImage(filename))
   {}
 
-  explicit Image(const gli::texture & texture) :
+  explicit Image(const VulkanTextureImage & texture) :
     texture(texture),
-    extent(get_image_extent(0)),
-    num_levels(static_cast<uint32_t>(texture.levels())),
-    num_layers(static_cast<uint32_t>(texture.layers())),
-    format(vulkan_format[texture.format()]),
-    image_type(vulkan_image_type[texture.target()]),
-    image_view_type(vulkan_image_view_type[texture.target()]),
     sample_count(VK_SAMPLE_COUNT_1_BIT),
     sharing_mode(VK_SHARING_MODE_EXCLUSIVE),
     create_flags(0),
@@ -528,33 +613,24 @@ public:
       VK_COMPONENT_SWIZZLE_B,         // b
       VK_COMPONENT_SWIZZLE_A}),       // a
     subresource_range({
-      VK_IMAGE_ASPECT_COLOR_BIT,                                 // aspectMask 
-      static_cast<uint32_t>(this->texture.base_level()),         // baseMipLevel 
-      static_cast<uint32_t>(this->texture.levels()),             // levelCount 
-      static_cast<uint32_t>(this->texture.base_layer()),         // baseArrayLayer 
-      static_cast<uint32_t>(this->texture.layers())})            // layerCount 
+      VK_IMAGE_ASPECT_COLOR_BIT,          // aspectMask 
+      this->texture.base_level(),         // baseMipLevel 
+      this->texture.levels(),             // levelCount 
+      this->texture.base_layer(),         // baseArrayLayer 
+      this->texture.layers()})            // layerCount 
   {}
 
   virtual ~Image() = default;
 
 private:
-  VkExtent3D get_image_extent(size_t mip_level) const
-  {
-    return {
-      static_cast<uint32_t>(this->texture.extent(mip_level).x),
-      static_cast<uint32_t>(this->texture.extent(mip_level).y),
-      static_cast<uint32_t>(this->texture.extent(mip_level).z)
-    };
-  }
-
   void doAlloc(MemoryAllocator * allocator) override
   {
     VkImageFormatProperties image_format_properties;
 
     THROW_ON_ERROR(vkGetPhysicalDeviceImageFormatProperties(
       allocator->device->physical_device.device,
-      this->format,
-      this->image_type,
+      this->texture.format(),
+      this->texture.image_type(),
       this->tiling,
       this->usage_flags,
       this->create_flags,
@@ -571,11 +647,11 @@ private:
     this->image = std::make_shared<ImageObject>(
       std::make_shared<VulkanImage>(
         allocator->device,
-        this->image_type,
-        this->format,
-        this->extent,
-        this->num_levels,
-        this->num_layers,
+        this->texture.image_type(),
+        this->texture.format(),
+        this->texture.extent(),
+        this->texture.levels(),
+        this->texture.layers(),
         this->sample_count,
         this->tiling,
         this->usage_flags,
@@ -592,8 +668,8 @@ private:
 
     this->view = std::make_unique<VulkanImageView>(
       this->image->image,
-      this->format,
-      this->image_view_type,
+      this->texture.format(),
+      this->texture.image_view_type(),
       this->component_mapping,
       this->subresource_range);
 
@@ -634,7 +710,7 @@ private:
         0,                                         // bufferImageHeight
         subresource_layers,                        // imageSubresource
         { 0, 0, 0 },                               // imageOffset
-        get_image_extent(mip_level),               // imageExtent
+        this->texture.extent(mip_level),           // imageExtent
       });
 
       buffer_offset += this->texture.size(mip_level);
@@ -657,18 +733,12 @@ private:
     };
   }
 
-  gli::texture texture;
+  VulkanTextureImage texture;
 
   std::shared_ptr<BufferObject> buffer;
   std::shared_ptr<ImageObject> image;
   std::unique_ptr<VulkanImageView> view;
 
-  VkExtent3D extent;
-  uint32_t num_levels;
-  uint32_t num_layers;
-  VkFormat format;
-  VkImageType image_type;
-  VkImageViewType image_view_type;
   VkSampleCountFlagBits sample_count;
   VkSharingMode sharing_mode;
   VkImageCreateFlags create_flags;
@@ -676,21 +746,6 @@ private:
   VkImageTiling tiling;
   VkComponentMapping component_mapping;
   VkImageSubresourceRange subresource_range;
-
-  inline static std::map<gli::format, VkFormat> vulkan_format{
-    { gli::format::FORMAT_R8_UNORM_PACK8, VkFormat::VK_FORMAT_R8_UNORM },
-    { gli::format::FORMAT_RGBA_DXT5_UNORM_BLOCK16, VkFormat::VK_FORMAT_BC3_UNORM_BLOCK },
-  };
-
-  inline static std::map<gli::target, VkImageViewType> vulkan_image_view_type{
-    { gli::target::TARGET_2D, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D },
-    { gli::target::TARGET_3D, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D },
-  };
-
-  inline static std::map<gli::target, VkImageType> vulkan_image_type{
-    { gli::target::TARGET_2D, VkImageType::VK_IMAGE_TYPE_2D },
-    { gli::target::TARGET_3D, VkImageType::VK_IMAGE_TYPE_3D },
-  };
 };
 
 class CullMode : public Node {
@@ -1030,7 +1085,7 @@ public:
     //};
 
     this->children = {
-      std::make_shared<Transform>(vec3d{ 20, 2, 0 }, vec3d{ 1, 1, 1 }),
+      std::make_shared<Transform>(vec3d{ 20, 0, 0 }, vec3d{ 1, 1, 1 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -1050,7 +1105,7 @@ public:
       std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
 
       std::make_shared<TransformBuffer>(),
-      std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+      std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
 
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
     };
