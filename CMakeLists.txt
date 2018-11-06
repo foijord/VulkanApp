@@ -32,6 +32,7 @@ add_executable(${TARGET_NAME}
   Innovator/Core/Misc/Defines.h
   Innovator/Core/Math/Vector.h
   Innovator/Core/Math/Matrix.h
+  Innovator/Core/Math/Octree.h
   Innovator/Core/Scheme/Scheme.h
   Innovator/Core/Vulkan/Wrapper.h)
 

@@ -539,7 +539,7 @@ public:
     VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,         // sType 
       nullptr,                                             // pNext
       VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,   // flags
-      1,                                                   // maxSets
+      static_cast<uint32_t>(descriptor_pool_sizes.size()), // maxSets
       static_cast<uint32_t>(descriptor_pool_sizes.size()), // poolSizeCount
       descriptor_pool_sizes.data()                         // pPoolSizes
     };

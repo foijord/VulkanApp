@@ -191,7 +191,7 @@ public:
   {
     this->root = std::move(scene);
 
-    this->camera->lookAt({ 20, 2, 5 }, { 20, 0, 0 }, { 0, 1, 0 });
+    this->camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
 
     this->renderaction->alloc(this->root.get());
     this->renderaction->stage(this->root.get());

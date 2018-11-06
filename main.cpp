@@ -99,11 +99,12 @@ int main(int argc, char *argv[])
     VulkanApplication app(argc, argv);
 
     File file;
-    const auto scene = file.open("Scenes/crate.scene");
+    //const auto scene = file.open("Scenes/crate.scene");
+    const auto scene = std::make_shared<Volume>();
 
     VulkanViewer viewer(vulkan);
     viewer.setSceneGraph(scene);
-    viewer.resize(1000, 700);
+    viewer.resize(2000, 1500);
     viewer.show();
 
     return QApplication::exec();

@@ -1008,6 +1008,141 @@ private:
   }
 };
 
+class Volume: public Separator {
+public:
+  NO_COPY_OR_ASSIGNMENT(Volume)
+    virtual ~Volume() = default;
+
+  Volume()
+  {
+    //     5------7
+    //    /|     /|
+    //   / |    / |
+    //  1------3  |
+    //  |  4---|--6
+    //  z x    | /
+    //  |/     |/
+    //  0--y---2
+
+    auto cube_outline = std::make_shared<Separator>();
+
+    {
+      std::vector<uint32_t> indices = {
+        0, 1, 3, 2, 0, 4, 6, 2, 3, 7, 6, 4, 5, 7, 3, 1, 5, 4, 0, 1, 5
+      };
+
+      std::vector<float> vertices = {
+        0, 0, 0, // 0
+        0, 0, 1, // 1
+        0, 1, 0, // 2
+        0, 1, 1, // 3
+        1, 0, 0, // 4
+        1, 0, 1, // 5
+        1, 1, 0, // 6
+        1, 1, 1, // 7
+      };
+
+      cube_outline->children = {
+        std::make_shared<Shader>("Shaders/wireframe.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+        std::make_shared<Shader>("Shaders/wireframe.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+
+        std::make_shared<BufferData<uint32_t>>(indices),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+        std::make_shared<BufferData<float>>(vertices),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
+        std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
+
+        std::make_shared<TransformBuffer>(),
+        std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
+
+        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
+      };
+    }
+
+    auto slice = std::make_shared<Separator>();
+
+    //      ------2
+    //    /|     /|
+    //   / |    / |
+    //  1------   |
+    //  |   ---|--3
+    //  z x    | /
+    //  |/     |/
+    //  0--y---> 
+
+    {
+      std::vector<uint32_t> indices = {
+        0, 1, 2, 2, 3, 0
+      };
+
+      std::vector<float> texcoords = {
+        0, 0, 
+        1, 0,
+        1, 1, 
+        0, 1, 
+      };
+
+      std::vector<float> vertices = {
+        0, 0, 0, // 0
+        1, 0, 1, // 3
+        1, 1, 1, // 2
+        0, 1, 0, // 1
+      };
+
+      std::vector<float> buffer = {
+        1, 2, 3, 4, 5, 6, 7, 8,
+      };
+
+      slice->children = {
+        std::make_shared<Sampler>(),
+        std::make_shared<Image>("Textures/crate.dds"),
+        std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+
+        std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+        std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+
+        std::make_shared<BufferData<float>>(buffer),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
+        std::make_shared<DescriptorSetLayoutBinding>(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
+
+        std::make_shared<BufferData<uint32_t>>(indices),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+        std::make_shared<BufferData<float>>(texcoords),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32_SFLOAT, 0),
+        std::make_shared<VertexInputBindingDescription>(0, 2, VK_VERTEX_INPUT_RATE_VERTEX),
+
+        std::make_shared<BufferData<float>>(vertices),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<VertexInputAttributeDescription>(1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0),
+        std::make_shared<VertexInputBindingDescription>(1, 3, VK_VERTEX_INPUT_RATE_VERTEX),
+
+        std::make_shared<TransformBuffer>(),
+        std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
+
+        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+      };
+
+    }
+
+    this->children = {
+      cube_outline,
+      slice,
+    };
+  }
+};
+
 class Box : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Box)
@@ -1085,7 +1220,7 @@ public:
     //};
 
     this->children = {
-      std::make_shared<Transform>(vec3d{ 20, 0, 0 }, vec3d{ 1, 1, 1 }),
+      std::make_shared<Transform>(vec3d{ 0, 0, 0 }, vec3d{ 1, 1, 1 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
