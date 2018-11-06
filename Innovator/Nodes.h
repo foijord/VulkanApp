@@ -791,8 +791,7 @@ private:
     this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
       creator->device,
       creator->descriptor_pool,
-      1,
-      this->descriptor_set_layout->layout);
+      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
 
     this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
       creator->device,
@@ -869,14 +868,13 @@ private:
       creator->device,
       creator->state.descriptor_set_layout_bindings);
 
+    this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
+      creator->device,
+      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
+
     this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
       creator->device,
       creator->descriptor_pool,
-      1,
-      this->descriptor_set_layout->layout);
-
-    this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
-      creator->device,
       std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
 
     for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
@@ -1108,7 +1106,7 @@ public:
 
         std::make_shared<BufferData<float>>(buffer),
         std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
         std::make_shared<DescriptorSetLayoutBinding>(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
 
         std::make_shared<BufferData<uint32_t>>(indices),
