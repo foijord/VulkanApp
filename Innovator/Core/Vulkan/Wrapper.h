@@ -592,7 +592,7 @@ public:
 
   VulkanDescriptorSets(std::shared_ptr<VulkanDevice> device,
                        std::shared_ptr<VulkanDescriptorPool> pool,
-                       const std::vector<VkDescriptorSetLayout> & layouts)
+                       const std::vector<VkDescriptorSetLayout> & set_layouts)
     : device(std::move(device)), 
       pool(std::move(pool))
   {
@@ -600,11 +600,11 @@ public:
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, // sType
       nullptr,                                        // pNext
       this->pool->pool,                               // descriptorPool
-      static_cast<uint32_t>(layouts.size()),          // descriptorSetCount
-      layouts.data()                                  // pSetLayouts
+      static_cast<uint32_t>(set_layouts.size()),      // descriptorSetCount
+      set_layouts.data()                              // pSetLayouts
     };
 
-    this->descriptor_sets.resize(layouts.size());
+    this->descriptor_sets.resize(set_layouts.size());
     THROW_ON_ERROR(vkAllocateDescriptorSets(this->device->device, &allocate_info, this->descriptor_sets.data()));
   }
 

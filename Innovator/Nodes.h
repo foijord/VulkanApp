@@ -874,13 +874,18 @@ private:
       this->descriptor_set_layout->layout 
     };
 
+    this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
+      creator->device,
+      descriptor_set_layouts);
+
     this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
       creator->device,
       descriptor_pool,
       descriptor_set_layouts);
 
-    this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
+    this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
       creator->device,
+      descriptor_pool,
       descriptor_set_layouts);
 
     for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
