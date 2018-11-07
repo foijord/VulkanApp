@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
 
     VulkanViewer viewer(vulkan);
     viewer.setSceneGraph(scene);
-    viewer.resize(2000, 1500);
+    viewer.resize(1000, 600);
     viewer.show();
 
     return QApplication::exec();
