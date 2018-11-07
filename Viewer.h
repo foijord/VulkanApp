@@ -66,6 +66,7 @@ public:
     required_device_features.geometryShader = VK_TRUE;
     required_device_features.tessellationShader = VK_TRUE;
     required_device_features.textureCompressionBC = VK_TRUE;
+    required_device_features.fragmentStoresAndAtomics = VK_TRUE;
 
     auto physical_device = this->vulkan->selectPhysicalDevice(required_device_features);
 

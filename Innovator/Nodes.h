@@ -878,15 +878,15 @@ private:
       creator->device,
       descriptor_set_layouts);
 
-    this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
+    this->descriptor_sets = std::make_unique<VulkanDescriptorSets>(
       creator->device,
       descriptor_pool,
       descriptor_set_layouts);
 
     for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
-      write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
+      write_descriptor_set.dstSet = this->descriptor_sets->descriptor_sets[0];
     }
-    this->descriptor_set->update(creator->state.write_descriptor_sets);
+    this->descriptor_sets->update(creator->state.write_descriptor_sets);
 
     this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
       creator->device,
@@ -913,8 +913,8 @@ private:
                             VK_PIPELINE_BIND_POINT_GRAPHICS, 
                             this->pipeline_layout->layout, 
                             0, 
-                            static_cast<uint32_t>(this->descriptor_set->descriptor_sets.size()), 
-                            this->descriptor_set->descriptor_sets.data(), 
+                            static_cast<uint32_t>(this->descriptor_sets->descriptor_sets.size()), 
+                            this->descriptor_sets->descriptor_sets.data(), 
                             0, 
                             nullptr);
 
@@ -970,7 +970,7 @@ private:
     VK_DYNAMIC_STATE_SCISSOR
   };
   std::shared_ptr<VulkanDescriptorSetLayout> descriptor_set_layout;
-  std::shared_ptr<VulkanDescriptorSets> descriptor_set;
+  std::shared_ptr<VulkanDescriptorSets> descriptor_sets;
   std::shared_ptr<VulkanPipelineLayout> pipeline_layout;
 };
 
@@ -1053,8 +1053,8 @@ public:
       std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
       std::make_shared<BufferData<vec4f>>(buffer),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
+      //std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
