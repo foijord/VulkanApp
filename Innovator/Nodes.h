@@ -883,11 +883,6 @@ private:
       descriptor_pool,
       descriptor_set_layouts);
 
-    this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
-      creator->device,
-      descriptor_pool,
-      descriptor_set_layouts);
-
     for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
       write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
     }
@@ -1020,7 +1015,7 @@ private:
 class Volume : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Volume)
-    virtual ~Volume() = default;
+  virtual ~Volume() = default;
 
   Volume()
   {
@@ -1054,13 +1049,13 @@ public:
       std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
       std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
 
+      std::make_shared<TransformBuffer>(),
+      std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+
       std::make_shared<BufferData<vec4f>>(buffer),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
-
-      std::make_shared<TransformBuffer>(),
-      std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
     };
