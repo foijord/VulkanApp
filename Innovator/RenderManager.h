@@ -127,8 +127,6 @@ public:
   std::shared_ptr<VulkanDevice> device;
   VkRenderPass renderpass;
   VkPipelineCache pipelinecache;
-  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
-  std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
 };
 
 class CommandRecorder {
@@ -222,17 +220,11 @@ public:
                            fence.fence);
   }
 
-  void pipeline(Node * root, const VkRenderPass renderpass)
+  void pipeline(Node * root, const VkRenderPass renderpass) const
   {
     PipelineCreator creator(this->device,
                             renderpass,
                             this->pipelinecache->cache);
-
-    root->descriptorPool(&creator);
-
-    creator.descriptor_pool = std::make_unique<VulkanDescriptorPool>(
-      this->device,
-      creator.descriptor_pool_sizes);
 
     root->pipeline(&creator);
   }

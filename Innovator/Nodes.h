@@ -396,20 +396,17 @@ public:
   {}
 
 private:
-  void doDescriptorPool(PipelineCreator * creator) override
+  void doPipeline(PipelineCreator * creator) override
   {
-    creator->descriptor_pool_sizes.push_back({
+    creator->state.descriptor_pool_sizes.push_back({
       this->descriptor_set_layout_binding.descriptorType,                // type 
       this->descriptor_set_layout_binding.descriptorCount,               // descriptorCount
     });
-  }
 
-  void doPipeline(PipelineCreator * creator) override
-  {
     creator->state.descriptor_set_layout_bindings.push_back({
-      this->descriptor_set_layout_binding    
+      this->descriptor_set_layout_binding
     });
-
+   
     creator->state.write_descriptor_sets.push_back({
       VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                           // sType
       nullptr,                                                          // pNext
@@ -790,9 +787,8 @@ private:
 
     this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
       creator->device,
-      creator->descriptor_pool,
-      1,
-      this->descriptor_set_layout->layout);
+      this->descriptor_pool,
+      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
 
     this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
       creator->device,
@@ -840,6 +836,7 @@ private:
   std::shared_ptr<VulkanDescriptorSetLayout> descriptor_set_layout;
   std::shared_ptr<VulkanDescriptorSets> descriptor_set;
   std::shared_ptr<VulkanPipelineLayout> pipeline_layout;
+  std::shared_ptr<VulkanDescriptorPool> descriptor_pool;
 };
 
 class DrawCommandBase : public Node {
@@ -865,19 +862,26 @@ private:
 
   void doPipeline(PipelineCreator * creator) override
   {
+    auto descriptor_pool = std::make_shared<VulkanDescriptorPool>(
+      creator->device,
+      creator->state.descriptor_pool_sizes);
+
     this->descriptor_set_layout = std::make_unique<VulkanDescriptorSetLayout>(
       creator->device,
       creator->state.descriptor_set_layout_bindings);
 
+    std::vector<VkDescriptorSetLayout> descriptor_set_layouts{ 
+      this->descriptor_set_layout->layout 
+    };
+
     this->descriptor_set = std::make_unique<VulkanDescriptorSets>(
       creator->device,
-      creator->descriptor_pool,
-      1,
-      this->descriptor_set_layout->layout);
+      descriptor_pool,
+      descriptor_set_layouts);
 
     this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
       creator->device,
-      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
+      descriptor_set_layouts);
 
     for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
       write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
@@ -1008,137 +1012,52 @@ private:
   }
 };
 
-class Volume: public Separator {
+class Volume : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Volume)
     virtual ~Volume() = default;
 
   Volume()
   {
-    //     5------7
-    //    /|     /|
-    //   / |    / |
-    //  1------3  |
-    //  |  4---|--6
-    //  z x    | /
-    //  |/     |/
-    //  0--y---2
+    std::vector<uint32_t> indices = {
+      0, 1, 2, 2, 3, 0
+    };
 
-    auto cube_outline = std::make_shared<Separator>();
+    std::vector<float> vertices = {
+      0, 0, 0, // 0
+      1, 0, 1, // 3
+      1, 1, 1, // 2
+      0, 1, 0, // 1
+    };
 
-    {
-      std::vector<uint32_t> indices = {
-        0, 1, 3, 2, 0, 4, 6, 2, 3, 7, 6, 4, 5, 7, 3, 1, 5, 4, 0, 1, 5
-      };
-
-      std::vector<float> vertices = {
-        0, 0, 0, // 0
-        0, 0, 1, // 1
-        0, 1, 0, // 2
-        0, 1, 1, // 3
-        1, 0, 0, // 4
-        1, 0, 1, // 5
-        1, 1, 0, // 6
-        1, 1, 1, // 7
-      };
-
-      cube_outline->children = {
-        std::make_shared<Shader>("Shaders/wireframe.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-        std::make_shared<Shader>("Shaders/wireframe.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
-
-        std::make_shared<BufferData<uint32_t>>(indices),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-        std::make_shared<BufferData<float>>(vertices),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
-        std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
-
-        std::make_shared<TransformBuffer>(),
-        std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
-
-        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
-      };
-    }
-
-    auto slice = std::make_shared<Separator>();
-
-    //      ------2
-    //    /|     /|
-    //   / |    / |
-    //  1------   |
-    //  |   ---|--3
-    //  z x    | /
-    //  |/     |/
-    //  0--y---> 
-
-    {
-      std::vector<uint32_t> indices = {
-        0, 1, 2, 2, 3, 0
-      };
-
-      std::vector<float> texcoords = {
-        0, 0, 
-        1, 0,
-        1, 1, 
-        0, 1, 
-      };
-
-      std::vector<float> vertices = {
-        0, 0, 0, // 0
-        1, 0, 1, // 3
-        1, 1, 1, // 2
-        0, 1, 0, // 1
-      };
-
-      std::vector<float> buffer = {
-        1, 2, 3, 4, 5, 6, 7, 8,
-      };
-
-      slice->children = {
-        std::make_shared<Sampler>(),
-        std::make_shared<Image>("Textures/crate.dds"),
-        std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
-
-        std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-        std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
-
-        std::make_shared<BufferData<float>>(buffer),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
-        std::make_shared<DescriptorSetLayoutBinding>(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
-
-        std::make_shared<BufferData<uint32_t>>(indices),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-        std::make_shared<BufferData<float>>(texcoords),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32_SFLOAT, 0),
-        std::make_shared<VertexInputBindingDescription>(0, 2, VK_VERTEX_INPUT_RATE_VERTEX),
-
-        std::make_shared<BufferData<float>>(vertices),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<VertexInputAttributeDescription>(1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0),
-        std::make_shared<VertexInputBindingDescription>(1, 3, VK_VERTEX_INPUT_RATE_VERTEX),
-
-        std::make_shared<TransformBuffer>(),
-        std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
-
-        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-      };
-
-    }
+    std::vector<vec4f> buffer = {
+      { 0.5f, 0.5f, 1.0f, 1.0f },
+    };
 
     this->children = {
-      cube_outline,
-      slice,
+      std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+
+      std::make_shared<BufferData<uint32_t>>(indices),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+      std::make_shared<BufferData<float>>(vertices),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
+      std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
+
+      std::make_shared<BufferData<vec4f>>(buffer),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+
+      std::make_shared<TransformBuffer>(),
+      std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+
+      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
     };
   }
 };

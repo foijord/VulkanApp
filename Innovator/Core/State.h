@@ -71,6 +71,7 @@ struct PipelineState {
   };
   
   std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
+  std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
   std::vector<VkWriteDescriptorSet> write_descriptor_sets;
   std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings;
   std::vector<VkVertexInputBindingDescription> vertex_input_bindings;
