@@ -380,11 +380,11 @@ private:
 class DescriptorSetLayoutBinding : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(DescriptorSetLayoutBinding)
-  DescriptorSetLayoutBinding() = delete;
+    DescriptorSetLayoutBinding() = delete;
   virtual ~DescriptorSetLayoutBinding() = default;
 
-  explicit DescriptorSetLayoutBinding(uint32_t binding,
-                                      VkDescriptorType descriptorType,
+  explicit DescriptorSetLayoutBinding(uint32_t binding, 
+                                      VkDescriptorType descriptorType, 
                                       VkShaderStageFlags stageFlags) :
     descriptor_set_layout_binding({
       binding,
@@ -392,7 +392,13 @@ public:
       1,
       stageFlags,
       nullptr,
-    })
+     }),
+     descriptor_image_info({
+       nullptr, nullptr, VK_IMAGE_LAYOUT_UNDEFINED
+     }),
+     descriptor_buffer_info({
+       nullptr, 0, 0
+     })
   {}
 
 private:
@@ -406,6 +412,10 @@ private:
     creator->state.descriptor_set_layout_bindings.push_back({
       this->descriptor_set_layout_binding
     });
+
+    // copy these!
+    this->descriptor_image_info = creator->state.descriptor_image_info;
+    this->descriptor_buffer_info = creator->state.descriptor_buffer_info;
    
     creator->state.write_descriptor_sets.push_back({
       VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                           // sType
@@ -415,12 +425,14 @@ private:
       0,                                                                // dstArrayElement
       this->descriptor_set_layout_binding.descriptorCount,              // descriptorCount
       this->descriptor_set_layout_binding.descriptorType,               // descriptorType
-      &creator->state.descriptor_image_info,                            // pImageInfo
-      &creator->state.descriptor_buffer_info,                           // pBufferInfo
+      &this->descriptor_image_info,                                     // pImageInfo
+      &this->descriptor_buffer_info,                                    // pBufferInfo
       nullptr,                                                          // pTexelBufferView
     });
   }
 
+  VkDescriptorImageInfo descriptor_image_info;
+  VkDescriptorBufferInfo descriptor_buffer_info;
   VkDescriptorSetLayoutBinding descriptor_set_layout_binding;
 };
 
@@ -1053,8 +1065,8 @@ public:
       std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
       std::make_shared<BufferData<vec4f>>(buffer),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
-      //std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
