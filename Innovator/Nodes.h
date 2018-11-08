@@ -1024,6 +1024,34 @@ private:
   }
 };
 
+static void populate_octree(std::vector<vec4f> & octree, const size_t index, const size_t level, const size_t num_levels) {
+
+  if (level == 0) {
+    size_t num_nodes = 8;
+    for (size_t i = 0; i < num_levels; i++) {
+      num_nodes *= 8;
+    }
+    num_nodes = (num_nodes - 1) / 7;
+    octree.resize(num_nodes);
+    octree[0] = vec4f{ 0, 0, 0, 1 };
+  }
+
+  if (level < num_levels) {
+    octree[index * 8 + 1] = vec4f{ 0, 0, 0, 1 };
+    octree[index * 8 + 2] = vec4f{ 0, 0, 1, 1 };
+    octree[index * 8 + 3] = vec4f{ 0, 1, 0, 1 };
+    octree[index * 8 + 4] = vec4f{ 0, 1, 1, 1 };
+    octree[index * 8 + 5] = vec4f{ 1, 0, 0, 1 };
+    octree[index * 8 + 6] = vec4f{ 1, 0, 1, 1 };
+    octree[index * 8 + 7] = vec4f{ 1, 1, 0, 1 };
+    octree[index * 8 + 8] = vec4f{ 1, 1, 1, 1 };
+    
+    for (size_t i = 1; i <= 8; i++) {
+      populate_octree(octree, index * 8 + i, level + 1, num_levels);
+    }
+  }
+}
+
 class Volume : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Volume)
@@ -1031,30 +1059,81 @@ public:
 
   Volume()
   {
-    std::vector<uint32_t> indices = {
-      0, 1, 2, 2, 3, 0
-    };
+    //     5------7
+    //    /|     /|
+    //   / |    / |
+    //  1------3  |
+    //  |  4---|--6
+    //  z x    | /
+    //  |/     |/
+    //  0--y---2
 
     std::vector<float> vertices = {
       0, 0, 0, // 0
-      1, 0, 1, // 3
-      1, 1, 1, // 2
-      0, 1, 0, // 1
+      0, 0, 1, // 1
+      0, 1, 0, // 2
+      0, 1, 1, // 3
+      1, 0, 0, // 4
+      1, 0, 1, // 5
+      1, 1, 0, // 6
+      1, 1, 1, // 7
     };
 
-    std::vector<vec4f> buffer = {
-      { 0.5f, 0.5f, 1.0f, 1.0f },
+    std::vector<uint32_t> slice_indices = {
+      0, 1, 7, 7, 6, 0
     };
 
-    this->children = {
-      std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+    std::vector<uint32_t> slice_indices2 = {
+      2, 3, 5, 5, 4, 2
+    };
 
-      std::make_shared<BufferData<uint32_t>>(indices),
+    std::vector<uint32_t> cube_indices = {
+      0, 1, 3, 2, 0, 4, 6, 2, 3, 7, 6, 4, 5, 7, 3, 1, 5, 4, 0, 1
+    };
+
+
+    std::vector<vec4f> octree;
+    populate_octree(octree, 0, 0, 8);
+
+    auto cube = std::make_shared<Separator>();
+
+    cube->children = {
+      std::make_shared<Shader>("Shaders/wireframe.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<Shader>("Shaders/wireframe.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+
+      std::make_shared<BufferData<uint32_t>>(cube_indices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
 
+      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
+    };
+
+    auto slice = std::make_shared<Separator>();
+
+    slice->children = {
+      std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+
+      std::make_shared<BufferData<uint32_t>>(slice_indices),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+      std::make_shared<BufferData<uint32_t>>(slice_indices2),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+      std::make_shared<BufferData<vec4f>>(octree),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+
+      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+    };
+
+    this->children = {
       std::make_shared<BufferData<float>>(vertices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
@@ -1064,12 +1143,8 @@ public:
       std::make_shared<TransformBuffer>(),
       std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
-      std::make_shared<BufferData<vec4f>>(buffer),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
-
-      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+      slice,
+      cube
     };
   }
 };

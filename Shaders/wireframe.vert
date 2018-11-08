@@ -1,6 +1,6 @@
 #version 450
 
-layout(std140, binding = 0) uniform Transform {
+layout(binding = 0) uniform Transform {
   mat4 ModelViewMatrix;
   mat4 ProjectionMatrix;
 };
