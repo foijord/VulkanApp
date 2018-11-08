@@ -98,10 +98,10 @@ private:
   }
 
   mat4d matrix{
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1
+    vec4d{ 1, 0, 0, 0 },
+    vec4d{ 0, 1, 0, 0 },
+    vec4d{ 0, 0, 1, 0 },
+    vec4d{ 0, 0, 0, 1 },
   };
 };
 
@@ -380,12 +380,12 @@ private:
 class DescriptorSetLayoutBinding : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(DescriptorSetLayoutBinding)
-    DescriptorSetLayoutBinding() = delete;
+  DescriptorSetLayoutBinding() = delete;
   virtual ~DescriptorSetLayoutBinding() = default;
 
-  explicit DescriptorSetLayoutBinding(uint32_t binding, 
-                                      VkDescriptorType descriptorType, 
-                                      VkShaderStageFlags stageFlags) :
+  DescriptorSetLayoutBinding(uint32_t binding, 
+                             VkDescriptorType descriptorType, 
+                             VkShaderStageFlags stageFlags) :
     descriptor_set_layout_binding({
       binding,
       descriptorType,
@@ -413,7 +413,7 @@ private:
       this->descriptor_set_layout_binding
     });
 
-    // copy these!
+    // copy these so they don't get overwritten!
     this->descriptor_image_info = creator->state.descriptor_image_info;
     this->descriptor_buffer_info = creator->state.descriptor_buffer_info;
    
@@ -442,7 +442,7 @@ public:
   Shader() = delete;
   virtual ~Shader() = default;
 
-  Shader(std::string filename, VkShaderStageFlagBits stage) : 
+  Shader(const std::string & filename, const VkShaderStageFlagBits stage) : 
     stage(stage)
   {
     std::ifstream input(filename, std::ios::binary);

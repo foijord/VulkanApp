@@ -67,10 +67,10 @@ public:
     const auto m32 = (this->nearplane * this->farplane) / (this->nearplane - this->farplane);
 
     return {
-      m00, 0, 0,  0,
-      0, -f, 0,   0,
-      0, 0, m22, -1,
-      0, 0, m32,  0
+      vec4d{ m00, 0, 0,  0 },
+      vec4d{ 0, -f, 0,   0 },
+      vec4d{ 0, 0, m22, -1 },
+      vec4d{ 0, 0, m32,  0 },
     };
   }
 
