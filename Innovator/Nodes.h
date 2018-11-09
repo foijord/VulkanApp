@@ -512,16 +512,8 @@ public:
       std::cerr << module.GetErrorMessage();
     }
 
-    this->test = { module.begin(), module.end() };
+    this->code = { module.begin(), module.end() };
   }
-
-private:
-  void doAlloc(MemoryAllocator * allocator) override
-  {
-    this->shader = std::make_unique<VulkanShaderModule>(allocator->device, this->test);
-  }
-
-  std::vector<uint32_t> test;
 };
 
 class Sampler : public Node {
