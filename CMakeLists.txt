@@ -39,6 +39,7 @@ add_executable(${TARGET_NAME}
 target_link_libraries(${TARGET_NAME} Qt5::Core)
 target_link_libraries(${TARGET_NAME} Qt5::Widgets)
 target_link_libraries(${TARGET_NAME} ${Vulkan_LIBRARY})
+target_link_libraries(${TARGET_NAME} "$ENV{VULKAN_SDK}/shaderc/build/libshaderc/Debug/shaderc_sharedd.lib")
 
 set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)

@@ -6,6 +6,7 @@
 
 #include <gli/load.hpp>
 #include <vulkan/vulkan.h>
+#include <shaderc/shaderc.hpp>
 
 #include <map>
 #include <utility>
@@ -386,19 +387,19 @@ public:
   DescriptorSetLayoutBinding(uint32_t binding, 
                              VkDescriptorType descriptorType, 
                              VkShaderStageFlags stageFlags) :
+    descriptor_image_info({
+      nullptr, nullptr, VK_IMAGE_LAYOUT_UNDEFINED
+    }),
+    descriptor_buffer_info({
+      nullptr, 0, 0
+    }),
     descriptor_set_layout_binding({
       binding,
       descriptorType,
       1,
       stageFlags,
       nullptr,
-     }),
-     descriptor_image_info({
-       nullptr, nullptr, VK_IMAGE_LAYOUT_UNDEFINED
-     }),
-     descriptor_buffer_info({
-       nullptr, 0, 0
-     })
+    })
   {}
 
 private:
@@ -431,24 +432,20 @@ private:
     });
   }
 
-  VkDescriptorImageInfo descriptor_image_info;
-  VkDescriptorBufferInfo descriptor_buffer_info;
+  VkDescriptorImageInfo descriptor_image_info{};
+  VkDescriptorBufferInfo descriptor_buffer_info{};
   VkDescriptorSetLayoutBinding descriptor_set_layout_binding;
 };
 
-class Shader : public Node {
+class ShaderNode : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(Shader)
-  Shader() = delete;
-  virtual ~Shader() = default;
+  NO_COPY_OR_ASSIGNMENT(ShaderNode)
+  ShaderNode() = delete;
+  virtual ~ShaderNode() = default;
 
-  Shader(const std::string & filename, const VkShaderStageFlagBits stage) : 
+  explicit ShaderNode(const VkShaderStageFlagBits stage):
     stage(stage)
-  {
-    std::ifstream input(filename, std::ios::binary);
-    this->code = std::vector<char>((std::istreambuf_iterator<char>(input)), 
-                                   (std::istreambuf_iterator<char>()));
-  }
+  {}
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
@@ -466,12 +463,65 @@ private:
       this->shader->module,                                // module 
       "main",                                              // pName 
       nullptr,                                             // pSpecializationInfo
-      });
+    });
   }
 
+protected:
   std::vector<char> code;
   VkShaderStageFlagBits stage;
   std::unique_ptr<VulkanShaderModule> shader;
+};
+
+class Shader : public ShaderNode {
+public:
+  NO_COPY_OR_ASSIGNMENT(Shader)
+  Shader() = delete;
+  virtual ~Shader() = default;
+
+  Shader(const std::string & filename, const VkShaderStageFlagBits stage) :
+    ShaderNode(stage)
+  {
+    std::ifstream input(filename, std::ios::binary);
+    this->code = std::vector<char>((std::istreambuf_iterator<char>(input)),
+      (std::istreambuf_iterator<char>()));
+  }
+};
+
+class GLSLShader : public ShaderNode {
+public:
+  NO_COPY_OR_ASSIGNMENT(GLSLShader)
+  GLSLShader() = delete;
+  virtual ~GLSLShader() = default;
+
+  GLSLShader(const std::string & source, const VkShaderStageFlagBits stage) :
+    ShaderNode(stage)
+  {
+    shaderc::CompileOptions options;
+    options.SetOptimizationLevel(shaderc_optimization_level_size);
+
+    std::map<VkShaderStageFlagBits, shaderc_shader_kind> shader_kind {
+      { VK_SHADER_STAGE_VERTEX_BIT, shaderc_glsl_vertex_shader },
+      { VK_SHADER_STAGE_FRAGMENT_BIT, shaderc_glsl_fragment_shader },
+    };
+
+    shaderc::Compiler compiler;
+    shaderc::SpvCompilationResult module =
+      compiler.CompileGlslToSpv(source, shader_kind[stage], "shader_src", options);
+
+    if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+      std::cerr << module.GetErrorMessage();
+    }
+
+    this->test = { module.begin(), module.end() };
+  }
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    this->shader = std::make_unique<VulkanShaderModule>(allocator->device, this->test);
+  }
+
+  std::vector<uint32_t> test;
 };
 
 class Sampler : public Node {
@@ -854,7 +904,7 @@ private:
 class DrawCommandBase : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(DrawCommandBase)
-    DrawCommandBase() = delete;
+  DrawCommandBase() = delete;
   virtual ~DrawCommandBase() = default;
 
   explicit DrawCommandBase(VkPrimitiveTopology topology) : 
@@ -1093,7 +1143,7 @@ public:
 
 
     std::vector<vec4f> octree;
-    populate_octree(octree, 0, 0, 8);
+    populate_octree(octree, 0, 0, 5);
 
     auto cube = std::make_shared<Separator>();
 
@@ -1109,10 +1159,31 @@ public:
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
     };
 
+    const char slice_vert_glsl[] =
+      "#version 450\n"
+      "layout(binding = 0) uniform Transform {\n"
+      "  mat4 ModelViewMatrix;\n"
+      "  mat4 ProjectionMatrix;\n"
+      "};\n"
+      
+      "layout(location = 0) in vec3 Position;\n"
+      "layout(location = 0) out vec3 position;\n"
+
+      "out gl_PerVertex {\n"
+      "  vec4 gl_Position;\n"
+      "};\n"
+
+      "void main() {\n"
+      "  position = Position;\n"
+      "  gl_Position = ProjectionMatrix * ModelViewMatrix * vec4(Position, 1.0);\n"
+      "}\n";
+
+
     auto slice = std::make_shared<Separator>();
 
     slice->children = {
       std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+      //std::make_shared<GLSLShader>(slice_vert_glsl, VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<uint32_t>>(slice_indices),

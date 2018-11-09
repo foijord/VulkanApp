@@ -22,7 +22,7 @@ void main() {
   int index = 0;
   vec3 pos = position;
 
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 5; i++) {
     int octant = 0;
     if (pos.x > 0.5) octant += 4;
     if (pos.y > 0.5) octant += 2;
