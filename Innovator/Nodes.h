@@ -431,8 +431,8 @@ private:
     });
   }
 
-  VkDescriptorImageInfo descriptor_image_info;
-  VkDescriptorBufferInfo descriptor_buffer_info;
+  VkDescriptorImageInfo descriptor_image_info{};
+  VkDescriptorBufferInfo descriptor_buffer_info{};
   VkDescriptorSetLayoutBinding descriptor_set_layout_binding;
 };
 

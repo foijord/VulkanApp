@@ -1305,7 +1305,7 @@ public:
     };
 
     VkPipelineColorBlendAttachmentState blend_attachment_state {
-      VK_TRUE,                                                                                                   // blendEnable
+      VK_FALSE,                                                                                                  // blendEnable
       VK_BLEND_FACTOR_SRC_COLOR,                                                                                 // srcColorBlendFactor
       VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,                                                                       // dstColorBlendFactor
       VK_BLEND_OP_ADD,                                                                                           // colorBlendOp
