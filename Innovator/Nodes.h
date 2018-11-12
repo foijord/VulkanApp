@@ -3,6 +3,7 @@
 #include <Innovator/RenderManager.h>
 #include <Innovator/Core/Node.h>
 #include <Innovator/Core/Math/Matrix.h>
+#include <Innovator/Core/Math/Octree.h>
 
 #include <gli/load.hpp>
 #include <vulkan/vulkan.h>
@@ -1094,34 +1095,6 @@ private:
   }
 };
 
-static void populate_octree(std::vector<vec4f> & octree, const size_t index, const size_t level, const size_t num_levels) {
-
-  if (level == 0) {
-    size_t num_nodes = 8;
-    for (size_t i = 0; i < num_levels; i++) {
-      num_nodes *= 8;
-    }
-    num_nodes = (num_nodes - 1) / 7;
-    octree.resize(num_nodes);
-    octree[0] = vec4f{ 0, 0, 0, 1 };
-  }
-
-  if (level < num_levels) {
-    octree[index * 8 + 1] = vec4f{ 0, 0, 0, 1 };
-    octree[index * 8 + 2] = vec4f{ 0, 0, 1, 1 };
-    octree[index * 8 + 3] = vec4f{ 0, 1, 0, 1 };
-    octree[index * 8 + 4] = vec4f{ 0, 1, 1, 1 };
-    octree[index * 8 + 5] = vec4f{ 1, 0, 0, 1 };
-    octree[index * 8 + 6] = vec4f{ 1, 0, 1, 1 };
-    octree[index * 8 + 7] = vec4f{ 1, 1, 0, 1 };
-    octree[index * 8 + 8] = vec4f{ 1, 1, 1, 1 };
-    
-    for (size_t i = 1; i <= 8; i++) {
-      populate_octree(octree, index * 8 + i, level + 1, num_levels);
-    }
-  }
-}
-
 class Volume : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Volume)
@@ -1149,11 +1122,11 @@ public:
       1, 1, 1, // 7
     };
 
-    std::vector<uint32_t> slice_indices = {
+    std::vector<uint32_t> slice1_indices = {
       0, 1, 7, 7, 6, 0
     };
 
-    std::vector<uint32_t> slice_indices2 = {
+    std::vector<uint32_t> slice2_indices = {
       2, 3, 5, 5, 4, 2
     };
 
@@ -1163,45 +1136,7 @@ public:
 
 
     std::vector<vec4f> octree;
-    populate_octree(octree, 0, 0, 5);
-
-    auto cube = std::make_shared<Separator>();
-
-    cube->children = {
-      std::make_shared<GLSLShader>("Shaders/wireframe.vert", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<GLSLShader>("Shaders/wireframe.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
-
-      std::make_shared<BufferData<uint32_t>>(cube_indices),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
-    };
-
-    auto slice = std::make_shared<Separator>();
-
-    slice->children = {
-      std::make_shared<GLSLShader>("Shaders/slice.vert", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<GLSLShader>("Shaders/slice.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
-
-      std::make_shared<BufferData<uint32_t>>(slice_indices),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-      std::make_shared<BufferData<uint32_t>>(slice_indices2),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-      std::make_shared<BufferData<vec4f>>(octree),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
-
-      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-    };
+    populate_octree(octree, 5);
 
     this->children = {
       std::make_shared<BufferData<float>>(vertices),
@@ -1213,8 +1148,41 @@ public:
       std::make_shared<TransformBuffer>(),
       std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
-      slice,
-      cube
+      // wireframe cube outline
+      std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
+        std::make_shared<GLSLShader>("Shaders/wireframe.vert", VK_SHADER_STAGE_VERTEX_BIT),
+        std::make_shared<GLSLShader>("Shaders/wireframe.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
+
+        std::make_shared<BufferData<uint32_t>>(cube_indices),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
+      }),
+
+      // slices
+      std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
+        std::make_shared<GLSLShader>("Shaders/slice.vert", VK_SHADER_STAGE_VERTEX_BIT),
+        std::make_shared<GLSLShader>("Shaders/slice.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
+
+        std::make_shared<BufferData<uint32_t>>(slice1_indices),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+        std::make_shared<BufferData<uint32_t>>(slice2_indices),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+        std::make_shared<BufferData<vec4f>>(octree),
+        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+
+        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+      }),
     };
   }
 };
