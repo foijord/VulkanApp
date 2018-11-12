@@ -49,7 +49,7 @@ public:
     const auto stage = get_number(args, 1);
     const auto filename = get_string(args, 0);
 
-    auto node = std::make_shared<Shader>(
+    auto node = std::make_shared<GLSLShader>(
       filename->value, 
       static_cast<VkShaderStageFlagBits>(int(stage->value)));
 

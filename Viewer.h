@@ -190,10 +190,26 @@ public:
     }
   }
 
-  void hackSetSceneGraph()
+  void reloadShaders()
   {
     try {
-      this->setSceneGraph(std::make_shared<Volume>());
+      std::vector<std::shared_ptr<GLSLShader>> shaders;
+      SearchAction(this->root, shaders);
+
+      MemoryAllocator allocator(this->device);
+
+      for (auto & shader : shaders) {
+        shader->readFile();
+        shader->alloc(&allocator);
+      }
+
+      this->renderaction->pipeline(this->root.get(),
+        this->renderpass->renderpass);
+
+      this->renderaction->record(this->root.get(),
+        this->framebuffer->framebuffer,
+        this->renderpass->renderpass,
+        this->extent2d);
 
       this->renderaction->render(this->root.get(),
         this->framebuffer->framebuffer,
@@ -546,7 +562,7 @@ public:
   {
     switch (e->key()) {
     case Qt::Key_R:
-      this->hackSetSceneGraph();
+      this->reloadShaders();
       break;
     default:
       break;      

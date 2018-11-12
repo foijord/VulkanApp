@@ -14,19 +14,19 @@
 #include <fstream>
 #include <iostream>
 
-template <typename NodeType> 
-static std::shared_ptr<NodeType> 
-SearchAction(const std::shared_ptr<Node> & root) {
+template <typename NodeType> void
+SearchAction(const std::shared_ptr<Node> & root, std::vector<std::shared_ptr<NodeType>> & results) {
   auto group = std::dynamic_pointer_cast<Group>(root);
-  if (!group) {
-    return std::dynamic_pointer_cast<NodeType>(root);
+  if (group) {
+    for (auto & node : group->children) {
+      SearchAction<NodeType>(node, results);
+    }
+  } else {
+    auto result = std::dynamic_pointer_cast<NodeType>(root);
+    if (result) {
+      results.push_back(result);
+    }
   }
-  for (auto & node : group->children) {
-    auto result = SearchAction<NodeType>(node);
-    if (result)
-      return result;
-  }
-  return std::shared_ptr<NodeType>();
 }
 
 class MemoryAllocator {
