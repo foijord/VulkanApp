@@ -468,6 +468,7 @@ private:
 
 protected:
   std::vector<char> code;
+  std::vector<uint32_t> module;
   VkShaderStageFlagBits stage;
   std::unique_ptr<VulkanShaderModule> shader;
 };
@@ -488,6 +489,13 @@ public:
 };
 
 class GLSLShader : public ShaderNode {
+
+  union word_t
+  {
+    uint32_t word;
+    char bytes[4];
+  };
+
 public:
   NO_COPY_OR_ASSIGNMENT(GLSLShader)
   GLSLShader() = delete;
@@ -512,7 +520,13 @@ public:
       std::cerr << module.GetErrorMessage();
     }
 
-    this->code = { module.begin(), module.end() };
+    for (auto word : module) {
+      word_t m{ word };
+      this->code.push_back(m.bytes[0]);
+      this->code.push_back(m.bytes[1]);
+      this->code.push_back(m.bytes[2]);
+      this->code.push_back(m.bytes[3]);
+    }
   }
 };
 
@@ -1139,8 +1153,27 @@ public:
 
     auto cube = std::make_shared<Separator>();
 
+    const char wireframe_vert_glsl[] =
+      "#version 450\n"
+
+      "layout(binding = 0) uniform Transform {\n"
+      "  mat4 ModelViewMatrix;\n"
+      "  mat4 ProjectionMatrix;\n"
+      "};\n"
+
+      "layout(location = 0) in vec3 Position;\n"
+
+      "out gl_PerVertex{\n"
+      "  vec4 gl_Position;\n"
+      "};\n"
+
+      "void main() {\n"
+      "  gl_Position = ProjectionMatrix * ModelViewMatrix * vec4(Position, 1.0);\n"
+      "}\n";
+
     cube->children = {
-      std::make_shared<Shader>("Shaders/wireframe.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<GLSLShader>(wireframe_vert_glsl, VK_SHADER_STAGE_VERTEX_BIT),
+      //std::make_shared<Shader>("Shaders/wireframe.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<Shader>("Shaders/wireframe.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<uint32_t>>(cube_indices),
@@ -1151,31 +1184,10 @@ public:
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
     };
 
-    const char slice_vert_glsl[] =
-      "#version 450\n"
-      "layout(binding = 0) uniform Transform {\n"
-      "  mat4 ModelViewMatrix;\n"
-      "  mat4 ProjectionMatrix;\n"
-      "};\n"
-      
-      "layout(location = 0) in vec3 Position;\n"
-      "layout(location = 0) out vec3 position;\n"
-
-      "out gl_PerVertex {\n"
-      "  vec4 gl_Position;\n"
-      "};\n"
-
-      "void main() {\n"
-      "  position = Position;\n"
-      "  gl_Position = ProjectionMatrix * ModelViewMatrix * vec4(Position, 1.0);\n"
-      "}\n";
-
-
     auto slice = std::make_shared<Separator>();
 
     slice->children = {
       std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-      //std::make_shared<GLSLShader>(slice_vert_glsl, VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<uint32_t>>(slice_indices),
