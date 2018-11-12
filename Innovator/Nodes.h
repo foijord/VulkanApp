@@ -489,13 +489,6 @@ public:
 };
 
 class GLSLShader : public ShaderNode {
-
-  union word_t
-  {
-    uint32_t word;
-    char bytes[4];
-  };
-
 public:
   NO_COPY_OR_ASSIGNMENT(GLSLShader)
   GLSLShader() = delete;
@@ -507,11 +500,6 @@ public:
     shaderc::CompileOptions options;
     options.SetOptimizationLevel(shaderc_optimization_level_size);
 
-    std::map<VkShaderStageFlagBits, shaderc_shader_kind> shader_kind {
-      { VK_SHADER_STAGE_VERTEX_BIT, shaderc_glsl_vertex_shader },
-      { VK_SHADER_STAGE_FRAGMENT_BIT, shaderc_glsl_fragment_shader },
-    };
-
     shaderc::Compiler compiler;
     shaderc::SpvCompilationResult module =
       compiler.CompileGlslToSpv(source, shader_kind[stage], "shader_src", options);
@@ -521,13 +509,27 @@ public:
     }
 
     for (auto word : module) {
-      word_t m{ word };
+      const word_t m{ word };
       this->code.push_back(m.bytes[0]);
       this->code.push_back(m.bytes[1]);
       this->code.push_back(m.bytes[2]);
       this->code.push_back(m.bytes[3]);
     }
   }
+
+  union word_t {
+    uint32_t word;
+    char bytes[4];
+  };
+
+  static inline std::map<VkShaderStageFlagBits, shaderc_shader_kind> shader_kind{
+    { VK_SHADER_STAGE_VERTEX_BIT, shaderc_glsl_vertex_shader },
+    { VK_SHADER_STAGE_FRAGMENT_BIT, shaderc_glsl_fragment_shader },
+    { VK_SHADER_STAGE_COMPUTE_BIT, shaderc_glsl_compute_shader },
+    { VK_SHADER_STAGE_GEOMETRY_BIT, shaderc_glsl_geometry_shader },
+    { VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, shaderc_glsl_tess_control_shader },
+    { VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, shaderc_glsl_tess_evaluation_shader },
+  };
 };
 
 class Sampler : public Node {
