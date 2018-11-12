@@ -505,15 +505,13 @@ public:
       compiler.CompileGlslToSpv(source, shader_kind[stage], "shader_src", options);
 
     if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-      std::cerr << module.GetErrorMessage();
+      throw std::runtime_error(module.GetErrorMessage());
     }
 
     for (auto word : module) {
       const word_t m{ word };
-      this->code.push_back(m.bytes[0]);
-      this->code.push_back(m.bytes[1]);
-      this->code.push_back(m.bytes[2]);
-      this->code.push_back(m.bytes[3]);
+      for (char byte : m.bytes)
+        this->code.push_back(byte);
     }
   }
 
@@ -531,6 +529,24 @@ public:
     { VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, shaderc_glsl_tess_evaluation_shader },
   };
 };
+
+class GLSLShaderFile : public GLSLShader {
+public:
+  NO_COPY_OR_ASSIGNMENT(GLSLShaderFile)
+    GLSLShaderFile() = delete;
+  virtual ~GLSLShaderFile() = default;
+
+  GLSLShaderFile(const std::string & filename, const VkShaderStageFlagBits stage) :
+    GLSLShader(readFile(filename), stage)
+  {}
+
+  static std::string readFile(const std::string & filename)
+  {
+    std::ifstream input(filename);
+    return std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+  }
+};
+
 
 class Sampler : public Node {
 public:
@@ -1155,28 +1171,9 @@ public:
 
     auto cube = std::make_shared<Separator>();
 
-    const char wireframe_vert_glsl[] =
-      "#version 450\n"
-
-      "layout(binding = 0) uniform Transform {\n"
-      "  mat4 ModelViewMatrix;\n"
-      "  mat4 ProjectionMatrix;\n"
-      "};\n"
-
-      "layout(location = 0) in vec3 Position;\n"
-
-      "out gl_PerVertex{\n"
-      "  vec4 gl_Position;\n"
-      "};\n"
-
-      "void main() {\n"
-      "  gl_Position = ProjectionMatrix * ModelViewMatrix * vec4(Position, 1.0);\n"
-      "}\n";
-
     cube->children = {
-      std::make_shared<GLSLShader>(wireframe_vert_glsl, VK_SHADER_STAGE_VERTEX_BIT),
-      //std::make_shared<Shader>("Shaders/wireframe.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<Shader>("Shaders/wireframe.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+      std::make_shared<GLSLShaderFile>("Shaders/wireframe.vert", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<GLSLShaderFile>("Shaders/wireframe.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<uint32_t>>(cube_indices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
@@ -1189,8 +1186,8 @@ public:
     auto slice = std::make_shared<Separator>();
 
     slice->children = {
-      std::make_shared<Shader>("Shaders/slice.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<Shader>("Shaders/slice.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+      std::make_shared<GLSLShaderFile>("Shaders/slice.vert", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<GLSLShaderFile>("Shaders/slice.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<uint32_t>>(slice_indices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),

@@ -100,10 +100,10 @@ int main(int argc, char *argv[])
 
     File file;
     //const auto scene = file.open("Scenes/crate.scene");
-    const auto scene = std::make_shared<Volume>();
 
     VulkanViewer viewer(vulkan);
-    viewer.setSceneGraph(scene);
+    viewer.hackSetSceneGraph();
+    //viewer.setSceneGraph(scene);
     viewer.resize(1000, 750);
     viewer.show();
 

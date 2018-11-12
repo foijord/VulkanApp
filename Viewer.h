@@ -56,6 +56,8 @@ public:
     vulkan(std::move(vulkan)),
     camera(std::make_unique<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f))
   {
+    this->camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
+
     this->surface = std::make_shared<::VulkanSurface>(
       this->vulkan,
       reinterpret_cast<HWND>(this->winId()),
@@ -188,11 +190,27 @@ public:
     }
   }
 
+  void hackSetSceneGraph()
+  {
+    try {
+      this->setSceneGraph(std::make_shared<Volume>());
+
+      this->renderaction->render(this->root.get(),
+        this->framebuffer->framebuffer,
+        this->renderpass->renderpass,
+        this->camera.get(),
+        this->extent2d);
+
+      this->swapBuffers();
+
+    } catch (std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
+  }
+
   void setSceneGraph(std::shared_ptr<Separator> scene)
   {
     this->root = std::move(scene);
-
-    this->camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
 
     this->renderaction->alloc(this->root.get());
     this->renderaction->stage(this->root.get());
@@ -526,6 +544,13 @@ public:
 
   void keyPressEvent(QKeyEvent * e) override
   {
+    switch (e->key()) {
+    case Qt::Key_R:
+      this->hackSetSceneGraph();
+      break;
+    default:
+      break;      
+    }
   }
 
   void keyReleaseEvent(QKeyEvent * e) override
