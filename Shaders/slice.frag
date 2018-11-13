@@ -1,7 +1,7 @@
 #version 450
 
 layout(binding = 1) buffer Octree {
-  vec4 nodes[];
+  int nodes[];
 } octree;
 
 layout(location = 0) in vec3 position;
@@ -18,11 +18,26 @@ vec3 origins[8] = {
   vec3(1, 1, 1)
 };
 
+float mip_level(in vec3 texcoord) {
+  vec3 dx = dFdx(texcoord);
+  vec3 dy = dFdy(texcoord);
+ 
+  float m = max(dot(dx, dx), dot(dy, dy));
+
+  return 0.5 * log2(m);
+}
+
 void main() {
+
+  int lod = 7 - int(mip_level(position * 512.0));
+
+  lod = clamp(lod, 0, 8);
+
   int index = 0;
   vec3 pos = position;
 
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 9; i++) {
+    if (i >= lod) break;
     int octant = 0;
     if (pos.x > 0.5) octant += 4;
     if (pos.y > 0.5) octant += 2;
@@ -32,5 +47,6 @@ void main() {
     pos = (pos - origins[octant] * 0.5) * 2.0;
   }
 
-  FragColor = octree.nodes[index];
+  int octant = octree.nodes[index];
+  FragColor = vec4(origins[octant], 1);
 }

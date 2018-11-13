@@ -9,7 +9,8 @@
 
 using namespace Innovator::Core::Math;
 
-static void populate_octree(std::vector<vec4f> & octree, const size_t num_levels, const size_t index = 0, const size_t level = 0) {
+template <typename T>
+static void populate_octree(std::vector<T> & octree, const size_t num_levels, const size_t index = 0, const size_t level = 0) {
 
   if (level == 0) {
     size_t num_nodes = 8;
@@ -18,18 +19,18 @@ static void populate_octree(std::vector<vec4f> & octree, const size_t num_levels
     }
     num_nodes = (num_nodes - 1) / 7;
     octree.resize(num_nodes);
-    octree[0] = vec4f{ 0, 0, 0, 1 };
+    octree[0] = 0;
   }
 
   if (level < num_levels) {
-    octree[index * 8 + 1] = vec4f{ 0, 0, 0, 1 };
-    octree[index * 8 + 2] = vec4f{ 0, 0, 1, 1 };
-    octree[index * 8 + 3] = vec4f{ 0, 1, 0, 1 };
-    octree[index * 8 + 4] = vec4f{ 0, 1, 1, 1 };
-    octree[index * 8 + 5] = vec4f{ 1, 0, 0, 1 };
-    octree[index * 8 + 6] = vec4f{ 1, 0, 1, 1 };
-    octree[index * 8 + 7] = vec4f{ 1, 1, 0, 1 };
-    octree[index * 8 + 8] = vec4f{ 1, 1, 1, 1 };
+    octree[index * 8 + 1] = 0;
+    octree[index * 8 + 2] = 1;
+    octree[index * 8 + 3] = 2;
+    octree[index * 8 + 4] = 3;
+    octree[index * 8 + 5] = 4;
+    octree[index * 8 + 6] = 5;
+    octree[index * 8 + 7] = 6;
+    octree[index * 8 + 8] = 7;
 
     for (size_t i = 1; i <= 8; i++) {
       populate_octree(octree, num_levels, index * 8 + i, level + 1);
