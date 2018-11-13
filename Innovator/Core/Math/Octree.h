@@ -3,98 +3,55 @@
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Math/Matrix.h>
 
-#include <map>
-#include <array>
 #include <vector>
 
 using namespace Innovator::Core::Math;
 
-template <typename T>
-static void populate_octree(std::vector<T> & octree, const size_t num_levels, const size_t index = 0, const size_t level = 0) {
+inline std::vector<uint32_t> data;
 
-  if (level == 0) {
-    size_t num_nodes = 8;
-    for (size_t i = 0; i < num_levels; i++) {
-      num_nodes *= 8;
-    }
-    num_nodes = (num_nodes - 1) / 7;
-    octree.resize(num_nodes);
-    octree[0] = 0;
-  }
+static void read_data()
+{
+  std::ifstream input("hackatree.hac_128", std::ios::binary);
+  std::vector<char> bytes = std::vector<char>((std::istreambuf_iterator<char>(input)), 
+    (std::istreambuf_iterator<char>()));
 
-  if (level < num_levels) {
-    octree[index * 8 + 1] = 0;
-    octree[index * 8 + 2] = 1;
-    octree[index * 8 + 3] = 2;
-    octree[index * 8 + 4] = 3;
-    octree[index * 8 + 5] = 4;
-    octree[index * 8 + 6] = 5;
-    octree[index * 8 + 7] = 6;
-    octree[index * 8 + 8] = 7;
+  data.resize(bytes.size());
 
-    for (size_t i = 1; i <= 8; i++) {
-      populate_octree(octree, num_levels, index * 8 + i, level + 1);
-    }
+  for (size_t i = 0; i < bytes.size(); i++) {
+    data[i] = static_cast<uint32_t>(bytes[i]);
   }
 }
 
-using Index = std::array<uint16_t, 4>;
-using Key = uint64_t;
-
-class OctreeNode {
-public:
-  explicit OctreeNode(Index index = { 0, 0, 0, 0 })
-    : index(index) {}
-
-  Index index;
+struct OctreeNode {
+  uint32_t data;
+  uint32_t children[8];
 };
 
-class Octree {
-public:
-  NO_COPY_OR_ASSIGNMENT(Octree);
-
-  Octree()
-  {
-    this->tree[0] = OctreeNode();
+static void populate_octree(std::vector<OctreeNode> & octree,
+                            const uint32_t node_index,
+                            const uint32_t subdivision,
+                            const uint32_t num_subdivisions)
+{
+  if (subdivision == num_subdivisions) {
+    return;
   }
 
-  ~Octree() = default;
-
-  static uint16_t IndexToOctant(const Index & index)
-  {
-    return ((index[0] % 2) * 4) + ((index[1] % 2) * 2) + ((index[2] % 2) * 1);
+  for (uint32_t i = 1; i <= 8; i++) {
+    const uint32_t child_index = node_index * 8 + i;
+    octree[node_index].children[i - 1] = child_index;
+    octree[child_index].data = data[child_index];
+    populate_octree(octree, child_index, subdivision + 1, num_subdivisions);
   }
+}
 
-  static std::array<Index, 8> getChildren(const Index & index)
-  {
-    const auto x = index[0];
-    const auto y = index[1];
-    const auto z = index[2];
-    const auto d = index[3];
+static void populate_octree(std::vector<OctreeNode> & octree, 
+                            const uint32_t num_levels)
+{
+  read_data();
 
-    return {
-      Index{ x * 2u + 0u, y * 2u + 0u, z + 0u, d + 1u },
-      Index{ x * 2u + 0u, y * 2u + 0u, z + 1u, d + 1u },
-      Index{ x * 2u + 0u, y * 2u + 1u, z + 0u, d + 1u },
-      Index{ x * 2u + 0u, y * 2u + 1u, z + 1u, d + 1u },
-      Index{ x * 2u + 1u, y * 2u + 0u, z + 0u, d + 1u },
-      Index{ x * 2u + 1u, y * 2u + 0u, z + 1u, d + 1u },
-      Index{ x * 2u + 1u, y * 2u + 1u, z + 0u, d + 1u },
-      Index{ x * 2u + 1u, y * 2u + 1u, z + 1u, d + 1u },
-    };
-  }
+  const uint32_t num_nodes = ((1 << (3 * num_levels)) - 1) / 7;
+  octree.resize(num_nodes);
+  octree[0].data = data[0];
 
-  uint64_t key(const Index & index)
-  {
-    return 0;
-  }
-
-  Index index(Key & key)
-  {
-    
-  }
-
-
-private:
-  std::map<uint64_t, OctreeNode> tree;
-};
+  populate_octree(octree, 0, 0, num_levels - 1);
+}

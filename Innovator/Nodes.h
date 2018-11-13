@@ -1134,9 +1134,8 @@ public:
       0, 1, 3, 2, 0, 4, 6, 2, 3, 7, 6, 4, 5, 7, 3, 1, 5, 4, 0, 1
     };
 
-
-    std::vector<int32_t> octree;
-    populate_octree(octree, 9);
+    std::vector<OctreeNode> octree;
+    populate_octree(octree, 8);
 
     this->children = {
       std::make_shared<BufferData<float>>(vertices),
@@ -1176,7 +1175,7 @@ public:
         std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
         std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
 
-        std::make_shared<BufferData<int32_t>>(octree),
+        std::make_shared<BufferData<OctreeNode>>(octree),
         std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
         std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
         std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),

@@ -1,7 +1,12 @@
 #version 450
 
+struct OctreeNode {
+  uint data;
+  uint children[8];
+};
+
 layout(binding = 1) buffer Octree {
-  int nodes[];
+  OctreeNode nodes[];
 } octree;
 
 layout(location = 0) in vec3 position;
@@ -33,20 +38,22 @@ void main() {
 
   lod = clamp(lod, 0, 8);
 
-  int index = 0;
+  uint node_index = 0;
   vec3 pos = position;
 
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 8; i++) {
     if (i >= lod) break;
-    int octant = 0;
-    if (pos.x > 0.5) octant += 4;
-    if (pos.y > 0.5) octant += 2;
-    if (pos.z > 0.5) octant += 1;
     
-    index = 8 * index + octant + 1;
-    pos = (pos - origins[octant] * 0.5) * 2.0;
+    int child_index = 0;
+    if (pos.x > 0.5) child_index += 4;
+    if (pos.y > 0.5) child_index += 2;
+    if (pos.z > 0.5) child_index += 1;
+    
+    // index = 8 * index + octant + 1;
+    node_index = octree.nodes[node_index].children[child_index];
+    pos = (pos - origins[child_index] * 0.5) * 2.0;
   }
 
-  int octant = octree.nodes[index];
-  FragColor = vec4(origins[octant], 1);
+  uint data = octree.nodes[node_index].data;
+  FragColor = vec4(origins[data], 1);
 }
