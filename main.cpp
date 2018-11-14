@@ -4,6 +4,7 @@
 #include <Viewer.h>
 #include <Innovator/Nodes.h>
 #include <Innovator/Core/File.h>
+#include <Innovator/Core/Math/Octree.h>
 
 #include <QApplication>
 
@@ -100,10 +101,9 @@ int main(int argc, char *argv[])
 
     File file;
     //const auto scene = file.open("Scenes/crate.scene");
-    const auto scene = std::make_shared<Volume>();
 
     VulkanViewer viewer(vulkan);
-    viewer.setSceneGraph(scene);
+    viewer.setSceneGraph(create_octree());
     viewer.resize(512, 512);
     viewer.show();
 

@@ -3,7 +3,6 @@
 #include <Innovator/RenderManager.h>
 #include <Innovator/Core/Node.h>
 #include <Innovator/Core/Math/Matrix.h>
-#include <Innovator/Core/Math/Octree.h>
 
 #include <gli/load.hpp>
 #include <vulkan/vulkan.h>
@@ -1095,97 +1094,6 @@ private:
   }
 };
 
-class Volume : public Separator {
-public:
-  NO_COPY_OR_ASSIGNMENT(Volume)
-  virtual ~Volume() = default;
-
-  Volume()
-  {
-    //     5------7
-    //    /|     /|
-    //   / |    / |
-    //  1------3  |
-    //  |  4---|--6
-    //  z x    | /
-    //  |/     |/
-    //  0--y---2
-
-    std::vector<float> vertices = {
-      0, 0, 0, // 0
-      0, 0, 1, // 1
-      0, 1, 0, // 2
-      0, 1, 1, // 3
-      1, 0, 0, // 4
-      1, 0, 1, // 5
-      1, 1, 0, // 6
-      1, 1, 1, // 7
-    };
-
-    std::vector<uint32_t> slice1_indices = {
-      0, 1, 7, 7, 6, 0
-    };
-
-    std::vector<uint32_t> slice2_indices = {
-      2, 3, 5, 5, 4, 2
-    };
-
-    std::vector<uint32_t> cube_indices = {
-      0, 1, 3, 2, 0, 4, 6, 2, 3, 7, 6, 4, 5, 7, 3, 1, 5, 4, 0, 1
-    };
-
-    std::vector<OctreeNode> octree;
-    populate_octree(octree, 8);
-
-    this->children = {
-      std::make_shared<BufferData<float>>(vertices),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
-      std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
-
-      std::make_shared<TransformBuffer>(),
-      std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
-
-      // wireframe cube outline
-      std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
-        std::make_shared<GLSLShader>("Shaders/wireframe.vert", VK_SHADER_STAGE_VERTEX_BIT),
-        std::make_shared<GLSLShader>("Shaders/wireframe.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
-
-        std::make_shared<BufferData<uint32_t>>(cube_indices),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)
-      }),
-
-      // slices
-      std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
-        std::make_shared<GLSLShader>("Shaders/slice.vert", VK_SHADER_STAGE_VERTEX_BIT),
-        std::make_shared<GLSLShader>("Shaders/slice.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
-
-        std::make_shared<BufferData<uint32_t>>(slice1_indices),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-        std::make_shared<BufferData<uint32_t>>(slice2_indices),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-        std::make_shared<BufferData<OctreeNode>>(octree),
-        std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-        std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-        std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
-
-        std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-      }),
-    };
-  }
-};
-
 class Box : public Separator {
 public:
   NO_COPY_OR_ASSIGNMENT(Box)
@@ -1222,45 +1130,6 @@ public:
       1, 1, 0, // 6
       1, 1, 1, // 7
     };
-
-    //std::vector<uint32_t> indices{
-    //  1,  4,  0,
-    //  4,  9,  0,
-    //  4,  5,  9,
-    //  8,  5,  4,
-    //  1,  8,  4,
-    //  1, 10,  8,
-    //  10,  3, 8,
-    //  8,  3,  5,
-    //  3,  2,  5,
-    //  3,  7,  2,
-    //  3, 10,  7,
-    //  10,  6, 7,
-    //  6, 11,  7,
-    //  6,  0, 11,
-    //  6,  1,  0,
-    //  10,  1, 6,
-    //  11,  0, 9,
-    //  2, 11,  9,
-    //  5,  2,  9,
-    //  11,  2, 7
-    //};
-    //
-    //const float t = float(1 + std::pow(5, 0.5)) / 2;  // golden ratio
-    //std::vector<float> vertices{
-    //  -1,  0,  t,
-    //   1,  0,  t,
-    //  -1,  0, -t,
-    //   1,  0, -t,
-    //   0,  t,  1,
-    //   0,  t, -1,
-    //   0, -t,  1,
-    //   0, -t, -1,
-    //   t,  1,  0,
-    //  -t,  1,  0,
-    //   t, -1,  0,
-    //  -t, -1,  0
-    //};
 
     this->children = {
       std::make_shared<Transform>(vec3d{ 0, 0, 0 }, vec3d{ 1, 1, 1 }),

@@ -1,7 +1,7 @@
 #version 450
 
 struct OctreeNode {
-  uint data;
+  int data;
   uint children[8];
 };
 
@@ -34,14 +34,15 @@ float mip_level(in vec3 texcoord) {
 
 void main() {
 
-  int lod = 7 - int(mip_level(position * 512.0));
+  int mip = int(mip_level(position * 256.0));
+  int lod = 7 - mip;
 
-  lod = clamp(lod, 0, 8);
+  lod = clamp(lod, 0, 7);
 
   uint node_index = 0;
   vec3 pos = position;
 
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 9; i++) {
     if (i >= lod) break;
     
     int child_index = 0;
@@ -54,6 +55,7 @@ void main() {
     pos = (pos - origins[child_index] * 0.5) * 2.0;
   }
 
-  uint data = octree.nodes[node_index].data;
-  FragColor = vec4(origins[data], 1);
+  int data = octree.nodes[node_index].data + 128;
+  float factor = float(data) / 255.0;
+  FragColor = vec4(vec3(origins[lod] * factor), 1);
 }

@@ -13,5 +13,6 @@ out gl_PerVertex {
 
 void main() 
 {
-  gl_Position = ProjectionMatrix * ModelViewMatrix * vec4(Position, 1.0);
+  vec3 position = Position * 2.0 - 1.0;
+  gl_Position = ProjectionMatrix * ModelViewMatrix * vec4(position, 1.0);
 }
