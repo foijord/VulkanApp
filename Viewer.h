@@ -274,6 +274,8 @@ public:
   void resizeEvent(QResizeEvent * e) override
   {
     QWindow::resizeEvent(e);
+    this->doShit();
+#if 0
     this->rebuildSwapchain();
 
     this->camera->aspectratio = static_cast<float>(this->extent2d.width) /
@@ -291,7 +293,32 @@ public:
                                this->extent2d);
 
     this->swapBuffers();
+#endif
+
   }
+
+
+  void doShit()
+  {
+    this->rebuildSwapchain();
+
+    this->camera->aspectratio = static_cast<float>(this->extent2d.width) /
+      static_cast<float>(this->extent2d.height);
+
+    this->renderaction->record(this->root.get(),
+      this->framebuffer->framebuffer,
+      this->renderpass->renderpass,
+      this->extent2d);
+
+    this->renderaction->render(this->root.get(),
+      this->framebuffer->framebuffer,
+      this->renderpass->renderpass,
+      this->camera.get(),
+      this->extent2d);
+
+    this->swapBuffers();
+  }
+
 
   void rebuildSwapchain()
   {
@@ -558,11 +585,23 @@ public:
     }
   }
 
+  void move() const
+  {
+    std::vector<std::shared_ptr<HackathonOffset>> offset;
+    SearchAction(this->root, offset);
+
+    offset[0]->move();
+  }
+
   void keyPressEvent(QKeyEvent * e) override
   {
     switch (e->key()) {
     case Qt::Key_R:
       this->reloadShaders();
+      break;
+    case Qt::Key_D:
+      this->move();
+      this->doShit();
       break;
     default:
       break;      

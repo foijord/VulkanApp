@@ -294,6 +294,63 @@ private:
   std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
+class HackathonOffset : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(HackathonOffset)
+  HackathonOffset()
+  {
+    this->offset = vec3f{ -0.5f, -0.5f, -0.5f };
+    this->direction = normalize(vec3f{ 1.0f, 0.876f, 0.123f });
+  }
+  virtual ~HackathonOffset() = default;
+
+  void move()
+  {
+    this->offset = this->offset + this->direction * 0.01f;
+    const float limit = 0.75f;
+    this->direction[0] *= calcBounceFactor(this->offset[0], limit);
+    this->direction[1] *= calcBounceFactor(this->offset[1], limit);
+    this->direction[2] *= calcBounceFactor(this->offset[2], limit);
+  }
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    this->buffer = std::make_shared<BufferObject>(
+      sizeof(vec3f),
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+      VK_SHARING_MODE_EXCLUSIVE,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    allocator->bufferobjects.push_back(this->buffer);
+  }
+
+  void doPipeline(PipelineCreator * creator) override
+  {
+    creator->state.descriptor_buffer_info = {
+      this->buffer->buffer->buffer,
+      this->buffer->offset,
+      this->buffer->range,
+    };
+  }
+
+  float calcBounceFactor(float coord, float limit) const
+  {
+    return std::abs(coord) > limit ? -1.0f : 1.0f;
+  }
+
+  void doRender(SceneRenderer * renderer) override
+  {
+    vec3f data[1] = { this->offset };
+    this->buffer->memcpy(data);
+  }
+
+  vec3f offset;
+  vec3f direction;
+  std::shared_ptr<BufferObject> buffer{ nullptr };
+};
+
+
 class IndexBufferDescription : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(IndexBufferDescription)

@@ -12,15 +12,12 @@ inline std::vector<int32_t> data;
 
 static void read_data()
 {
-  std::ifstream input("seismic.hac_256", std::ios::binary);
+  std::ifstream input("seismic.hac_512", std::ios::binary);
   std::vector<char> bytes = std::vector<char>((std::istreambuf_iterator<char>(input)), 
     (std::istreambuf_iterator<char>()));
 
   data.resize(bytes.size());
-
-  for (size_t i = 0; i < bytes.size(); i++) {
-    data[i] = static_cast<int32_t>(bytes[i]);
-  }
+  std::copy(bytes.begin(), bytes.end(), data.begin());
 }
 
 struct OctreeNode {
@@ -28,7 +25,7 @@ struct OctreeNode {
   uint32_t children[8];
 };
 
-static void populate_octree(std::vector<OctreeNode> & octree,
+static void populate_octree(std::vector<int32_t> & octree,
                             const uint32_t node_index,
                             const uint32_t subdivision,
                             const uint32_t num_subdivisions)
@@ -39,19 +36,18 @@ static void populate_octree(std::vector<OctreeNode> & octree,
 
   for (uint32_t i = 1; i <= 8; i++) {
     const uint32_t child_index = node_index * 8 + i;
-    octree[node_index].children[i - 1] = child_index;
-    octree[child_index].data = data[child_index];
+    octree[child_index] = data[child_index];
     populate_octree(octree, child_index, subdivision + 1, num_subdivisions);
   }
 }
 
-static std::vector<OctreeNode> create_octree(const uint32_t num_levels)
+static std::vector<int32_t> create_octree(const uint32_t num_levels)
 {
   read_data();
 
   const uint32_t num_nodes = ((1 << (3 * num_levels)) - 1) / 7;
-  std::vector<OctreeNode> octree(num_nodes);
-  octree[0].data = data[0];
+  std::vector<int32_t> octree(num_nodes);
+  octree[0] = 0;
 
   populate_octree(octree, 0, 0, num_levels - 1);
 
@@ -108,6 +104,12 @@ inline std::shared_ptr<Separator> create_octree()
      t, -1,  0,
     -t, -1,  0
   };
+
+  float l = length(vec3f{ 1, 0, t });
+  for (auto & v : vertices) { 
+    v /= l;
+    v *= 0.25f;
+  }
 
 
   return std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
@@ -169,11 +171,14 @@ inline std::shared_ptr<Separator> create_octree()
       //std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       //std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
 
-      std::make_shared<BufferData<OctreeNode>>(create_octree(9)),
+      std::make_shared<BufferData<int32_t>>(create_octree(10)),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
+      std::make_shared<HackathonOffset>(),
+      std::make_shared<DescriptorSetLayoutBinding>(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
+        
       std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
     }),
   });
