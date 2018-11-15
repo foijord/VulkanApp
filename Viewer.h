@@ -274,8 +274,7 @@ public:
   void resizeEvent(QResizeEvent * e) override
   {
     QWindow::resizeEvent(e);
-    this->doShit();
-#if 0
+
     this->rebuildSwapchain();
 
     this->camera->aspectratio = static_cast<float>(this->extent2d.width) /
@@ -293,32 +292,7 @@ public:
                                this->extent2d);
 
     this->swapBuffers();
-#endif
-
   }
-
-
-  void doShit()
-  {
-    this->rebuildSwapchain();
-
-    this->camera->aspectratio = static_cast<float>(this->extent2d.width) /
-      static_cast<float>(this->extent2d.height);
-
-    this->renderaction->record(this->root.get(),
-      this->framebuffer->framebuffer,
-      this->renderpass->renderpass,
-      this->extent2d);
-
-    this->renderaction->render(this->root.get(),
-      this->framebuffer->framebuffer,
-      this->renderpass->renderpass,
-      this->camera.get(),
-      this->extent2d);
-
-    this->swapBuffers();
-  }
-
 
   void rebuildSwapchain()
   {
@@ -593,6 +567,17 @@ public:
     offset[0]->move();
   }
 
+  void redraw()
+  {
+    this->renderaction->render(this->root.get(),
+      this->framebuffer->framebuffer,
+      this->renderpass->renderpass,
+      this->camera.get(),
+      this->extent2d);
+
+    this->swapBuffers();
+  }
+
   void keyPressEvent(QKeyEvent * e) override
   {
     switch (e->key()) {
@@ -601,7 +586,7 @@ public:
       break;
     case Qt::Key_D:
       this->move();
-      this->doShit();
+      this->redraw();
       break;
     default:
       break;      
