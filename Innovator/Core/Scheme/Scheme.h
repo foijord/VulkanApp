@@ -300,6 +300,14 @@ public:
     return argvec;
   }
 
+  static void
+  check_num_args(const Expression * args)
+  {
+    if (args->children.empty()) {
+      throw std::invalid_argument("invalid number of arguments");
+    }
+  }
+
   static void 
   check_num_args(const Expression * args, size_t num)
   {

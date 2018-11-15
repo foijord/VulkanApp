@@ -100,10 +100,11 @@ int main(int argc, char *argv[])
     VulkanApplication app(argc, argv);
 
     File file;
-    //const auto scene = file.open("Scenes/crate.scene");
+    const auto scene = file.open("Scenes/crate.scene");
 
     VulkanViewer viewer(vulkan);
-    viewer.setSceneGraph(create_octree());
+    //viewer.setSceneGraph(create_octree());
+    viewer.setSceneGraph(scene);
     viewer.resize(512, 512);
     viewer.show();
 

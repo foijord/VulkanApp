@@ -41,6 +41,107 @@ public:
   }
 };
 
+template <typename T>
+class BufferDataFunction : public Callable {
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args);
+    std::vector<T> data(args->children.size());
+    for (size_t i = 0; i < args->children.size(); i++) {
+      const auto number = get_number(args, i);
+      data[i] = static_cast<T>(number->value);
+    }
+    return std::make_shared<NodeExpression>(std::make_shared<BufferData<T>>(data));
+  }
+};
+
+class CpuMemoryBufferFunction : public Callable {
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args);
+    uint32_t flags = 0;
+    for (size_t i = 0; i < args->children.size(); i++) {
+      const auto number = get_number(args, i);
+      flags |= static_cast<uint32_t>(number->value);
+    }
+    return std::make_shared<NodeExpression>(std::make_shared<CpuMemoryBuffer>(flags));
+  }
+};
+
+class GpuMemoryBufferFunction : public Callable {
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args);
+    uint32_t flags = 0;
+    for (size_t i = 0; i < args->children.size(); i++) {
+      const auto number = get_number(args, i);
+      flags |= static_cast<uint32_t>(number->value);
+    }
+    return std::make_shared<NodeExpression>(std::make_shared<GpuMemoryBuffer>(flags));
+  }
+};
+
+class VertexInputAttributeDescriptionFunction : public Callable {
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args, 4);
+    const auto location = get_number(args, 0);
+    const auto binding = get_number(args, 1);
+    const auto format = get_number(args, 2);
+    const auto offset = get_number(args, 3);
+
+    return std::make_shared<NodeExpression>(std::make_shared<VertexInputAttributeDescription>(
+      static_cast<uint32_t>(location->value),
+      static_cast<uint32_t>(binding->value),
+      static_cast<VkFormat>(uint32_t(format->value)),
+      static_cast<uint32_t>(offset->value)));
+  }
+};
+
+class VertexInputBindingDescriptionFunction : public Callable
+{
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args, 3);
+    const auto binding = get_number(args, 0);
+    const auto stride = get_number(args, 1);
+    const auto inputRate = get_number(args, 2);
+
+    return std::make_shared<NodeExpression>(std::make_shared<VertexInputBindingDescription>(
+      static_cast<uint32_t>(binding->value),
+      static_cast<uint32_t>(stride->value),
+      static_cast<VkVertexInputRate>(uint32_t(inputRate->value))));
+  }
+};
+
+class IndexedDrawCommandFunction : public Callable
+{
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args, 1);
+    const auto topology = get_number(args, 0);
+
+    return std::make_shared<NodeExpression>(std::make_shared<IndexedDrawCommand>(
+      static_cast<VkPrimitiveTopology>(uint32_t(topology->value))));
+  }
+};
+
+class ImageFunction : public Callable {
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args, 1);
+    const auto filename = get_string(args, 0);
+    return std::make_shared<NodeExpression>(std::make_shared<Image>(filename->value));
+  }
+};
+
 class ShaderFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
@@ -49,10 +150,31 @@ public:
     const auto stage = get_number(args, 1);
     const auto filename = get_string(args, 0);
 
-    auto node = std::make_shared<GLSLShader>(
+    auto node = std::make_shared<Shader>(
       filename->value, 
-      static_cast<VkShaderStageFlagBits>(int(stage->value)));
+      static_cast<VkShaderStageFlagBits>(uint32_t(stage->value)));
 
+    return std::make_shared<NodeExpression>(node);
+  }
+};
+
+class IndexBufferDescriptionFunction: public Callable
+{
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args, 1);
+    const auto type = get_number(args, 0);
+    return std::make_shared<NodeExpression>(
+      std::make_shared<IndexBufferDescription>(static_cast<VkIndexType>(uint32_t(type->value))));
+  }
+};
+
+class TransformBufferFunction : public Callable
+{
+  std::shared_ptr<Expression> operator()(const Expression *) const override
+  {
+    auto node = std::make_shared<TransformBuffer>();
     return std::make_shared<NodeExpression>(node);
   }
 };
@@ -89,6 +211,7 @@ public:
     auto sep = std::make_shared<Separator>(children);
     return std::make_shared<NodeExpression>(sep);
   }
+
 };
 
 class File {
@@ -98,13 +221,34 @@ public:
     Environment node_env {
       { "separator", std::make_shared<SeparatorFunction>() },
       { "shader", std::make_shared<ShaderFunction>() },
+      { "layout-binding", std::make_shared<LayoutBindingFunction>() },
+      { "sampler", std::make_shared<SamplerFunction>() },
+      { "indexeddrawcommand", std::make_shared<IndexedDrawCommandFunction>() },
+      { "box", std::make_shared<BoxFunction>() },
+      { "image", std::make_shared<ImageFunction>() },
+      { "bufferdataui", std::make_shared<BufferDataFunction<uint32_t>>() },
+      { "bufferdataf", std::make_shared<BufferDataFunction<float>>() },
+      { "cpumemorybuffer", std::make_shared<CpuMemoryBufferFunction>() },
+      { "gpumemorybuffer", std::make_shared<GpuMemoryBufferFunction>() },
+      { "transformbuffer", std::make_shared<TransformBufferFunction>() },
+      { "indexbufferdescription", std::make_shared<IndexBufferDescriptionFunction>() },
+      { "vertexinputattributedescription", std::make_shared<VertexInputAttributeDescriptionFunction>() },
+      { "vertexinputbindingdescription", std::make_shared<VertexInputBindingDescriptionFunction>() },
+      { "VK_INDEX_TYPE_UINT", std::make_shared<Number>(VK_INDEX_TYPE_UINT32) },
       { "VK_SHADER_STAGE_VERTEX_BIT", std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT) },
       { "VK_SHADER_STAGE_COMPUTE_BIT", std::make_shared<Number>(VK_SHADER_STAGE_COMPUTE_BIT) },
       { "VK_SHADER_STAGE_FRAGMENT_BIT", std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT) },
-      { "layout-binding", std::make_shared<LayoutBindingFunction>() },
       { "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER", std::make_shared<Number>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) },
-      { "sampler", std::make_shared<SamplerFunction>() },
-      { "box", std::make_shared<BoxFunction>() },
+      { "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER", std::make_shared<Number>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) },
+      { "VK_BUFFER_USAGE_TRANSFER_SRC_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) },
+      { "VK_BUFFER_USAGE_TRANSFER_DST_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) },
+      { "VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) },
+      { "VK_BUFFER_USAGE_STORAGE_BUFFER_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) },
+      { "VK_BUFFER_USAGE_INDEX_BUFFER_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) },
+      { "VK_BUFFER_USAGE_VERTEX_BUFFER_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) },
+      { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST", std::make_shared<Number>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) },
+      { "VK_VERTEX_INPUT_RATE_VERTEX", std::make_shared<Number>(VK_VERTEX_INPUT_RATE_VERTEX) },
+      { "VK_FORMAT_SFLOAT", std::make_shared<Number>(VK_FORMAT_R32G32B32_SFLOAT) },
     };
 
     this->scheme.environment->outer = std::make_shared<Environment>(node_env.begin(), node_env.end());

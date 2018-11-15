@@ -193,7 +193,7 @@ public:
   void reloadShaders()
   {
     try {
-      std::vector<std::shared_ptr<GLSLShader>> shaders;
+      std::vector<std::shared_ptr<Shader>> shaders;
       SearchAction(this->root, shaders);
 
       MemoryAllocator allocator(this->device);

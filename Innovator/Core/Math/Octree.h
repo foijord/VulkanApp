@@ -117,8 +117,8 @@ inline std::shared_ptr<Separator> create_octree()
 
     // wireframe cube outline
     std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
-      std::make_shared<GLSLShader>("Shaders/wireframe.vert", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<GLSLShader>("Shaders/wireframe.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
+      std::make_shared<Shader>("Shaders/wireframe.vert", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<Shader>("Shaders/wireframe.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<float>>(std::vector<float>({
         0, 0, 0, // 0
@@ -145,8 +145,8 @@ inline std::shared_ptr<Separator> create_octree()
 
     // slices
     std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
-      std::make_shared<GLSLShader>("Shaders/slice.vert", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<GLSLShader>("Shaders/slice.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
+      std::make_shared<Shader>("Shaders/slice.vert", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<Shader>("Shaders/slice.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<uint32_t>>(indices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),

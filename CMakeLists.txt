@@ -39,7 +39,6 @@ add_executable(${TARGET_NAME}
 target_link_libraries(${TARGET_NAME} Qt5::Core)
 target_link_libraries(${TARGET_NAME} Qt5::Widgets)
 target_link_libraries(${TARGET_NAME} ${Vulkan_LIBRARY})
-target_link_libraries(${TARGET_NAME} "$ENV{VULKAN_SDK}/shaderc/build/libshaderc/Debug/shaderc_sharedd.lib")
 
 set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)
@@ -68,26 +67,8 @@ add_dependencies(${PROJECT_NAME} gli)
 include_directories(${CMAKE_BINARY_DIR}/glm/src/glm)
 include_directories(${CMAKE_BINARY_DIR}/gli/src/gli)
 
-file(GLOB_RECURSE GLSL_SOURCE_FILES
-  "Shaders/*.vert"
-  "Shaders/*.tesc"
-  "Shaders/*.tese"
-  "Shaders/*.geom"
-  "Shaders/*.frag"
-  "Shaders/*.comp")
-
-set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
-
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Shaders $<TARGET_FILE_DIR:${TARGET_NAME}>/Shaders)
-
-foreach(GLSL ${GLSL_SOURCE_FILES})
-  get_filename_component(FILE_NAME ${GLSL} NAME)
-  add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o $<TARGET_FILE_DIR:${TARGET_NAME}>/Shaders/${FILE_NAME}.spv
-    DEPENDS ${GLSL})
-  
-endforeach(GLSL)
 
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Textures $<TARGET_FILE_DIR:${TARGET_NAME}>/Textures)

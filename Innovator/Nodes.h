@@ -6,7 +6,6 @@
 
 #include <gli/load.hpp>
 #include <vulkan/vulkan.h>
-#include <shaderc/shaderc.hpp>
 
 #include <map>
 #include <utility>
@@ -437,16 +436,25 @@ private:
   VkDescriptorSetLayoutBinding descriptor_set_layout_binding;
 };
 
-class ShaderNode : public Node {
+class Shader : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(ShaderNode)
-  ShaderNode() = delete;
-  virtual ~ShaderNode() = default;
+  NO_COPY_OR_ASSIGNMENT(Shader)
+  Shader() = delete;
+  virtual ~Shader() = default;
 
-  explicit ShaderNode(std::string filename, const VkShaderStageFlagBits stage):
+  explicit Shader(std::string filename, const VkShaderStageFlagBits stage):
     filename(std::move(filename)), 
     stage(stage)
-  {}
+  {
+    this->readFile();
+  }
+
+  void readFile() 
+  {
+    std::ifstream input(this->filename, std::ios::binary);
+    this->code = std::vector<char>((std::istreambuf_iterator<char>(input)),
+      (std::istreambuf_iterator<char>()));
+  }
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
@@ -473,75 +481,6 @@ protected:
   std::vector<uint32_t> module;
   VkShaderStageFlagBits stage;
   std::unique_ptr<VulkanShaderModule> shader;
-};
-
-class SPIRVShader : public ShaderNode {
-public:
-  NO_COPY_OR_ASSIGNMENT(SPIRVShader)
-    SPIRVShader() = delete;
-  virtual ~SPIRVShader() = default;
-
-  SPIRVShader(const std::string & filename, const VkShaderStageFlagBits stage) :
-    ShaderNode(filename, stage)
-  {
-    this->readFile();
-  }
-
-  void readFile() {
-    std::ifstream input(this->filename, std::ios::binary);
-    this->code = std::vector<char>((std::istreambuf_iterator<char>(input)),
-      (std::istreambuf_iterator<char>()));
-  }
-};
-
-class GLSLShader : public ShaderNode {
-public:
-  NO_COPY_OR_ASSIGNMENT(GLSLShader)
-  GLSLShader() = delete;
-  virtual ~GLSLShader() = default;
-
-  GLSLShader(const std::string & filename, const VkShaderStageFlagBits stage) :
-    ShaderNode(filename, stage)
-  {
-    this->readFile();
-  }
-
-  void readFile() {
-    std::ifstream input(this->filename);
-    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-
-    shaderc::CompileOptions options;
-    options.SetOptimizationLevel(shaderc_optimization_level_size);
-
-    shaderc::Compiler compiler;
-    shaderc::SpvCompilationResult module =
-      compiler.CompileGlslToSpv(source, shader_kind[stage], "shader_src", options);
-
-    if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-      throw std::runtime_error(module.GetErrorMessage());
-    }
-
-    this->code.clear();
-    for (auto word : module) {
-      const word_t m{ word };
-      for (char byte : m.bytes)
-        this->code.push_back(byte);
-    }
-  }
-
-  union word_t {
-    uint32_t word;
-    char bytes[4];
-  };
-
-  static inline std::map<VkShaderStageFlagBits, shaderc_shader_kind> shader_kind{
-    { VK_SHADER_STAGE_VERTEX_BIT, shaderc_glsl_vertex_shader },
-    { VK_SHADER_STAGE_FRAGMENT_BIT, shaderc_glsl_fragment_shader },
-    { VK_SHADER_STAGE_COMPUTE_BIT, shaderc_glsl_compute_shader },
-    { VK_SHADER_STAGE_GEOMETRY_BIT, shaderc_glsl_geometry_shader },
-    { VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, shaderc_glsl_tess_control_shader },
-    { VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, shaderc_glsl_tess_evaluation_shader },
-  };
 };
 
 class Sampler : public Node {
@@ -1132,13 +1071,12 @@ public:
     };
 
     this->children = {
-      std::make_shared<Transform>(vec3d{ 0, 0, 0 }, vec3d{ 1, 1, 1 }),
       std::make_shared<Sampler>(),
       std::make_shared<Image>("Textures/crate.dds"),
       std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
 
-      std::make_shared<SPIRVShader>("Shaders/vertex.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<SPIRVShader>("Shaders/fragment.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+      std::make_shared<Shader>("Shaders/vertex.vert", VK_SHADER_STAGE_VERTEX_BIT),
+      std::make_shared<Shader>("Shaders/fragment.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
 
       std::make_shared<BufferData<uint32_t>>(indices),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
