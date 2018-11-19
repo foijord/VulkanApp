@@ -117,21 +117,22 @@ inline std::shared_ptr<Separator> create_octree()
     std::make_shared<TransformBuffer>(),
     std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS),
 
+    std::make_shared<BufferData<float>>(std::vector<float>({
+      0, 0, 0, // 0
+      0, 0, 1, // 1
+      0, 1, 0, // 2
+      0, 1, 1, // 3
+      1, 0, 0, // 4
+      1, 0, 1, // 5
+      1, 1, 0, // 6
+      1, 1, 1, // 7
+    })),
+
     // wireframe cube outline
     std::make_shared<Separator>(std::vector<std::shared_ptr<Node>>{
       std::make_shared<GLSLShader>("Shaders/wireframe.vert", VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<GLSLShader>("Shaders/wireframe.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
 
-      std::make_shared<BufferData<float>>(std::vector<float>({
-        0, 0, 0, // 0
-        0, 0, 1, // 1
-        0, 1, 0, // 2
-        0, 1, 1, // 3
-        1, 0, 0, // 4
-        1, 0, 1, // 5
-        1, 1, 0, // 6
-        1, 1, 1, // 7
-        })),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
@@ -150,26 +151,26 @@ inline std::shared_ptr<Separator> create_octree()
       std::make_shared<GLSLShader>("Shaders/slice.vert", VK_SHADER_STAGE_VERTEX_BIT),
       std::make_shared<GLSLShader>("Shaders/slice.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
 
-      std::make_shared<BufferData<uint32_t>>(indices),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-      std::make_shared<BufferData<float>>(vertices),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
-      std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
-
-      //std::make_shared<BufferData<uint32_t>>(std::vector<uint32_t>({ 0, 1, 7, 7, 6, 0 })),
+      //std::make_shared<BufferData<uint32_t>>(indices),
       //std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       //std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       //std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-      //  
+
+      std::make_shared<BufferData<uint32_t>>(std::vector<uint32_t>({ 0, 1, 7, 7, 6, 0 })),
+      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+        
       //std::make_shared<BufferData<uint32_t>>(std::vector<uint32_t>({ 2, 3, 5, 5, 4, 2 })),
       //std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
       //std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
       //std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
+
+      //std::make_shared<BufferData<float>>(vertices),
+      //std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+      //std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+      //std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
+      //std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
 
       std::make_shared<BufferData<int32_t>>(create_octree(10)),
       std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),

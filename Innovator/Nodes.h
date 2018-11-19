@@ -299,7 +299,7 @@ public:
   NO_COPY_OR_ASSIGNMENT(HackathonOffset)
   HackathonOffset()
   {
-    this->offset = vec3f{ -0.5f, -0.5f, -0.5f };
+    this->offset = vec3f{ 0.0f, 0.0f, 0.0f };
     this->direction = normalize(vec3f{ 1.0f, 0.876f, 0.123f });
   }
   virtual ~HackathonOffset() = default;
@@ -307,7 +307,7 @@ public:
   void move()
   {
     this->offset = this->offset + this->direction * 0.01f;
-    const float limit = 0.75f;
+    const float limit = 0.5f;
     this->direction[0] *= calcBounceFactor(this->offset[0], limit);
     this->direction[1] *= calcBounceFactor(this->offset[1], limit);
     this->direction[2] *= calcBounceFactor(this->offset[2], limit);

@@ -20,7 +20,7 @@ out gl_PerVertex {
 void main() 
 {
   vec3 vertex = Position;
-  vertex += offset;
+  vertex += offset - vec3(0.5);
   
   texcoord = vertex * 0.5 + 0.5;
   
