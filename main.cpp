@@ -96,6 +96,78 @@ public:
   gli::texture texture;
 };
 
+class QTextureImage : public VulkanTextureImage {
+public:
+  NO_COPY_OR_ASSIGNMENT(QTextureImage)
+
+  explicit QTextureImage(const std::string & filename) :
+    image(QImage(filename.c_str()))
+  {}
+  virtual ~QTextureImage() = default;
+
+  VkExtent3D extent(size_t mip_level) const override
+  {
+    return {
+      static_cast<uint32_t>(this->image.size().width()),
+      static_cast<uint32_t>(this->image.size().height()),
+      1 
+    };
+  }
+
+  uint32_t base_level() const override
+  {
+    return 0;
+  }
+
+  uint32_t levels() const override
+  {
+    return 1;
+  }
+
+  uint32_t base_layer() const override
+  {
+    return 0;
+  }
+
+  uint32_t layers() const override
+  {
+    return 0;
+  }
+
+  size_t size() const override
+  {
+    return 0;
+  }
+
+  size_t size(size_t level) const override
+  {
+    return 0;
+  }
+
+  const void * data() const override
+  {
+    return nullptr;
+  }
+
+  VkFormat format() const override
+  {
+    return VK_FORMAT_R8G8B8A8_UNORM;
+  }
+
+  VkImageType image_type() const override
+  {
+    return VK_IMAGE_TYPE_2D;
+  }
+
+  VkImageViewType image_view_type() const override
+  {
+    return VK_IMAGE_VIEW_TYPE_2D;
+  }
+
+  QImage image;
+};
+
+
 static VkBool32 DebugCallback(
   VkFlags flags,
   VkDebugReportObjectTypeEXT type,
