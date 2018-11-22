@@ -30,6 +30,7 @@ add_executable(${TARGET_NAME}
   Innovator/Core/State.h
   Innovator/Core/VulkanObjects.h
   Innovator/Core/Misc/Defines.h
+  Innovator/Core/Misc/Factory.h
   Innovator/Core/Math/Vector.h
   Innovator/Core/Math/Matrix.h
   Innovator/Core/Math/Octree.h

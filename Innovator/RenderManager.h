@@ -5,7 +5,6 @@
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Node.h>
 #include <Innovator/Core/State.h>
-#include <Innovator/Core/VulkanObjects.h>
 
 #include <map>
 #include <memory>

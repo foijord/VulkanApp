@@ -179,15 +179,6 @@ class TransformBufferFunction : public Callable
   }
 };
 
-class BoxFunction : public Callable {
-public:
-  std::shared_ptr<Expression> operator()(const Expression *) const override
-  {
-    auto node = std::make_shared<Box>();
-    return std::make_shared<NodeExpression>(node);
-  }
-};
-
 static std::shared_ptr<Node> extract_node(const exp_ptr exp)
 {
   const auto node_exp = std::dynamic_pointer_cast<NodeExpression>(exp);
@@ -224,7 +215,6 @@ public:
       { "layout-binding", std::make_shared<LayoutBindingFunction>() },
       { "sampler", std::make_shared<SamplerFunction>() },
       { "indexeddrawcommand", std::make_shared<IndexedDrawCommandFunction>() },
-      { "box", std::make_shared<BoxFunction>() },
       { "image", std::make_shared<ImageFunction>() },
       { "bufferdataui", std::make_shared<BufferDataFunction<uint32_t>>() },
       { "bufferdataf", std::make_shared<BufferDataFunction<float>>() },

@@ -3,11 +3,12 @@
 #include <Innovator/RenderManager.h>
 #include <Innovator/Core/Node.h>
 #include <Innovator/Core/Math/Matrix.h>
+#include <Innovator/Core/Misc/Defines.h>
+#include <Innovator/Core/Misc/Factory.h>
 
 #include <gli/load.hpp>
 #include <vulkan/vulkan.h>
 
-#include <map>
 #include <utility>
 #include <vector>
 #include <memory>
@@ -519,107 +520,12 @@ private:
   std::unique_ptr<VulkanSampler> sampler;
 };
 
-
-class VulkanTextureImage {
-public:
-  VulkanTextureImage() = default;
-  VulkanTextureImage(VulkanTextureImage&&) = delete;
-  VulkanTextureImage(const VulkanTextureImage&) = default;
-  VulkanTextureImage & operator=(VulkanTextureImage&&) = delete;
-  VulkanTextureImage & operator=(const VulkanTextureImage&) = delete;
-
-  explicit VulkanTextureImage(const std::string & filename)
-    : texture(gli::load(filename))
-  {}
-  ~VulkanTextureImage() = default;
-
-  VkExtent3D extent(size_t mip_level = 0) const
-  {
-    return {
-      static_cast<uint32_t>(this->texture.extent(mip_level).x),
-      static_cast<uint32_t>(this->texture.extent(mip_level).y),
-      static_cast<uint32_t>(this->texture.extent(mip_level).z)
-    };
-  }
-
-  uint32_t base_level() const
-  {
-    return static_cast<uint32_t>(this->texture.base_level());
-  }
-
-  uint32_t levels() const
-  {
-    return static_cast<uint32_t>(this->texture.levels());
-  }
-
-  uint32_t base_layer() const
-  {
-    return static_cast<uint32_t>(this->texture.base_layer());
-  }
-
-  uint32_t layers() const
-  {
-    return static_cast<uint32_t>(this->texture.layers());
-  }
-
-  size_t size() const
-  {
-    return this->texture.size();
-  }
-
-  size_t size(size_t level) const
-  {
-    return this->texture.size(level);
-  }
-
-  const void * data() const
-  {
-    return this->texture.data();
-  }
-
-  VkFormat format() const
-  {
-    return vulkan_format[this->texture.format()];
-  }
-
-  VkImageType image_type() const
-  {
-    return vulkan_image_type[this->texture.target()];
-  }
-
-  VkImageViewType image_view_type() const
-  {
-    return vulkan_image_view_type[this->texture.target()];
-  }
-
-  inline static std::map<gli::format, VkFormat> vulkan_format{
-    { gli::format::FORMAT_R8_UNORM_PACK8, VkFormat::VK_FORMAT_R8_UNORM },
-    { gli::format::FORMAT_RGBA_DXT5_UNORM_BLOCK16, VkFormat::VK_FORMAT_BC3_UNORM_BLOCK },
-  };
-
-  inline static std::map<gli::target, VkImageViewType> vulkan_image_view_type{
-    { gli::target::TARGET_2D, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D },
-    { gli::target::TARGET_3D, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D },
-  };
-
-  inline static std::map<gli::target, VkImageType> vulkan_image_type{
-    { gli::target::TARGET_2D, VkImageType::VK_IMAGE_TYPE_2D },
-    { gli::target::TARGET_3D, VkImageType::VK_IMAGE_TYPE_3D },
-  };
-
-  gli::texture texture;
-};
-
 class Image : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Image)
 
-  explicit Image(const std::string & filename) :
-    Image(VulkanTextureImage(filename))
-  {}
-
-  explicit Image(const VulkanTextureImage & texture) :
-    texture(texture),
+  explicit Image(std::shared_ptr<VulkanTextureImage> texture) :
+    texture(std::move(texture)),
     sample_count(VK_SAMPLE_COUNT_1_BIT),
     sharing_mode(VK_SHARING_MODE_EXCLUSIVE),
     create_flags(0),
@@ -632,10 +538,14 @@ public:
       VK_COMPONENT_SWIZZLE_A}),       // a
     subresource_range({
       VK_IMAGE_ASPECT_COLOR_BIT,          // aspectMask 
-      this->texture.base_level(),         // baseMipLevel 
-      this->texture.levels(),             // levelCount 
-      this->texture.base_layer(),         // baseArrayLayer 
-      this->texture.layers()})            // layerCount 
+      this->texture->base_level(),         // baseMipLevel 
+      this->texture->levels(),             // levelCount 
+      this->texture->base_layer(),         // baseArrayLayer 
+      this->texture->layers()})            // layerCount 
+  {}
+
+  explicit Image(const std::string & filename) :
+    Image(VulkanImageFactory::Create(filename))
   {}
 
   virtual ~Image() = default;
@@ -647,15 +557,15 @@ private:
 
     THROW_ON_ERROR(vkGetPhysicalDeviceImageFormatProperties(
       allocator->device->physical_device.device,
-      this->texture.format(),
-      this->texture.image_type(),
+      this->texture->format(),
+      this->texture->image_type(),
       this->tiling,
       this->usage_flags,
       this->create_flags,
       &image_format_properties));
 
     this->buffer = std::make_shared<BufferObject>(
-      this->texture.size(),
+      this->texture->size(),
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -665,11 +575,11 @@ private:
     this->image = std::make_shared<ImageObject>(
       std::make_shared<VulkanImage>(
         allocator->device,
-        this->texture.image_type(),
-        this->texture.format(),
-        this->texture.extent(),
-        this->texture.levels(),
-        this->texture.layers(),
+        this->texture->image_type(),
+        this->texture->format(),
+        this->texture->extent(0),
+        this->texture->levels(),
+        this->texture->layers(),
         this->sample_count,
         this->tiling,
         this->usage_flags,
@@ -682,12 +592,12 @@ private:
 
   void doStage(MemoryStager * stager) override
   {
-    this->buffer->memcpy(this->texture.data());
+    this->buffer->memcpy(this->texture->data());
 
     this->view = std::make_unique<VulkanImageView>(
       this->image->image,
-      this->texture.format(),
-      this->texture.image_view_type(),
+      this->texture->format(),
+      this->texture->image_view_type(),
       this->component_mapping,
       this->subresource_range);
 
@@ -713,7 +623,7 @@ private:
     std::vector<VkBufferImageCopy> regions;
 
     VkDeviceSize buffer_offset = 0;
-    for (uint32_t mip_level = 0; mip_level < this->texture.levels(); mip_level++) {
+    for (uint32_t mip_level = 0; mip_level < this->texture->levels(); mip_level++) {
 
       const VkImageSubresourceLayers subresource_layers{
         this->subresource_range.aspectMask,               // aspectMask
@@ -728,10 +638,10 @@ private:
         0,                                         // bufferImageHeight
         subresource_layers,                        // imageSubresource
         { 0, 0, 0 },                               // imageOffset
-        this->texture.extent(mip_level),           // imageExtent
+        this->texture->extent(mip_level),           // imageExtent
       });
 
-      buffer_offset += this->texture.size(mip_level);
+      buffer_offset += this->texture->size(mip_level);
     }
 
     vkCmdCopyBufferToImage(stager->command,
@@ -751,7 +661,7 @@ private:
     };
   }
 
-  VulkanTextureImage texture;
+  std::shared_ptr<VulkanTextureImage> texture;
 
   std::shared_ptr<BufferObject> buffer;
   std::shared_ptr<ImageObject> image;
@@ -1030,69 +940,5 @@ private:
       vkCmdBindIndexBuffer(command, indexbuffer.buffer, 0, indexbuffer.type);
       vkCmdDrawIndexed(command, indexbuffer.count, 1, 0, 0, 1);
     }
-  }
-};
-
-class Box : public Separator {
-public:
-  NO_COPY_OR_ASSIGNMENT(Box)
-  virtual ~Box() = default;
-
-  Box()
-  {
-    //     5------7
-    //    /|     /|
-    //   / |    / |
-    //  1------3  |
-    //  |  4---|--6
-    //  z x    | /
-    //  |/     |/
-    //  0--y---2
-
-
-    std::vector<uint32_t> indices = {
-      0, 1, 3, 3, 2, 0, // -x
-      4, 6, 7, 7, 5, 4, // +x
-      0, 4, 5, 5, 1, 0, // -y
-      6, 2, 3, 3, 7, 6, // +y
-      0, 2, 6, 6, 4, 0, // -z
-      1, 5, 7, 7, 3, 1, // +z
-    };
-
-    std::vector<float> vertices = {
-      0, 0, 0, // 0
-      0, 0, 1, // 1
-      0, 1, 0, // 2
-      0, 1, 1, // 3
-      1, 0, 0, // 4
-      1, 0, 1, // 5
-      1, 1, 0, // 6
-      1, 1, 1, // 7
-    };
-
-    this->children = {
-      std::make_shared<Sampler>(),
-      std::make_shared<Image>("Textures/crate.dds"),
-      std::make_shared<DescriptorSetLayoutBinding>(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
-
-      std::make_shared<Shader>("Shaders/vertex.vert", VK_SHADER_STAGE_VERTEX_BIT),
-      std::make_shared<Shader>("Shaders/fragment.frag", VK_SHADER_STAGE_FRAGMENT_BIT),
-
-      std::make_shared<BufferData<uint32_t>>(indices),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<IndexBufferDescription>(VK_INDEX_TYPE_UINT32),
-
-      std::make_shared<BufferData<float>>(vertices),
-      std::make_shared<CpuMemoryBuffer>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-      std::make_shared<GpuMemoryBuffer>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-      std::make_shared<VertexInputAttributeDescription>(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),
-      std::make_shared<VertexInputBindingDescription>(0, 3, VK_VERTEX_INPUT_RATE_VERTEX),
-
-      std::make_shared<TransformBuffer>(),
-      std::make_shared<DescriptorSetLayoutBinding>(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
-
-      std::make_shared<IndexedDrawCommand>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-    };
   }
 };
