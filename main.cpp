@@ -259,7 +259,7 @@ public:
   {
     switch (e->key()) {
     case Qt::Key_R:
-      this->viewer->reloadShaders();
+      this->reloadShaders();
       break;
     default:
       break;

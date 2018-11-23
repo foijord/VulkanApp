@@ -2,7 +2,6 @@
 
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/VulkanObjects.h>
-#include <Innovator/RenderManager.h>
 #include <Innovator/Nodes.h>
 #include <Innovator/Camera.h>
 
@@ -44,12 +43,322 @@ public:
   VkSurfaceKHR surface { nullptr };
 };
 
+class VulkanSwapchainObject {
+public:
+  VulkanSwapchainObject(std::shared_ptr<VulkanInstance> vulkan,
+                        std::shared_ptr<VulkanDevice> device,
+                        VkSurfaceKHR surface,
+                        VkFormat depth_format,
+                        VkPresentModeKHR present_mode,
+                        VkSurfaceFormatKHR surface_format,
+                        VkSurfaceCapabilitiesKHR surface_capabilities,
+                        VkSwapchainKHR oldSwapchain) :
+    vulkan(std::move(vulkan)),
+    device(std::move(device))
+  {
+    // make sure all work submitted is done before we start recreating stuff
+    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
+
+    const auto physical_device = this->device->physical_device.device;
+
+    uint32_t mode_count;
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, surface, &mode_count, nullptr));
+    std::vector<VkPresentModeKHR> present_modes(mode_count);
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, surface, &mode_count, present_modes.data()));
+
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+      throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
+    }
+
+    this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
+
+    this->extent2d = surface_capabilities.currentExtent;
+    VkExtent3D extent3d = { this->extent2d.width, this->extent2d.height, 1 };
+
+    std::vector<VkImageMemoryBarrier> memory_barriers;
+    {
+      VkImageSubresourceRange subresource_range{
+        VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+      };
+
+      VkComponentMapping component_mapping{
+        VK_COMPONENT_SWIZZLE_R,
+        VK_COMPONENT_SWIZZLE_G,
+        VK_COMPONENT_SWIZZLE_B,
+        VK_COMPONENT_SWIZZLE_A
+      };
+
+      this->color_buffer = std::make_shared<VulkanImage>(
+        this->device,
+        VK_IMAGE_TYPE_2D,
+        surface_format.format,
+        extent3d,
+        subresource_range.levelCount,
+        subresource_range.layerCount,
+        VK_SAMPLE_COUNT_1_BIT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        VK_SHARING_MODE_EXCLUSIVE);
+
+      this->color_buffer_object = std::make_unique<ImageObject>(
+        this->color_buffer,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      this->color_buffer_object->bind();
+
+      this->color_buffer_view = std::make_unique<VulkanImageView>(
+        this->color_buffer,
+        surface_format.format,
+        VK_IMAGE_VIEW_TYPE_2D,
+        component_mapping,
+        subresource_range);
+
+      memory_barriers.push_back({
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        0,                                                             // srcAccessMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
+        this->device->default_queue_index,                             // srcQueueFamilyIndex
+        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        this->color_buffer->image,                                     // image
+        subresource_range                                              // subresourceRange
+        });
+    }
+    {
+      VkImageSubresourceRange subresource_range{
+        VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1
+      };
+
+      VkComponentMapping component_mapping{
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY
+      };
+
+      this->depth_buffer = std::make_shared<VulkanImage>(
+        this->device,
+        VK_IMAGE_TYPE_2D,
+        depth_format,
+        extent3d,
+        subresource_range.levelCount,
+        subresource_range.layerCount,
+        VK_SAMPLE_COUNT_1_BIT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_SHARING_MODE_EXCLUSIVE);
+
+      this->depth_buffer_object = std::make_unique<ImageObject>(
+        this->depth_buffer,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      this->depth_buffer_object->bind();
+
+      this->depth_buffer_view = std::make_unique<VulkanImageView>(
+        this->depth_buffer,
+        depth_format,
+        VK_IMAGE_VIEW_TYPE_2D,
+        component_mapping,
+        subresource_range);
+
+      memory_barriers.push_back({
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        0,                                                             // srcAccessMask
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,                  // dstAccessMask
+        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,              // newLayout
+        this->device->default_queue_index,                             // srcQueueFamilyIndex
+        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        this->depth_buffer->image,                                     // image
+        subresource_range                                              // subresourceRange
+        });
+    }
+
+    this->swapchain = std::make_unique<VulkanSwapchain>(
+      this->device,
+      this->vulkan,
+      surface,
+      3,
+      surface_format.format,
+      surface_format.colorSpace,
+      this->extent2d,
+      1,
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+      VK_SHARING_MODE_EXCLUSIVE,
+      std::vector<uint32_t>{ this->device->default_queue_index },
+      surface_capabilities.currentTransform,
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+      present_mode,
+      VK_FALSE,
+      oldSwapchain);
+
+    auto swapchain_images = this->swapchain->getSwapchainImages();
+    {
+      for (auto& swapchain_image : swapchain_images) {
+        memory_barriers.push_back({
+          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+          nullptr,                                                       // pNext
+          0,                                                             // srcAccessMask
+          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+          VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
+          this->device->default_queue_index,                             // srcQueueFamilyIndex
+          this->device->default_queue_index,                             // dstQueueFamilyIndex
+          swapchain_image,                                               // image
+          { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }                      // subresourceRange
+          });
+      }
+
+      VulkanCommandBuffers command(this->device);
+      {
+        VulkanCommandBufferScope command_scope(command.buffer());
+
+        vkCmdPipelineBarrier(command.buffer(),
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          0, 0, nullptr, 0, nullptr,
+          static_cast<uint32_t>(memory_barriers.size()),
+          memory_barriers.data());
+      }
+
+      command.submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+      THROW_ON_ERROR(vkQueueWaitIdle(this->device->default_queue));
+    }
+
+    const VkImageSubresourceRange subresource_range{
+      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+    };
+
+    std::vector<VkImageMemoryBarrier> src_image_barriers{ {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+        VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
+        this->device->default_queue_index,                             // srcQueueFamilyIndex
+        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        nullptr,                                                       // image
+        subresource_range,                                             // subresourceRange
+      },{
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+        VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
+        this->device->default_queue_index,                             // srcQueueFamilyIndex
+        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        nullptr,                                                       // image
+        subresource_range,                                             // subresourceRange
+      } };
+
+    auto dst_image_barriers = src_image_barriers;
+    std::swap(dst_image_barriers[0].oldLayout, dst_image_barriers[0].newLayout);
+    std::swap(dst_image_barriers[1].oldLayout, dst_image_barriers[1].newLayout);
+    std::swap(dst_image_barriers[0].srcAccessMask, dst_image_barriers[0].dstAccessMask);
+    std::swap(dst_image_barriers[1].srcAccessMask, dst_image_barriers[1].dstAccessMask);
+
+    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(this->device, swapchain_images.size());
+
+    for (uint32_t i = 0; i < swapchain_images.size(); i++) {
+      src_image_barriers[1].image = this->color_buffer->image;
+      dst_image_barriers[1].image = this->color_buffer->image;
+      src_image_barriers[0].image = swapchain_images[i];
+      dst_image_barriers[0].image = swapchain_images[i];
+
+      VulkanCommandBufferScope command_scope(this->swap_buffers_command->buffer(i));
+
+      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0, 0, nullptr, 0, nullptr,
+        static_cast<uint32_t>(src_image_barriers.size()),
+        src_image_barriers.data());
+
+      const VkImageSubresourceLayers subresource_layers{
+        subresource_range.aspectMask,     // aspectMask
+        subresource_range.baseMipLevel,   // mipLevel
+        subresource_range.baseArrayLayer, // baseArrayLayer
+        subresource_range.layerCount      // layerCount;
+      };
+
+      const VkOffset3D offset = {
+        0, 0, 0
+      };
+
+      VkImageCopy image_copy{
+        subresource_layers,             // srcSubresource
+        offset,                         // srcOffset
+        subresource_layers,             // dstSubresource
+        offset,                         // dstOffset
+        extent3d                        // extent
+      };
+
+      vkCmdCopyImage(this->swap_buffers_command->buffer(i),
+        this->color_buffer->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        swapchain_images[i],
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &image_copy);
+
+      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0, 0, nullptr, 0, nullptr,
+        static_cast<uint32_t>(dst_image_barriers.size()),
+        dst_image_barriers.data());
+    }
+  }
+
+  void swapBuffers() const
+  {
+    auto image_index = this->swapchain->getNextImageIndex(this->semaphore);
+
+    this->swap_buffers_command->submit(this->device->default_queue,
+      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      image_index,
+      { this->semaphore->semaphore });
+
+    VkPresentInfoKHR present_info{
+      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
+      nullptr,                            // pNext
+      0,                                  // waitSemaphoreCount
+      nullptr,                            // pWaitSemaphores
+      1,                                  // swapchainCount
+      &this->swapchain->swapchain,        // pSwapchains
+      &image_index,                       // pImageIndices
+      nullptr                             // pResults
+    };
+
+    THROW_ON_ERROR(this->vulkan->vkQueuePresent(this->device->default_queue, &present_info));
+  }
+
+  std::shared_ptr<VulkanInstance> vulkan;
+  std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanSemaphore> semaphore;
+  std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
+  std::shared_ptr<VulkanImage> color_buffer;
+  std::unique_ptr<ImageObject> color_buffer_object;
+  std::unique_ptr<VulkanImageView> color_buffer_view;
+  std::shared_ptr<VulkanImage> depth_buffer;
+  std::unique_ptr<ImageObject> depth_buffer_object;
+  std::unique_ptr<VulkanImageView> depth_buffer_view;
+  std::unique_ptr<VulkanSwapchain> swapchain;
+
+  VkExtent2D extent2d{ 0, 0 };
+};
+
 class VulkanViewer {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanViewer)
   VulkanViewer() = delete;
 
-  VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, std::shared_ptr<::VulkanSurface> surface, std::shared_ptr<Camera> camera) :
+  VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, 
+               std::shared_ptr<::VulkanSurface> surface, 
+               std::shared_ptr<Camera> camera) :
     vulkan(std::move(vulkan)),
     surface(std::move(surface)),
     camera(std::move(camera))
@@ -91,14 +400,11 @@ public:
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
-    this->device = std::make_shared<VulkanDevice>(
-      physical_device,
-      required_device_features,
-      device_layers,
-      device_extensions,
-      queue_create_info);
-
-    this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
+    this->device = std::make_shared<VulkanDevice>(physical_device,
+                                                  required_device_features,
+                                                  device_layers,
+                                                  device_extensions,
+                                                  queue_create_info);
 
     uint32_t format_count;
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface, &format_count, nullptr));
@@ -107,20 +413,9 @@ public:
 
     this->surface_format = surface_formats[0];
 
-    uint32_t mode_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &mode_count, nullptr));
-    std::vector<VkPresentModeKHR> present_modes(mode_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &mode_count, present_modes.data()));
-
-    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
-      throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
-    }
-
-    this->color_format = this->surface_format.format;
-
     std::vector<VkAttachmentDescription> attachment_descriptions{ {
         0,                                                    // flags
-        this->color_format,                                   // format
+        this->surface_format.format,                          // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
         VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
         VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
@@ -168,7 +463,29 @@ public:
 
     this->renderaction = std::make_unique<RenderManager>(this->device);
 
-    this->rebuildSwapchain();
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
+                                                                        this->surface->surface,
+                                                                        &this->surface_capabilities));
+
+    this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
+                                                              this->device,
+                                                              this->surface->surface,
+                                                              this->depth_format,
+                                                              this->present_mode,
+                                                              this->surface_format,
+                                                              this->surface_capabilities,
+                                                              nullptr);
+
+    std::vector<VkImageView> framebuffer_attachments{
+      this->swapchain->color_buffer_view->view,
+      this->swapchain->depth_buffer_view->view,
+    };
+
+    this->framebuffer = std::make_unique<VulkanFramebuffer>(this->device,
+                                                            this->renderpass,
+                                                            framebuffer_attachments,
+                                                            this->swapchain->extent2d,
+                                                            1);
   }
 
   ~VulkanViewer()
@@ -192,7 +509,7 @@ public:
     this->renderaction->record(this->root.get(),
       this->framebuffer->framebuffer,
       this->renderpass->renderpass,
-      this->extent2d);
+      this->swapchain->extent2d);
   }
 
   void render() const
@@ -201,34 +518,13 @@ public:
       this->framebuffer->framebuffer,
       this->renderpass->renderpass,
       this->camera.get(),
-      this->extent2d);
+      this->swapchain->extent2d);
   }
 
-  void redraw()
+  void redraw() const
   {
     this->render();
     this->swapBuffers();
-  }
-
-  void reloadShaders()
-  {
-    try {
-      std::vector<std::shared_ptr<Shader>> shaders;
-      SearchAction(this->root, shaders);
-
-      MemoryAllocator allocator(this->device);
-
-      for (auto & shader : shaders) {
-        shader->readFile();
-        shader->alloc(&allocator);
-      }
-
-      this->pipeline();
-      this->record();
-      this->redraw();
-    } catch (std::exception & e) {
-      std::cerr << e.what() << std::endl;
-    }
   }
 
   void setSceneGraph(std::shared_ptr<Separator> scene)
@@ -244,34 +540,15 @@ public:
     this->renderaction->record(this->root.get(), 
                                this->framebuffer->framebuffer, 
                                this->renderpass->renderpass, 
-                               this->extent2d);
+                               this->swapchain->extent2d);
   }
 
-  void swapBuffers()
+  void swapBuffers() const
   {
     try {
-      auto image_index = this->swapchain->getNextImageIndex(this->semaphore);
-
-      this->swap_buffers_command->submit(this->device->default_queue,
-                                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                         image_index,
-                                         { this->semaphore->semaphore });
-
-      VkPresentInfoKHR present_info{
-        VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
-        nullptr,                            // pNext
-        0,                                  // waitSemaphoreCount
-        nullptr,                            // pWaitSemaphores
-        1,                                  // swapchainCount
-        &this->swapchain->swapchain,        // pSwapchains
-        &image_index,                       // pImageIndices
-        nullptr                             // pResults
-      };
-
-      THROW_ON_ERROR(this->vulkan->vkQueuePresent(this->device->default_queue, &present_info));
+      this->swapchain->swapBuffers();
     }
     catch (VkErrorOutOfDateException &) {
-      this->rebuildSwapchain();
     }
     catch (std::exception & e) {
       std::cout << e.what() << std::endl;
@@ -280,312 +557,58 @@ public:
 
   void resize()
   {
-    this->rebuildSwapchain();
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
+                                                                        this->surface->surface,
+                                                                        &this->surface_capabilities));
 
-    this->camera->aspectratio = static_cast<float>(this->extent2d.width) /
-                                static_cast<float>(this->extent2d.height);
+    this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
+                                                              this->device,
+                                                              this->surface->surface,
+                                                              this->depth_format,
+                                                              this->present_mode,
+                                                              this->surface_format,
+                                                              this->surface_capabilities,
+                                                              this->swapchain->swapchain->swapchain);
+    std::vector<VkImageView> framebuffer_attachments{
+      this->swapchain->color_buffer_view->view,
+      this->swapchain->depth_buffer_view->view,
+    };
+
+    this->framebuffer = std::make_unique<VulkanFramebuffer>(this->device,
+                                                            this->renderpass,
+                                                            framebuffer_attachments,
+                                                            this->swapchain->extent2d,
+                                                            1);
+
+    this->camera->aspectratio = static_cast<float>(this->swapchain->extent2d.width) /
+                                static_cast<float>(this->swapchain->extent2d.height);
 
     this->renderaction->record(this->root.get(),
                                this->framebuffer->framebuffer,
                                this->renderpass->renderpass,
-                               this->extent2d);
+                               this->swapchain->extent2d);
 
     this->renderaction->render(this->root.get(), 
                                this->framebuffer->framebuffer,
                                this->renderpass->renderpass,
                                this->camera.get(), 
-                               this->extent2d);
+                               this->swapchain->extent2d);
 
     this->swapBuffers();
-  }
-
-  void rebuildSwapchain()
-  {
-    // make sure all work submitted is done before we start recreating stuff
-    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
-
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(
-      this->device->physical_device.device,
-      this->surface->surface,
-      &surface_capabilities));
-
-    this->extent2d = surface_capabilities.currentExtent;
-    VkExtent3D extent3d = { this->extent2d.width, this->extent2d.height, 1 };
-
-    std::vector<VkImageMemoryBarrier> memory_barriers;
-    {
-      VkImageSubresourceRange subresource_range{
-        VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
-      };
-
-      VkComponentMapping component_mapping{
-        VK_COMPONENT_SWIZZLE_R,
-        VK_COMPONENT_SWIZZLE_G,
-        VK_COMPONENT_SWIZZLE_B,
-        VK_COMPONENT_SWIZZLE_A
-      };
-
-      this->color_buffer = std::make_shared<VulkanImage>(
-        this->device,
-        VK_IMAGE_TYPE_2D,
-        this->color_format,
-        extent3d,
-        subresource_range.levelCount,
-        subresource_range.layerCount,
-        VK_SAMPLE_COUNT_1_BIT,
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        VK_SHARING_MODE_EXCLUSIVE);
-
-      this->color_buffer_object = std::make_unique<ImageObject>(
-        this->color_buffer,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-      this->color_buffer_object->bind();
-
-      this->color_buffer_view = std::make_unique<VulkanImageView>(
-        this->color_buffer,
-        this->color_format,
-        VK_IMAGE_VIEW_TYPE_2D,
-        component_mapping,
-        subresource_range);
-
-      memory_barriers.push_back({
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
-        nullptr,                                                       // pNext
-        0,                                                             // srcAccessMask
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
-        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
-        this->device->default_queue_index,                             // srcQueueFamilyIndex
-        this->device->default_queue_index,                             // dstQueueFamilyIndex
-        this->color_buffer->image,                                     // image
-        subresource_range                                              // subresourceRange
-        });
-    }
-    {
-      VkImageSubresourceRange subresource_range{
-        VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1
-      };
-
-      VkComponentMapping component_mapping{
-        VK_COMPONENT_SWIZZLE_IDENTITY,
-        VK_COMPONENT_SWIZZLE_IDENTITY,
-        VK_COMPONENT_SWIZZLE_IDENTITY,
-        VK_COMPONENT_SWIZZLE_IDENTITY
-      };
-
-      this->depth_buffer = std::make_shared<VulkanImage>(
-        this->device,
-        VK_IMAGE_TYPE_2D,
-        this->depth_format,
-        extent3d,
-        subresource_range.levelCount,
-        subresource_range.layerCount,
-        VK_SAMPLE_COUNT_1_BIT,
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        VK_SHARING_MODE_EXCLUSIVE);
-
-      this->depth_buffer_object = std::make_unique<ImageObject>(
-        this->depth_buffer,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-      this->depth_buffer_object->bind();
-
-      this->depth_buffer_view = std::make_unique<VulkanImageView>(
-        this->depth_buffer,
-        this->depth_format,
-        VK_IMAGE_VIEW_TYPE_2D,
-        component_mapping,
-        subresource_range);
-
-      memory_barriers.push_back({
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
-        nullptr,                                                       // pNext
-        0,                                                             // srcAccessMask
-        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,                  // dstAccessMask
-        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,              // newLayout
-        this->device->default_queue_index,                             // srcQueueFamilyIndex
-        this->device->default_queue_index,                             // dstQueueFamilyIndex
-        this->depth_buffer->image,                                     // image
-        subresource_range                                              // subresourceRange
-      });
-    }
-
-    std::vector<VkImageView> framebuffer_attachments{
-      this->color_buffer_view->view,
-      this->depth_buffer_view->view,
-    };
-
-    this->framebuffer = std::make_unique<VulkanFramebuffer>(
-      this->device,
-      this->renderpass,
-      framebuffer_attachments,
-      this->extent2d,
-      1);
-
-    this->swapchain = std::make_unique<VulkanSwapchain>(
-      this->device,
-      this->vulkan,
-      this->surface->surface,
-      3,
-      this->surface_format.format,
-      this->surface_format.colorSpace,
-      this->extent2d,
-      1,
-      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-      VK_SHARING_MODE_EXCLUSIVE,
-      std::vector<uint32_t>{ this->device->default_queue_index },
-      surface_capabilities.currentTransform,
-      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-      this->present_mode,
-      VK_FALSE,
-      this->swapchain ? this->swapchain->swapchain : nullptr);
-
-    auto swapchain_images = this->swapchain->getSwapchainImages();
-    {
-      for (auto& swapchain_image : swapchain_images) {
-        memory_barriers.push_back({
-          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
-          nullptr,                                                       // pNext
-          0,                                                             // srcAccessMask
-          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
-          VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
-          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
-          this->device->default_queue_index,                             // srcQueueFamilyIndex
-          this->device->default_queue_index,                             // dstQueueFamilyIndex
-          swapchain_image,                                               // image
-          { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }                      // subresourceRange
-        });
-      }
-
-      VulkanCommandBuffers command(this->device);
-      {
-        VulkanCommandBufferScope command_scope(command.buffer());
-
-        vkCmdPipelineBarrier(command.buffer(),
-                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                             0, 0, nullptr, 0, nullptr,
-                             static_cast<uint32_t>(memory_barriers.size()),
-                             memory_barriers.data());
-      }
-
-      command.submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-      THROW_ON_ERROR(vkQueueWaitIdle(this->device->default_queue));
-    }
-
-    const VkImageSubresourceRange subresource_range{
-      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
-    };
-
-    std::vector<VkImageMemoryBarrier> src_image_barriers{ {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
-        nullptr,                                                       // pNext
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
-        VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // oldLayout
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
-        this->device->default_queue_index,                             // srcQueueFamilyIndex
-        this->device->default_queue_index,                             // dstQueueFamilyIndex
-        nullptr,                                                       // image
-        subresource_range,                                             // subresourceRange
-      },{
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
-        nullptr,                                                       // pNext
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
-        VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
-        this->device->default_queue_index,                             // srcQueueFamilyIndex
-        this->device->default_queue_index,                             // dstQueueFamilyIndex
-        nullptr,                                                       // image
-        subresource_range,                                             // subresourceRange
-    } };
-
-    auto dst_image_barriers = src_image_barriers;
-    std::swap(dst_image_barriers[0].oldLayout, dst_image_barriers[0].newLayout);
-    std::swap(dst_image_barriers[1].oldLayout, dst_image_barriers[1].newLayout);
-    std::swap(dst_image_barriers[0].srcAccessMask, dst_image_barriers[0].dstAccessMask);
-    std::swap(dst_image_barriers[1].srcAccessMask, dst_image_barriers[1].dstAccessMask);
-
-    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(this->device, swapchain_images.size());
-
-    for (uint32_t i = 0; i < swapchain_images.size(); i++) {
-      src_image_barriers[1].image = color_buffer->image;
-      dst_image_barriers[1].image = color_buffer->image;
-      src_image_barriers[0].image = swapchain_images[i];
-      dst_image_barriers[0].image = swapchain_images[i];
-
-      VulkanCommandBufferScope command_scope(this->swap_buffers_command->buffer(i));
-
-      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(src_image_barriers.size()),
-        src_image_barriers.data());
-
-      const VkImageSubresourceLayers subresource_layers{
-        subresource_range.aspectMask,     // aspectMask
-        subresource_range.baseMipLevel,   // mipLevel
-        subresource_range.baseArrayLayer, // baseArrayLayer
-        subresource_range.layerCount      // layerCount;
-      };
-
-      const VkOffset3D offset = {
-        0, 0, 0
-      };
-
-      VkImageCopy image_copy{
-        subresource_layers,             // srcSubresource
-        offset,                         // srcOffset
-        subresource_layers,             // dstSubresource
-        offset,                         // dstOffset
-        extent3d                        // extent
-      };
-
-      vkCmdCopyImage(this->swap_buffers_command->buffer(i),
-                     this->color_buffer->image,
-                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                     swapchain_images[i],
-                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                     1,
-                     &image_copy);
-
-      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
-                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                           0, 0, nullptr, 0, nullptr,
-                           static_cast<uint32_t>(dst_image_barriers.size()),
-                           dst_image_barriers.data());
-    }
   }
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<::VulkanSurface> surface;
   std::shared_ptr<Camera> camera;
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanSemaphore> semaphore;
-  std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
   std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFramebuffer> framebuffer;
-  std::shared_ptr<VulkanImage> color_buffer;
-  std::unique_ptr<ImageObject> color_buffer_object;
-  std::unique_ptr<VulkanImageView> color_buffer_view;
-  std::shared_ptr<VulkanImage> depth_buffer;
-  std::unique_ptr<ImageObject> depth_buffer_object;
-  std::unique_ptr<VulkanImageView> depth_buffer_view;
   std::unique_ptr<RenderManager> renderaction;
-  std::unique_ptr<VulkanSwapchain> swapchain;
+  std::unique_ptr<VulkanSwapchainObject> swapchain;
   std::shared_ptr<Separator> root;
 
-  VkExtent2D extent2d{ 0, 0 };
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
-  VkFormat color_format;
-
   VkPresentModeKHR present_mode{ VK_PRESENT_MODE_MAILBOX_KHR };
   VkSurfaceFormatKHR surface_format{};
+  VkSurfaceCapabilitiesKHR surface_capabilities{};
 };
