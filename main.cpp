@@ -7,8 +7,41 @@
 #include <Innovator/Core/Misc/Factory.h>
 
 #include <QApplication>
+#include <QWindow>
+#include <QMouseEvent>
 
 #include <iostream>
+
+static VkBool32 DebugCallback(
+  VkFlags flags,
+  VkDebugReportObjectTypeEXT type,
+  uint64_t src,
+  size_t location,
+  int32_t code,
+  const char *layer,
+  const char *msg,
+  void *)
+{
+  std::string message;
+  if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
+    message += "ERROR: ";
+  }
+  if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT) {
+    message += "DEBUG: ";
+  }
+  if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
+    message += "WARNING: ";
+  }
+  if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT) {
+    message += "INFORMATION: ";
+  }
+  if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) {
+    message += "PERFORMANCE_WARNING: ";
+  }
+  message += std::string(layer) + " " + std::string(msg);
+  std::cout << message << std::endl;
+  return VK_FALSE;
+}
 
 class GLITextureImage : public VulkanTextureImage {
 public:
@@ -167,37 +200,110 @@ public:
   QImage image;
 };
 
+class QVulkanViewer : public QWindow {
+public:
+  NO_COPY_OR_ASSIGNMENT(QVulkanViewer)
+  QVulkanViewer() = delete;
+  ~QVulkanViewer() = default;
 
-static VkBool32 DebugCallback(
-  VkFlags flags,
-  VkDebugReportObjectTypeEXT type,
-  uint64_t src,
-  size_t location,
-  int32_t code,
-  const char *layer,
-  const char *msg,
-  void *)
-{
-  std::string message;
-  if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
-    message += "ERROR: ";
+  QVulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) :
+    QWindow(parent)
+  {
+    this->camera = std::make_shared<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f);
+    this->camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
+
+    this->surface = std::make_shared<::VulkanSurface>(
+      vulkan,
+      reinterpret_cast<HWND>(this->winId()),
+      GetModuleHandle(nullptr));
+
+    this->viewer = std::make_shared<VulkanViewer>(vulkan, this->surface, this->camera);
   }
-  if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT) {
-    message += "DEBUG: ";
+
+  void loadSceneGraph(const std::string & filename)
+  {
+    File file;
+    this->scene = file.open("Scenes/crate.scene");
+    this->viewer->setSceneGraph(scene);
   }
-  if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
-    message += "WARNING: ";
+
+  void resizeEvent(QResizeEvent * e) override
+  {
+    QWindow::resizeEvent(e);
+    this->viewer->resize();
   }
-  if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT) {
-    message += "INFORMATION: ";
+
+  void reloadShaders() const
+  {
+    try {
+      std::vector<std::shared_ptr<Shader>> shaders;
+      SearchAction(this->scene, shaders);
+
+      MemoryAllocator allocator(this->viewer->device);
+
+      for (auto & shader : shaders) {
+        shader->readFile();
+        shader->alloc(&allocator);
+      }
+
+      this->viewer->pipeline();
+      this->viewer->record();
+      this->viewer->redraw();
+    }
+    catch (std::exception & e) {
+      std::cerr << e.what() << std::endl;
+    }
   }
-  if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) {
-    message += "PERFORMANCE_WARNING: ";
+
+  void keyPressEvent(QKeyEvent * e) override
+  {
+    switch (e->key()) {
+    case Qt::Key_R:
+      this->viewer->reloadShaders();
+      break;
+    default:
+      break;
+    }
   }
-  message += std::string(layer) + " " + std::string(msg);
-  std::cout << message << std::endl;
-  return VK_FALSE;
-}
+
+  void mousePressEvent(QMouseEvent * e) override
+  {
+    this->button = e->button();
+    this->mouse_pos = { static_cast<float>(e->x()), static_cast<float>(e->y()) };
+    this->mouse_pressed = true;
+  }
+
+  void mouseReleaseEvent(QMouseEvent *) override
+  {
+    this->mouse_pressed = false;
+  }
+
+  void mouseMoveEvent(QMouseEvent * e) override
+  {
+    if (this->mouse_pressed) {
+      const vec2d pos = { static_cast<double>(e->x()), static_cast<double>(e->y()) };
+      vec2d dx = (this->mouse_pos - pos) * .01;
+      dx[1] = -dx[1];
+      switch (this->button) {
+      case Qt::MiddleButton: this->camera->pan(dx); break;
+      case Qt::LeftButton: this->camera->orbit(dx); break;
+      case Qt::RightButton: this->camera->zoom(dx[1]); break;
+      default: break;
+      }
+      this->mouse_pos = pos;
+      this->viewer->redraw();
+    }
+  }
+
+  std::shared_ptr<::VulkanSurface> surface;
+  std::shared_ptr<Camera> camera;
+  std::shared_ptr<VulkanViewer> viewer;
+  std::shared_ptr<Separator> scene;
+
+  Qt::MouseButton button{ Qt::MouseButton::NoButton };
+  bool mouse_pressed{ false };
+  vec2d mouse_pos{};
+};
 
 class VulkanApplication : public QApplication {
 public:
@@ -258,12 +364,8 @@ int main(int argc, char *argv[])
 
     VulkanApplication app(argc, argv);
 
-    File file;
-    const auto scene = file.open("Scenes/crate.scene");
-
-    VulkanViewer viewer(vulkan);
-    //viewer.setSceneGraph(create_octree());
-    viewer.setSceneGraph(scene);
+    QVulkanViewer viewer(vulkan);
+    viewer.loadSceneGraph("Scenes/crate.scene");
     viewer.resize(512, 512);
     viewer.show();
 

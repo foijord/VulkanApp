@@ -6,8 +6,6 @@
 #include <Innovator/Nodes.h>
 #include <Innovator/Camera.h>
 
-#include <QWindow>
-#include <QMouseEvent>
 
 #include <map>
 #include <string>
@@ -46,23 +44,16 @@ public:
   VkSurfaceKHR surface { nullptr };
 };
 
-class VulkanViewer : public QWindow {
+class VulkanViewer {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanViewer)
   VulkanViewer() = delete;
 
-  explicit VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) : 
-    QWindow(parent),
+  VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, std::shared_ptr<::VulkanSurface> surface, std::shared_ptr<Camera> camera) :
     vulkan(std::move(vulkan)),
-    camera(std::make_unique<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f))
+    surface(std::move(surface)),
+    camera(std::move(camera))
   {
-    this->camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
-
-    this->surface = std::make_shared<::VulkanSurface>(
-      this->vulkan,
-      reinterpret_cast<HWND>(this->winId()),
-      GetModuleHandle(nullptr));
-
     VkPhysicalDeviceFeatures required_device_features;
     ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
     required_device_features.geometryShader = VK_TRUE;
@@ -190,6 +181,35 @@ public:
     }
   }
 
+  void pipeline() const
+  {
+    this->renderaction->pipeline(this->root.get(),
+      this->renderpass->renderpass);
+  }
+
+  void record() const
+  {
+    this->renderaction->record(this->root.get(),
+      this->framebuffer->framebuffer,
+      this->renderpass->renderpass,
+      this->extent2d);
+  }
+
+  void render() const
+  {
+    this->renderaction->render(this->root.get(),
+      this->framebuffer->framebuffer,
+      this->renderpass->renderpass,
+      this->camera.get(),
+      this->extent2d);
+  }
+
+  void redraw()
+  {
+    this->render();
+    this->swapBuffers();
+  }
+
   void reloadShaders()
   {
     try {
@@ -203,22 +223,9 @@ public:
         shader->alloc(&allocator);
       }
 
-      this->renderaction->pipeline(this->root.get(),
-        this->renderpass->renderpass);
-
-      this->renderaction->record(this->root.get(),
-        this->framebuffer->framebuffer,
-        this->renderpass->renderpass,
-        this->extent2d);
-
-      this->renderaction->render(this->root.get(),
-        this->framebuffer->framebuffer,
-        this->renderpass->renderpass,
-        this->camera.get(),
-        this->extent2d);
-
-      this->swapBuffers();
-
+      this->pipeline();
+      this->record();
+      this->redraw();
     } catch (std::exception & e) {
       std::cerr << e.what() << std::endl;
     }
@@ -271,9 +278,8 @@ public:
     }
   }
 
-  void resizeEvent(QResizeEvent * e) override
+  void resize()
   {
-    QWindow::resizeEvent(e);
     this->rebuildSwapchain();
 
     this->camera->aspectratio = static_cast<float>(this->extent2d.width) /
@@ -558,60 +564,9 @@ public:
     }
   }
 
-  void keyPressEvent(QKeyEvent * e) override
-  {
-    switch (e->key()) {
-    case Qt::Key_R:
-      this->reloadShaders();
-      break;
-    default:
-      break;      
-    }
-  }
-
-  void keyReleaseEvent(QKeyEvent * e) override
-  {
-  }
-
-  void mousePressEvent(QMouseEvent * e) override
-  {
-    this->button = e->button();
-    this->mouse_pos = { static_cast<float>(e->x()), static_cast<float>(e->y()) };
-    this->mouse_pressed = true;
-  }
-
-  void mouseReleaseEvent(QMouseEvent *) override
-  {
-    this->mouse_pressed = false;
-  }
-
-  void mouseMoveEvent(QMouseEvent * e) override
-  {
-    if (this->mouse_pressed) {
-      const vec2d pos = { static_cast<double>(e->x()), static_cast<double>(e->y()) };
-      vec2d dx = (this->mouse_pos - pos) * .01;
-      dx[1] = -dx[1];
-      switch (this->button) {
-      case Qt::MiddleButton: this->camera->pan(dx); break;
-      case Qt::LeftButton: this->camera->orbit(dx); break;
-      case Qt::RightButton: this->camera->zoom(dx[1]); break;
-      default: break;
-      }
-      this->mouse_pos = pos;
-
-      this->renderaction->render(this->root.get(), 
-                                 this->framebuffer->framebuffer,
-                                 this->renderpass->renderpass,
-                                 this->camera.get(), 
-                                 this->extent2d);
-
-      this->swapBuffers();
-    }
-  }
-
   std::shared_ptr<VulkanInstance> vulkan;
-  std::unique_ptr<Camera> camera;
   std::shared_ptr<::VulkanSurface> surface;
+  std::shared_ptr<Camera> camera;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanSemaphore> semaphore;
   std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
@@ -633,8 +588,4 @@ public:
 
   VkPresentModeKHR present_mode{ VK_PRESENT_MODE_MAILBOX_KHR };
   VkSurfaceFormatKHR surface_format{};
-
-  Qt::MouseButton button{ Qt::MouseButton::NoButton };
-  bool mouse_pressed{ false };
-  vec2d mouse_pos{};
 };
