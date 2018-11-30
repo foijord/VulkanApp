@@ -136,9 +136,9 @@ public:
   explicit QTextureImage(const std::string & filename) :
     image(QImage(filename.c_str()))
   {
-    
-
+    this->image = this->image.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
   }
+
   virtual ~QTextureImage() = default;
 
   VkExtent3D extent(size_t mip_level) const override
