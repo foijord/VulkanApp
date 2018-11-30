@@ -135,7 +135,10 @@ public:
 
   explicit QTextureImage(const std::string & filename) :
     image(QImage(filename.c_str()))
-  {}
+  {
+    
+
+  }
   virtual ~QTextureImage() = default;
 
   VkExtent3D extent(size_t mip_level) const override
@@ -325,7 +328,7 @@ public:
 int main(int argc, char *argv[])
 {
   try {
-    VulkanImageFactory::Register<GLITextureImage>();
+    VulkanImageFactory::Register<QTextureImage>();
 
     std::vector<const char *> instance_layers{
 #ifdef _DEBUG
