@@ -6,7 +6,6 @@
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Misc/Factory.h>
 
-#include <gli/load.hpp>
 #include <vulkan/vulkan.h>
 
 #include <utility>
@@ -916,7 +915,7 @@ public:
   {}
 
 private:
-  void execute(VkCommandBuffer command, CommandRecorder * recorder) override
+  void execute(VkCommandBuffer command, CommandRecorder *) override
   {
     vkCmdDraw(command, this->count, 1, 0, 0);
   }

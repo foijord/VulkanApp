@@ -1,6 +1,4 @@
 
-#define GLM_ENABLE_EXPERIMENTAL
-
 #include <Viewer.h>
 #include <Innovator/Nodes.h>
 #include <Innovator/Core/File.h>
@@ -43,92 +41,6 @@ static VkBool32 DebugCallback(
   return VK_FALSE;
 }
 
-class GLITextureImage : public VulkanTextureImage {
-public:
-  NO_COPY_OR_ASSIGNMENT(GLITextureImage)
-
-  explicit GLITextureImage(const std::string & filename) :
-    texture(gli::load(filename))
-  {}
-  virtual ~GLITextureImage() = default;
-
-  VkExtent3D extent(size_t mip_level) const override
-  {
-    return {
-      static_cast<uint32_t>(this->texture.extent(mip_level).x),
-      static_cast<uint32_t>(this->texture.extent(mip_level).y),
-      static_cast<uint32_t>(this->texture.extent(mip_level).z)
-    };
-  }
-
-  uint32_t base_level() const override
-  {
-    return static_cast<uint32_t>(this->texture.base_level());
-  }
-
-  uint32_t levels() const override
-  {
-    return static_cast<uint32_t>(this->texture.levels());
-  }
-
-  uint32_t base_layer() const override
-  {
-    return static_cast<uint32_t>(this->texture.base_layer());
-  }
-
-  uint32_t layers() const override
-  {
-    return static_cast<uint32_t>(this->texture.layers());
-  }
-
-  size_t size() const override
-  {
-    return this->texture.size();
-  }
-
-  size_t size(size_t level) const override
-  {
-    return this->texture.size(level);
-  }
-
-  const void * data() const override
-  {
-    return this->texture.data();
-  }
-
-  VkFormat format() const override
-  {
-    return vulkan_format[this->texture.format()];
-  }
-
-  VkImageType image_type() const override
-  {
-    return vulkan_image_type[this->texture.target()];
-  }
-
-  VkImageViewType image_view_type() const override
-  {
-    return vulkan_image_view_type[this->texture.target()];
-  }
-
-  inline static std::map<gli::format, VkFormat> vulkan_format{
-    { gli::format::FORMAT_R8_UNORM_PACK8, VkFormat::VK_FORMAT_R8_UNORM },
-    { gli::format::FORMAT_RGBA_DXT5_UNORM_BLOCK16, VkFormat::VK_FORMAT_BC3_UNORM_BLOCK },
-  };
-
-  inline static std::map<gli::target, VkImageViewType> vulkan_image_view_type{
-    { gli::target::TARGET_2D, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D },
-    { gli::target::TARGET_3D, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D },
-  };
-
-  inline static std::map<gli::target, VkImageType> vulkan_image_type{
-    { gli::target::TARGET_2D, VkImageType::VK_IMAGE_TYPE_2D },
-    { gli::target::TARGET_3D, VkImageType::VK_IMAGE_TYPE_3D },
-  };
-
-  gli::texture texture;
-};
-
 class QTextureImage : public VulkanTextureImage {
 public:
   NO_COPY_OR_ASSIGNMENT(QTextureImage)
@@ -167,22 +79,22 @@ public:
 
   uint32_t layers() const override
   {
-    return 0;
+    return 1;
   }
 
   size_t size() const override
   {
-    return 0;
+    return this->image.sizeInBytes();
   }
 
   size_t size(size_t level) const override
   {
-    return 0;
+    return this->image.sizeInBytes();
   }
 
   const void * data() const override
   {
-    return nullptr;
+    return this->image.bits();
   }
 
   VkFormat format() const override

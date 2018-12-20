@@ -542,7 +542,7 @@ inline exp_ptr parse(const ParseTree & parsetree)
   return std::make_shared<Expression>(exp_vec.begin(), exp_vec.end());
 }
 
-inline Environment global_env{
+static Environment global_env{
   { "+",   std::make_shared<Add>() },
   { "-",   std::make_shared<Sub>() },
   { "/",   std::make_shared<Div>() },

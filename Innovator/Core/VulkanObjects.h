@@ -2,7 +2,6 @@
 
 #include <Innovator/Core/Misc/Defines.h>
 #include <Innovator/Core/Vulkan/Wrapper.h>
-#include <Innovator/Core/State.h>
 
 #include <vulkan/vulkan.h>
 

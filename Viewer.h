@@ -5,6 +5,7 @@
 #include <Innovator/Nodes.h>
 #include <Innovator/Camera.h>
 
+#include <windows.h>
 
 #include <map>
 #include <string>

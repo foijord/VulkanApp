@@ -1,6 +1,6 @@
 (separator
  (sampler)
- (image "Textures/crate.dds")
+ (image "Textures/qt256.png")
  (layout-binding 1 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER VK_SHADER_STAGE_FRAGMENT_BIT)
  (shader "Shaders/vertex.vert" VK_SHADER_STAGE_VERTEX_BIT)
  (shader "Shaders/fragment.frag" VK_SHADER_STAGE_FRAGMENT_BIT)

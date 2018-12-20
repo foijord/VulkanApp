@@ -46,28 +46,6 @@ set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)
 
 include(ExternalProject)
 
-ExternalProject_Add(
-  glm
-  PREFIX glm
-  BUILD_COMMAND ""
-  INSTALL_COMMAND ""
-  CONFIGURE_COMMAND ""
-  URL https://github.com/g-truc/glm/archive/0.9.8.5.tar.gz)
-
-ExternalProject_Add(
-  gli
-  PREFIX gli
-  BUILD_COMMAND ""
-  INSTALL_COMMAND ""
-  CONFIGURE_COMMAND ""
-  URL https://github.com/g-truc/gli/archive/0.8.2.0.tar.gz)
-
-add_dependencies(${PROJECT_NAME} glm)
-add_dependencies(${PROJECT_NAME} gli)
-
-include_directories(${CMAKE_BINARY_DIR}/glm/src/glm)
-include_directories(${CMAKE_BINARY_DIR}/gli/src/gli)
-
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Shaders $<TARGET_FILE_DIR:${TARGET_NAME}>/Shaders)
 
