@@ -279,21 +279,36 @@ public:
 class Callable : public Expression {
 public:
   virtual exp_ptr operator()(const Expression * args) const = 0;
- 
-  static std::vector<double> 
-  get_argvec(const Expression * args)
+
+  static std::vector<std::shared_ptr<Number>> get_numbers(const Expression * args)
   {
-    std::vector<double> dargs(args->children.size());
-    std::transform(args->children.begin(), args->children.end(), dargs.begin(), [](auto & arg) {
-      return std::static_pointer_cast<Number>(arg)->value;
+    std::vector<std::shared_ptr<Number>> numbers(args->children.size());
+    std::transform(args->children.begin(), args->children.end(), numbers.begin(), [](auto arg) {
+      const auto number = std::dynamic_pointer_cast<Number>(arg);
+      if (!number) {
+        throw std::invalid_argument("parameter must be a number");
+      }
+      return number;
     });
-    return dargs;
+    return numbers;
   }
 
-  static std::vector<double>
-  get_argvec(const Expression * args, size_t expected_size)
+  template <typename T>
+  static std::vector<T> get_values(const Expression * args)
   {
-    auto argvec = get_argvec(args);
+    std::vector<std::shared_ptr<Number>> numbers = get_numbers(args);
+    std::vector<T> values(numbers.size());
+
+    std::transform(numbers.begin(), numbers.end(), values.begin(), [](auto number) {
+      return static_cast<T>(number->value);
+    });
+    return values;
+  }
+
+  template <typename T>
+  static std::vector<T> get_values(const Expression * args, size_t expected_size)
+  {
+    auto argvec = get_values<T>(args);
     if (argvec.size() != expected_size) {
       throw std::logic_error("internal error: wrong number of arguments!");
     }
@@ -316,22 +331,22 @@ public:
     }
   }
 
-  static const String * 
+  static std::shared_ptr<String> 
   get_string(const Expression * args, size_t n)
   {
     const auto it = std::next(args->children.begin(), n);
-    const auto string = dynamic_cast<const String*>(&**it);
+    const auto string = std::dynamic_pointer_cast<String>(*it);
     if (!string) {
       throw std::invalid_argument("parameter must be a string");
     }
     return string;
   }
 
-  static const Number * 
+  static std::shared_ptr<Number>
   get_number(const Expression * args, size_t n)
   {
     const auto it = std::next(args->children.begin(), n);
-    const auto number = dynamic_cast<const Number*>(&**it);
+    const auto number = std::dynamic_pointer_cast<Number>(*it);
     if (!number) {
       throw std::invalid_argument("parameter must be a number");
     }
@@ -348,7 +363,7 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    auto dargs = get_argvec(args);
+    auto dargs = get_values<double>(args);
     if (dargs.empty()) {
       throw std::logic_error("logic error: no arguments to function call");
     }
@@ -371,7 +386,7 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    auto dargs = get_argvec(args, 2);
+    auto dargs = get_values<double>(args, 2);
     return std::make_shared<Boolean>(dargs[0] < dargs[1]);
   }
 };
@@ -384,7 +399,7 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    auto dargs = get_argvec(args, 2);
+    auto dargs = get_values<double>(args, 2);
     return std::make_shared<Boolean>(dargs[0] > dargs[1]);
   }
 };
@@ -397,7 +412,7 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    auto dargs = get_argvec(args, 2);
+    auto dargs = get_values<double>(args, 2);
     return std::make_shared<Boolean>(dargs[0] == dargs[1]);
   }
 };

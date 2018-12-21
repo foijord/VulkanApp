@@ -47,42 +47,31 @@ public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     check_num_args(args);
-    std::vector<T> data(args->children.size());
-    for (size_t i = 0; i < args->children.size(); i++) {
-      const auto number = get_number(args, i);
-      data[i] = static_cast<T>(number->value);
-    }
-    return std::make_shared<NodeExpression>(std::make_shared<BufferData<T>>(data));
+    auto bufferdata = std::make_shared<BufferData<T>>(get_values<T>(args));
+    return std::make_shared<NodeExpression>(bufferdata);
   }
 };
 
-class CpuMemoryBufferFunction : public Callable {
+template <typename T>
+class MemoryBufferFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     check_num_args(args);
     uint32_t flags = 0;
-    for (size_t i = 0; i < args->children.size(); i++) {
-      const auto number = get_number(args, i);
+    for (auto it = args->children.begin(); it != args->children.end(); ++it) {
+      const auto number = std::dynamic_pointer_cast<Number>(*it);
+      if (!number) {
+        throw std::invalid_argument("parameter must be a number");
+      }
       flags |= static_cast<uint32_t>(number->value);
     }
-    return std::make_shared<NodeExpression>(std::make_shared<CpuMemoryBuffer>(flags));
+    return std::make_shared<NodeExpression>(std::make_shared<T>(flags));
   }
 };
 
-class GpuMemoryBufferFunction : public Callable {
-public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
-  {
-    check_num_args(args);
-    uint32_t flags = 0;
-    for (size_t i = 0; i < args->children.size(); i++) {
-      const auto number = get_number(args, i);
-      flags |= static_cast<uint32_t>(number->value);
-    }
-    return std::make_shared<NodeExpression>(std::make_shared<GpuMemoryBuffer>(flags));
-  }
-};
+typedef MemoryBufferFunction<CpuMemoryBuffer> CpuMemoryBufferFunction;
+typedef MemoryBufferFunction<GpuMemoryBuffer> GpuMemoryBufferFunction;
 
 class VertexInputAttributeDescriptionFunction : public Callable {
 public:
@@ -102,8 +91,7 @@ public:
   }
 };
 
-class VertexInputBindingDescriptionFunction : public Callable
-{
+class VertexInputBindingDescriptionFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
@@ -119,8 +107,7 @@ public:
   }
 };
 
-class IndexedDrawCommandFunction : public Callable
-{
+class IndexedDrawCommandFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
@@ -158,8 +145,7 @@ public:
   }
 };
 
-class IndexBufferDescriptionFunction: public Callable
-{
+class IndexBufferDescriptionFunction: public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
@@ -170,8 +156,7 @@ public:
   }
 };
 
-class TransformBufferFunction : public Callable
-{
+class TransformBufferFunction : public Callable {
   std::shared_ptr<Expression> operator()(const Expression *) const override
   {
     auto node = std::make_shared<TransformBuffer>();
