@@ -64,8 +64,8 @@ public:
       VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, // sType 
       nullptr,                                       // pNext
       0,                                             // flags (reserved for future use)
-      connection,                                    // display 
-      window,                                        // surface
+      connection,                                    // connection
+      window,                                        // window
     };
 
     THROW_ON_ERROR(vkCreateXcbSurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
@@ -95,16 +95,6 @@ public:
     device(std::move(device))
   {
     const auto physical_device = this->device->physical_device.device;
-
-    uint32_t mode_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, surface, &mode_count, nullptr));
-    std::vector<VkPresentModeKHR> present_modes(mode_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device, surface, &mode_count, present_modes.data()));
-
-    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
-      throw std::runtime_error("surface does not support VK_PRESENT_MODE_MAILBOX_KHR");
-    }
-
     this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
 
     this->extent2d = surface_capabilities.currentExtent;
@@ -448,6 +438,15 @@ public:
 
     this->surface_format = surface_formats[0];
 
+    uint32_t presentmode_count;
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &presentmode_count, nullptr));
+    std::vector<VkPresentModeKHR> present_modes(presentmode_count);
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &presentmode_count, present_modes.data()));
+
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+      throw std::runtime_error("surface does not support VK_PRESENT_MODE_FIFO_KHR");
+    }
+
     std::vector<VkAttachmentDescription> attachment_descriptions{ {
         0,                                                    // flags
         this->surface_format.format,                          // format
@@ -646,7 +645,7 @@ public:
   std::shared_ptr<Separator> root;
 
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
-  VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR };
+  VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR }; // always present?
   VkSurfaceFormatKHR surface_format{};
   VkSurfaceCapabilitiesKHR surface_capabilities{};
 };

@@ -85,12 +85,12 @@ public:
 
   size_t size() const override
   {
-    return this->image.byteCount();
+    return this->image.sizeInBytes();
   }
 
   size_t size(size_t level) const override
   {
-    return this->image.byteCount();
+    return this->image.sizeInBytes();
   }
 
   const void * data() const override
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
     auto surface = std::make_shared<::VulkanSurface>(
       vulkan,
-      reinterpret_cast<HWND>(this->winId()),
+      reinterpret_cast<HWND>(window.winId()),
       GetModuleHandle(nullptr));
 
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
