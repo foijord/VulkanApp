@@ -185,19 +185,19 @@ public:
 
   void mouseMoveEvent(QMouseEvent * e) override
   {
-    // if (this->mouse_pressed) {
-    //   const vec2d pos = { static_cast<double>(e->x()), static_cast<double>(e->y()) };
-    //   vec2d dx = (this->mouse_pos - pos) * .01;
-    //   dx[1] = -dx[1];
-    //   switch (this->button) {
-    //   case Qt::MiddleButton: this->camera->pan(dx); break;
-    //   case Qt::LeftButton: this->camera->orbit(dx); break;
-    //   case Qt::RightButton: this->camera->zoom(dx[1]); break;
-    //   default: break;
-    //   }
-    //   this->mouse_pos = pos;
-    //   this->viewer->redraw();
-    // }
+    if (this->mouse_pressed) {
+      const vec2d pos = { static_cast<double>(e->x()), static_cast<double>(e->y()) };
+      vec2d dx = (this->mouse_pos - pos) * .01;
+      dx.v[1] = -dx.v[1];
+      switch (this->button) {
+      case Qt::MiddleButton: this->camera->pan(dx); break;
+      case Qt::LeftButton: this->camera->orbit(dx); break;
+      case Qt::RightButton: this->camera->zoom(dx.v[1]); break;
+      default: break;
+      }
+      this->mouse_pos = pos;
+      this->viewer->redraw();
+    }
   }
 
   std::shared_ptr<::VulkanSurface> surface;
