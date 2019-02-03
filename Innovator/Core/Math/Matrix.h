@@ -8,10 +8,16 @@ namespace Innovator {
     namespace Math {
 
       template <typename T, int N>
-      using vec = std::array<T, N>;
+      class vec {
+      public:
+        T v[N];
+      };
 
       template <typename T, int N>
-      using mat = vec<vec<T, N>, N>;
+      class mat {
+      public:
+        vec<T,N> m[N];
+      };
 
       template <typename T>
       using vec2 = vec<T, 2>;
@@ -43,8 +49,8 @@ namespace Innovator {
       template <typename T, int N>
       vec<T, N> operator + (vec<T, N> v0, const vec<T, N> & v1)
       {
-        for (auto i = 0; i < N; i++) {
-          v0[i] += v1[i];
+        for (size_t i = 0; i < N; i++) {
+          v0.v[i] += v1.v[i];
         }
         return v0;
       }
@@ -52,8 +58,8 @@ namespace Innovator {
       template <typename T, int N>
       vec<T, N> operator - (vec<T, N> v0, const vec<T, N> & v1)
       {
-        for (auto i = 0; i < N; i++) {
-          v0[i] -= v1[i];
+        for (size_t i = 0; i < N; i++) {
+          v0.v[i] -= v1.v[i];
         }
         return v0;
       }
@@ -62,8 +68,8 @@ namespace Innovator {
       T operator * (const vec<T, N> & v0, const vec<T, N> & v1)
       {
         T d = 0;
-        for (auto i = 0; i < N; i++) {
-          d += v0[i] * v1[i];
+        for (size_t i = 0; i < N; i++) {
+          d += v0.v[i] * v1.v[i];
         }
         return d;
       }
@@ -71,8 +77,8 @@ namespace Innovator {
       template <typename T, int N>
       vec<T, N> operator * (vec<T, N> v, T s)
       {
-        for (auto i = 0; i < N; i++) {
-          v[i] *= s;
+        for (size_t i = 0; i < N; i++) {
+          v.v[i] *= s;
         }
         return v;
       }
@@ -99,9 +105,9 @@ namespace Innovator {
       vec3<T> operator^(const vec3<T> & v0, const vec3<T> & v1)
       {
         return {
-          v0[1] * v1[2] - v0[2] * v1[1],
-          v0[2] * v1[0] - v0[0] * v1[2],
-          v0[0] * v1[1] - v0[1] * v1[0],
+          v0.v[1] * v1.v[2] - v0.v[2] * v1.v[1],
+          v0.v[2] * v1.v[0] - v0.v[0] * v1.v[2],
+          v0.v[0] * v1.v[1] - v0.v[1] * v1.v[0],
         };
       }
 
@@ -109,9 +115,9 @@ namespace Innovator {
       mat<T, N> transpose(const mat<T, N> & m)
       {
         mat<T, N> t;
-        for (auto i = 0; i < N; i++) {
-          for (auto j = 0; j < N; j++) {
-            t[i][j] = m[j][i];
+        for (size_t i = 0; i < N; i++) {
+          for (size_t j = 0; j < N; j++) {
+            t.m[i].v[j] = m.m[j].v[i];
           }
         }
         return t;
@@ -121,8 +127,8 @@ namespace Innovator {
       vec<T, N> operator * (const mat<T, N> & m, const vec<T, N> & v)
       {
         vec<T, N> result;
-        for (auto i = 0; i < N; i++) {
-          result[i] = v * m[i];
+        for (size_t i = 0; i < N; i++) {
+          result.m[i] = v * m.m[i];
         }
         return result;
       }
@@ -132,9 +138,9 @@ namespace Innovator {
       {
         mat<T, N> t = transpose(m1);
         mat<T, N> m;
-        for (auto i = 0; i < N; i++) {
-          for (auto j = 0; j < N; j++) {
-            m[i][j] = m0[i] * t[j];
+        for (size_t i = 0; i < N; i++) {
+          for (size_t j = 0; j < N; j++) {
+            m.m[i].v[j] = m0.m[i] * t.m[j];
           }
         }
         return m;
@@ -144,8 +150,8 @@ namespace Innovator {
       vec<T0, N> cast(const vec<T1, N> & v)
       {
         vec<T0, N> vec;
-        for (auto i = 0; i < N; i++) {
-          vec[i] = static_cast<T0>(v[i]);
+        for (size_t i = 0; i < N; i++) {
+          vec.v[i] = static_cast<T0>(v.v[i]);
         }
         return vec;
       }
@@ -154,8 +160,8 @@ namespace Innovator {
       mat<T0, N> cast(const mat<T1, N> & m)
       {
         mat<T0, N> mat;
-        for (auto i = 0; i < N; i++) {
-          mat[i] = cast<T0, T1, N>(m[i]);
+        for (size_t i = 0; i < N; i++) {
+          mat.m[i] = cast<T0, T1, N>(m.m[i]);
         }
         return mat;
       }

@@ -85,9 +85,9 @@ public:
   explicit Transform(const vec3d & t,
                      const vec3d & s)
   {
-    for (auto i = 0; i < 3; i++) {
-      this->matrix[i][i] = s[i];
-      this->matrix[3][i] = t[i];
+    for (size_t i = 0; i < 3; i++) {
+      this->matrix.m[i].v[i] = s.v[i];
+      this->matrix.m[3].v[i] = t.v[i];
     }
   }
 
@@ -98,10 +98,10 @@ private:
   }
 
   mat4d matrix{
-    vec4d{ 1, 0, 0, 0 },
-    vec4d{ 0, 1, 0, 0 },
-    vec4d{ 0, 0, 1, 0 },
-    vec4d{ 0, 0, 0, 1 },
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
   };
 };
 

@@ -10,6 +10,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include <cstring>
+
 class VulkanPhysicalDevice {
 public:
   VulkanPhysicalDevice(VulkanPhysicalDevice && self) = default;
@@ -231,7 +233,7 @@ public:
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
     THROW_ON_ERROR(vkEnumeratePhysicalDevices(this->instance, &physical_device_count, physical_devices.data()));
 
-    for (const VkPhysicalDevice & physical_device : physical_devices) {
+    for (const auto& physical_device : physical_devices) {
       this->physical_devices.emplace_back(physical_device);
     }
   }
@@ -248,7 +250,7 @@ public:
   VulkanPhysicalDevice selectPhysicalDevice(const VkPhysicalDeviceFeatures & required_features) 
   {
     std::vector<VulkanPhysicalDevice> devices;
-    for (VulkanPhysicalDevice & physical_device : this->physical_devices) {
+    for (auto& physical_device : this->physical_devices) {
       if (physical_device.supportsFeatures(required_features)) {
         devices.push_back(physical_device);
       }

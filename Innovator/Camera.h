@@ -29,7 +29,7 @@ public:
 
   void pan(const vec2d & dx)
   {
-    this->e = this->e + this->x * dx[0] + this->y * dx[1];
+    this->e = this->e + this->x * dx.v[0] + this->y * dx.v[1];
   }
 
   void orbit(const vec2d & dx)
@@ -52,9 +52,9 @@ public:
   mat4d viewmatrix() const
   {
     return {
-      this->x[0], this->y[0], this->z[0], 0,
-      this->x[1], this->y[1], this->z[1], 0,
-      this->x[2], this->y[2], this->z[2], 0,
+      this->x.v[0], this->y.v[0], this->z.v[0], 0,
+      this->x.v[1], this->y.v[1], this->z.v[1], 0,
+      this->x.v[2], this->y.v[2], this->z.v[2], 0,
        -(x * e),   -(y * e),   -(z * e),  1,
     };
   }
@@ -67,10 +67,10 @@ public:
     const auto m32 = (this->nearplane * this->farplane) / (this->nearplane - this->farplane);
 
     return {
-      vec4d{ m00, 0, 0,  0 },
-      vec4d{ 0, -f, 0,   0 },
-      vec4d{ 0, 0, m22, -1 },
-      vec4d{ 0, 0, m32,  0 },
+      m00, 0, 0,  0,
+      0, -f, 0,   0,
+      0, 0, m22, -1,
+      0, 0, m32,  0,
     };
   }
 

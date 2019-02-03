@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QWindow>
 #include <QMouseEvent>
+#include <QX11Info>
 
 #include <iostream>
 
@@ -84,12 +85,12 @@ public:
 
   size_t size() const override
   {
-    return this->image.sizeInBytes();
+    return this->image.byteCount();
   }
 
   size_t size(size_t level) const override
   {
-    return this->image.sizeInBytes();
+    return this->image.byteCount();
   }
 
   const void * data() const override
@@ -115,25 +116,12 @@ public:
   QImage image;
 };
 
-class QVulkanViewer : public QWindow {
+class VulkanWindow : public QWindow {
 public:
-  NO_COPY_OR_ASSIGNMENT(QVulkanViewer)
-  QVulkanViewer() = delete;
-  ~QVulkanViewer() = default;
+  NO_COPY_OR_ASSIGNMENT(VulkanWindow)
+  ~VulkanWindow() = default;
 
-  QVulkanViewer(std::shared_ptr<VulkanInstance> vulkan, QWindow * parent = nullptr) :
-    QWindow(parent)
-  {
-    this->camera = std::make_shared<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f);
-    this->camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
-
-    this->surface = std::make_shared<::VulkanSurface>(
-      vulkan,
-      reinterpret_cast<HWND>(this->winId()),
-      GetModuleHandle(nullptr));
-
-    this->viewer = std::make_shared<VulkanViewer>(vulkan, this->surface, this->camera);
-  }
+  VulkanWindow(QWindow * parent = nullptr) : QWindow(parent) {}
 
   void loadSceneGraph(const std::string & filename)
   {
@@ -145,7 +133,9 @@ public:
   void resizeEvent(QResizeEvent * e) override
   {
     QWindow::resizeEvent(e);
-    this->viewer->resize();
+    if (this->viewer) {
+      this->viewer->resize();
+    }
   }
 
   void reloadShaders() const
@@ -195,19 +185,19 @@ public:
 
   void mouseMoveEvent(QMouseEvent * e) override
   {
-    if (this->mouse_pressed) {
-      const vec2d pos = { static_cast<double>(e->x()), static_cast<double>(e->y()) };
-      vec2d dx = (this->mouse_pos - pos) * .01;
-      dx[1] = -dx[1];
-      switch (this->button) {
-      case Qt::MiddleButton: this->camera->pan(dx); break;
-      case Qt::LeftButton: this->camera->orbit(dx); break;
-      case Qt::RightButton: this->camera->zoom(dx[1]); break;
-      default: break;
-      }
-      this->mouse_pos = pos;
-      this->viewer->redraw();
-    }
+    // if (this->mouse_pressed) {
+    //   const vec2d pos = { static_cast<double>(e->x()), static_cast<double>(e->y()) };
+    //   vec2d dx = (this->mouse_pos - pos) * .01;
+    //   dx[1] = -dx[1];
+    //   switch (this->button) {
+    //   case Qt::MiddleButton: this->camera->pan(dx); break;
+    //   case Qt::LeftButton: this->camera->orbit(dx); break;
+    //   case Qt::RightButton: this->camera->zoom(dx[1]); break;
+    //   default: break;
+    //   }
+    //   this->mouse_pos = pos;
+    //   this->viewer->redraw();
+    // }
   }
 
   std::shared_ptr<::VulkanSurface> surface;
@@ -247,11 +237,19 @@ int main(int argc, char *argv[])
       "VK_LAYER_LUNARG_standard_validation",
 #endif
     };
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
     std::vector<const char *> instance_extensions{
       VK_KHR_SURFACE_EXTENSION_NAME,
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
       VK_EXT_DEBUG_REPORT_EXTENSION_NAME
     };
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+    std::vector<const char *> instance_extensions{
+      VK_KHR_SURFACE_EXTENSION_NAME,
+      VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+      VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+    };
+#endif
 
     VkApplicationInfo application_info{
       VK_STRUCTURE_TYPE_APPLICATION_INFO, // sType
@@ -276,13 +274,35 @@ int main(int argc, char *argv[])
       VK_DEBUG_REPORT_ERROR_BIT_EXT,
       DebugCallback);
 #endif
+    QApplication app(argc, argv);
 
-    VulkanApplication app(argc, argv);
+    VulkanWindow window;
+    window.resize(512, 512);
+    window.show();
 
-    QVulkanViewer viewer(vulkan);
-    viewer.loadSceneGraph("Scenes/crate.scene");
-    viewer.resize(512, 512);
-    viewer.show();
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    auto surface = std::make_shared<::VulkanSurface>(
+      vulkan,
+      reinterpret_cast<HWND>(this->winId()),
+      GetModuleHandle(nullptr));
+
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+    auto surface = std::make_shared<::VulkanSurface>(
+      vulkan,
+      static_cast<xcb_window_t>(window.winId()),
+      QX11Info::connection());
+#endif
+
+    auto camera = std::make_shared<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f);
+    camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
+
+    auto viewer = std::make_shared<VulkanViewer>(vulkan, surface, camera);
+
+    window.camera = camera;
+    window.viewer = viewer;
+
+    window.loadSceneGraph("Scenes/crate.scene");
+    window.resize(512, 512);
 
     return QApplication::exec();
   }

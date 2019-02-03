@@ -5,7 +5,11 @@
 #include <Innovator/Nodes.h>
 #include <Innovator/Camera.h>
 
-#include <windows.h>
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#include <Windows.h>
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+#include <xcb/xcb.h>
+#endif
 
 #include <map>
 #include <string>
@@ -14,6 +18,7 @@
 #include <vector>
 #include <iostream>
 
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
 class VulkanSurface {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanSurface)
@@ -44,6 +49,38 @@ public:
   VkSurfaceKHR surface { nullptr };
 };
 
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+class VulkanSurface {
+public:
+  NO_COPY_OR_ASSIGNMENT(VulkanSurface)
+  VulkanSurface() = delete;
+
+  VulkanSurface(std::shared_ptr<VulkanInstance> vulkan,
+                xcb_window_t window,
+                xcb_connection_t * connection) : 
+    vulkan(std::move(vulkan))
+  {
+    VkXcbSurfaceCreateInfoKHR create_info {
+      VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, // sType 
+      nullptr,                                       // pNext
+      0,                                             // flags (reserved for future use)
+      connection,                                    // display 
+      window,                                        // surface
+    };
+
+    THROW_ON_ERROR(vkCreateXcbSurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
+  }
+
+  ~VulkanSurface()
+  {
+    vkDestroySurfaceKHR(this->vulkan->instance, this->surface, nullptr);
+  }
+
+  std::shared_ptr<VulkanInstance> vulkan;
+  VkSurfaceKHR surface { nullptr };
+};
+#endif
+
 class VulkanSwapchainObject {
 public:
   VulkanSwapchainObject(std::shared_ptr<VulkanInstance> vulkan,
@@ -57,9 +94,6 @@ public:
     vulkan(std::move(vulkan)),
     device(std::move(device))
   {
-    // make sure all work submitted is done before we start recreating stuff
-    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
-
     const auto physical_device = this->device->physical_device.device;
 
     uint32_t mode_count;
@@ -558,6 +592,9 @@ public:
 
   void resize()
   {
+    // make sure all work submitted is done before we start recreating stuff
+    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
+
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
                                                                         this->surface->surface,
                                                                         &this->surface_capabilities));
@@ -609,7 +646,7 @@ public:
   std::shared_ptr<Separator> root;
 
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
-  VkPresentModeKHR present_mode{ VK_PRESENT_MODE_MAILBOX_KHR };
+  VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR };
   VkSurfaceFormatKHR surface_format{};
   VkSurfaceCapabilitiesKHR surface_capabilities{};
 };

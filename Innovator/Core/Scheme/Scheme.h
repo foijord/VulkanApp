@@ -37,6 +37,15 @@ public:
 
   virtual exp_ptr eval(env_ptr env);
 
+  virtual std::string toString() const
+  {
+    std::string s("(");
+    for (auto child : this->children) {
+      s += child->toString();
+    }
+    return s + ")";
+  }
+
   exp_list children;
 };
 
@@ -50,6 +59,11 @@ public:
     : token(std::move(token)) {}
 
   exp_ptr eval(env_ptr env) override;
+  
+  std::string toString() const override
+  {
+    return this->token;
+  }
 
   std::string token;
 };
@@ -116,7 +130,12 @@ public:
 
   explicit Number(const std::string & token)
     : Number(stod(token)) {}
-  
+
+  std::string toString() const override
+  {
+    return std::to_string(this->value);
+  }
+
   double value;
 };
 
@@ -137,6 +156,11 @@ public:
     }
     this->value = tokenmap[token];
   }
+
+  std::string toString() const override
+  {
+    return this->value ? "#t" : "#f";
+  }
   
   bool value;
 };
@@ -153,6 +177,11 @@ public:
       throw std::invalid_argument("invalid string literal: " + token);
     }
     this->value = token.substr(1, token.size() - 2);
+  }
+
+  std::string toString() const override
+  {
+    return this->value;
   }
 
   std::string value;

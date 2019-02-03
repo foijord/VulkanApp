@@ -59,8 +59,8 @@ public:
   {
     check_num_args(args);
     uint32_t flags = 0;
-    for (auto it = args->children.begin(); it != args->children.end(); ++it) {
-      const auto number = std::dynamic_pointer_cast<Number>(*it);
+    for (const auto& it : args->children) {
+      const auto number = std::dynamic_pointer_cast<Number>(it);
       if (!number) {
         throw std::invalid_argument("parameter must be a number");
       }
