@@ -7,7 +7,10 @@
 #include <QApplication>
 #include <QWindow>
 #include <QMouseEvent>
+
+#if defined(VK_USE_PLATFORM_XCB_KHR)
 #include <QX11Info>
+#endif
 
 #include <iostream>
 
