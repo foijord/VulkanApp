@@ -251,8 +251,6 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     VulkanWindow window;
-    window.resize(512, 512);
-    window.show();
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
     auto surface = std::make_shared<::VulkanSurface>(
@@ -270,7 +268,53 @@ int main(int argc, char *argv[])
     auto camera = std::make_shared<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f);
     camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
 
-    auto viewer = std::make_shared<VulkanViewer>(vulkan, surface, camera);
+    VkPhysicalDeviceFeatures required_device_features;
+    ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
+    required_device_features.geometryShader = VK_TRUE;
+    required_device_features.tessellationShader = VK_TRUE;
+    required_device_features.textureCompressionBC = VK_TRUE;
+    required_device_features.fragmentStoresAndAtomics = VK_TRUE;
+
+    auto physical_device = vulkan->selectPhysicalDevice(required_device_features);
+
+    std::vector<VkBool32> presentation_filter(physical_device.queue_family_properties.size());
+    for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
+      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, surface->surface, &presentation_filter[i]);
+    }
+
+    float queue_priorities[1] = { 1.0f };
+    const auto queue_index = physical_device.getQueueIndex(
+      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
+      presentation_filter);
+
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos{ {
+        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,   // sType
+        nullptr,                                      // pNext
+        0,                                            // flags
+        queue_index,                                  // queueFamilyIndex
+        1,                                            // queueCount   
+        queue_priorities                              // pQueuePriorities
+    } };
+
+    std::vector<const char *> device_layers{
+#ifdef _DEBUG
+      "VK_LAYER_LUNARG_standard_validation",
+#endif
+    };
+    std::vector<const char *> device_extensions{
+      VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    };
+
+    auto device = std::make_shared<VulkanDevice>(physical_device,
+                                                 required_device_features,
+                                                 device_layers,
+                                                 device_extensions,
+                                                 queue_create_infos);
+
+    auto viewer = std::make_shared<VulkanViewer>(vulkan, 
+                                                 device, 
+                                                 surface, 
+                                                 camera);
 
     window.camera = camera;
     window.viewer = viewer;
@@ -278,6 +322,9 @@ int main(int argc, char *argv[])
     File file;
     auto scene = file.open("Scenes/crate.scene");
     viewer->setSceneGraph(scene);
+
+    window.resize(512, 512);
+    window.show();
 
     return QApplication::exec();
   }

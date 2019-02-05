@@ -26,12 +26,16 @@ public:
                         VkFormat depth_format,
                         VkPresentModeKHR present_mode,
                         VkSurfaceFormatKHR surface_format,
-                        VkSurfaceCapabilitiesKHR surface_capabilities,
                         VkSwapchainKHR oldSwapchain) :
     vulkan(std::move(vulkan)),
     device(std::move(device))
   {
     this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
+    
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
+                                                                        surface,
+                                                                        &surface_capabilities));
 
     this->extent2d = surface_capabilities.currentExtent;
     VkExtent3D extent3d = { this->extent2d.width, this->extent2d.height, 1 };
@@ -318,60 +322,22 @@ public:
   VulkanViewer() = delete;
 
   VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, 
+               std::shared_ptr<VulkanDevice> device,
                std::shared_ptr<::VulkanSurface> surface, 
                std::shared_ptr<Camera> camera) :
     vulkan(std::move(vulkan)),
+    device(std::move(device)),
     surface(std::move(surface)),
     camera(std::move(camera))
   {
-    VkPhysicalDeviceFeatures required_device_features;
-    ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
-    required_device_features.geometryShader = VK_TRUE;
-    required_device_features.tessellationShader = VK_TRUE;
-    required_device_features.textureCompressionBC = VK_TRUE;
-    required_device_features.fragmentStoresAndAtomics = VK_TRUE;
-
-    auto physical_device = this->vulkan->selectPhysicalDevice(required_device_features);
-
-    std::vector<VkBool32> presentation_filter(physical_device.queue_family_properties.size());
-    for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
-      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, this->surface->surface, &presentation_filter[i]);
-    }
-
-    float queue_priorities[1] = { 1.0f };
-    const auto queue_index = physical_device.getQueueIndex(
-      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
-      presentation_filter);
-
-    std::vector<VkDeviceQueueCreateInfo> queue_create_info{ {
-        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,   // sType
-        nullptr,                                      // pNext
-        0,                                            // flags
-        queue_index,                                  // queueFamilyIndex
-        1,                                            // queueCount   
-        queue_priorities                              // pQueuePriorities
-    } };
-
-    std::vector<const char *> device_layers{
-#ifdef _DEBUG
-      "VK_LAYER_LUNARG_standard_validation",
-#endif
-    };
-    std::vector<const char *> device_extensions{
-      VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    };
-
-    this->device = std::make_shared<VulkanDevice>(physical_device,
-                                                  required_device_features,
-                                                  device_layers,
-                                                  device_extensions,
-                                                  queue_create_info);
-
-    std::vector<VkSurfaceFormatKHR> surface_formats = this->vulkan->getPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface);
+    auto physical_device = this->device->physical_device.device;
+    std::vector<VkSurfaceFormatKHR> surface_formats = this->vulkan->getPhysicalDeviceSurfaceFormats(physical_device, this->surface->surface);
     this->surface_format = surface_formats[0];
-    std::vector<VkPresentModeKHR> present_modes = this->vulkan->getPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface);
+    std::vector<VkPresentModeKHR> present_modes = this->vulkan->getPhysicalDeviceSurfacePresentModes(physical_device, this->surface->surface);
 
-    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+    this->present_mode = VK_PRESENT_MODE_FIFO_KHR;
+
+    if (std::find(present_modes.begin(), present_modes.end(), this->present_mode) == present_modes.end()) {
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_FIFO_KHR");
     }
 
@@ -425,17 +391,12 @@ public:
 
     this->renderaction = std::make_unique<RenderManager>(this->device);
 
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
-                                                                        this->surface->surface,
-                                                                        &this->surface_capabilities));
-
     this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
                                                               this->device,
                                                               this->surface->surface,
                                                               this->depth_format,
                                                               this->present_mode,
                                                               this->surface_format,
-                                                              this->surface_capabilities,
                                                               nullptr);
 
     std::vector<VkImageView> framebuffer_attachments{
@@ -460,32 +421,14 @@ public:
     }
   }
 
-  void pipeline() const
-  {
-    this->renderaction->pipeline(this->root.get(),
-      this->renderpass->renderpass);
-  }
-
-  void record() const
-  {
-    this->renderaction->record(this->root.get(),
-      this->framebuffer->framebuffer,
-      this->renderpass->renderpass,
-      this->swapchain->extent2d);
-  }
-
-  void render() const
-  {
-    this->renderaction->render(this->root.get(),
-      this->framebuffer->framebuffer,
-      this->renderpass->renderpass,
-      this->camera.get(),
-      this->swapchain->extent2d);
-  }
-
   void redraw() const
   {
-    this->render();
+    this->renderaction->render(this->root.get(),
+                               this->framebuffer->framebuffer,
+                               this->renderpass->renderpass,
+                               this->camera.get(),
+                               this->swapchain->extent2d);
+
     this->swapBuffers();
   }
 
@@ -522,17 +465,12 @@ public:
     // make sure all work submitted is done before we start recreating stuff
     THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
 
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
-                                                                        this->surface->surface,
-                                                                        &this->surface_capabilities));
-
     this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
                                                               this->device,
                                                               this->surface->surface,
                                                               this->depth_format,
                                                               this->present_mode,
                                                               this->surface_format,
-                                                              this->surface_capabilities,
                                                               this->swapchain->swapchain->swapchain);
     std::vector<VkImageView> framebuffer_attachments{
       this->swapchain->color_buffer_view->view,
@@ -553,19 +491,15 @@ public:
                                this->renderpass->renderpass,
                                this->swapchain->extent2d);
 
-    this->renderaction->render(this->root.get(), 
-                               this->framebuffer->framebuffer,
-                               this->renderpass->renderpass,
-                               this->camera.get(), 
-                               this->swapchain->extent2d);
-
-    this->swapBuffers();
+    this->redraw();
   }
 
   std::shared_ptr<VulkanInstance> vulkan;
-  std::shared_ptr<::VulkanSurface> surface;
-  std::shared_ptr<Camera> camera;
   std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<::VulkanSurface> surface;
+  VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR }; // always present?
+  VkSurfaceFormatKHR surface_format{};
+  std::shared_ptr<Camera> camera;
   std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFramebuffer> framebuffer;
   std::unique_ptr<RenderManager> renderaction;
@@ -573,7 +507,4 @@ public:
   std::shared_ptr<Separator> root;
 
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
-  VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR }; // always present?
-  VkSurfaceFormatKHR surface_format{};
-  VkSurfaceCapabilitiesKHR surface_capabilities{};
 };
