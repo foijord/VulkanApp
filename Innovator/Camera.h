@@ -24,12 +24,12 @@ public:
 
   void zoom(double dy)
   {
-    this->e = this->e + this->z * dy;
+    this->e += this->z * dy;
   }
 
   void pan(const vec2d & dx)
   {
-    this->e = this->e + this->x * dx.v[0] + this->y * dx.v[1];
+    this->e += this->x * dx.v[0] + this->y * dx.v[1];
   }
 
   void orbit(const vec2d & dx)
@@ -55,7 +55,7 @@ public:
       this->x.v[0], this->y.v[0], this->z.v[0], 0,
       this->x.v[1], this->y.v[1], this->z.v[1], 0,
       this->x.v[2], this->y.v[2], this->z.v[2], 0,
-       -(x * e),   -(y * e),   -(z * e),  1,
+       -(x * e),      -(y * e),     -(z * e),   1,
     };
   }
 

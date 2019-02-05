@@ -6,9 +6,9 @@
 #include <Innovator/Camera.h>
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-#include <Windows.h>
+#include <Innovator/Win32Surface.h>
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
-#include <xcb/xcb.h>
+#include <Innovator/XcbSurface.h>
 #endif
 
 #include <map>
@@ -17,69 +17,6 @@
 #include <utility>
 #include <vector>
 #include <iostream>
-
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-class VulkanSurface {
-public:
-  NO_COPY_OR_ASSIGNMENT(VulkanSurface)
-  VulkanSurface() = delete;
-
-  VulkanSurface(std::shared_ptr<VulkanInstance> vulkan,
-                HWND window,
-                HINSTANCE hinstance) : 
-    vulkan(std::move(vulkan))
-  {
-    VkWin32SurfaceCreateInfoKHR create_info{
-      VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR, // sType 
-      nullptr,                                         // pNext
-      0,                                               // flags (reserved for future use)
-      hinstance,                                       // hinstance 
-      window,                                          // hwnd
-    };
-
-    THROW_ON_ERROR(vkCreateWin32SurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
-  }
-
-  ~VulkanSurface()
-  {
-    vkDestroySurfaceKHR(this->vulkan->instance, this->surface, nullptr);
-  }
-
-  std::shared_ptr<VulkanInstance> vulkan;
-  VkSurfaceKHR surface { nullptr };
-};
-
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-class VulkanSurface {
-public:
-  NO_COPY_OR_ASSIGNMENT(VulkanSurface)
-  VulkanSurface() = delete;
-
-  VulkanSurface(std::shared_ptr<VulkanInstance> vulkan,
-                xcb_window_t window,
-                xcb_connection_t * connection) : 
-    vulkan(std::move(vulkan))
-  {
-    VkXcbSurfaceCreateInfoKHR create_info {
-      VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, // sType 
-      nullptr,                                       // pNext
-      0,                                             // flags (reserved for future use)
-      connection,                                    // connection
-      window,                                        // window
-    };
-
-    THROW_ON_ERROR(vkCreateXcbSurfaceKHR(this->vulkan->instance, &create_info, nullptr, &this->surface));
-  }
-
-  ~VulkanSurface()
-  {
-    vkDestroySurfaceKHR(this->vulkan->instance, this->surface, nullptr);
-  }
-
-  std::shared_ptr<VulkanInstance> vulkan;
-  VkSurfaceKHR surface { nullptr };
-};
-#endif
 
 class VulkanSwapchainObject {
 public:
@@ -94,7 +31,6 @@ public:
     vulkan(std::move(vulkan)),
     device(std::move(device))
   {
-    const auto physical_device = this->device->physical_device.device;
     this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
 
     this->extent2d = surface_capabilities.currentExtent;
@@ -431,17 +367,9 @@ public:
                                                   device_extensions,
                                                   queue_create_info);
 
-    uint32_t format_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface, &format_count, nullptr));
-    std::vector<VkSurfaceFormatKHR> surface_formats(format_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface, &format_count, surface_formats.data()));
-
+    std::vector<VkSurfaceFormatKHR> surface_formats = this->vulkan->getPhysicalDeviceSurfaceFormats(physical_device.device, this->surface->surface);
     this->surface_format = surface_formats[0];
-
-    uint32_t presentmode_count;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &presentmode_count, nullptr));
-    std::vector<VkPresentModeKHR> present_modes(presentmode_count);
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface, &presentmode_count, present_modes.data()));
+    std::vector<VkPresentModeKHR> present_modes = this->vulkan->getPhysicalDeviceSurfacePresentModes(physical_device.device, this->surface->surface);
 
     if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_FIFO_KHR");

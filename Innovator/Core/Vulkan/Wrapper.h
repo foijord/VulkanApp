@@ -261,6 +261,24 @@ public:
     return devices.front();
   }
 
+  std::vector<VkSurfaceFormatKHR> getPhysicalDeviceSurfaceFormats(VkPhysicalDevice device, VkSurfaceKHR surface) 
+  {
+    uint32_t count;
+    THROW_ON_ERROR(this->vkGetPhysicalDeviceSurfaceFormats(device, surface, &count, nullptr));
+    std::vector<VkSurfaceFormatKHR> surface_formats(count);
+    THROW_ON_ERROR(this->vkGetPhysicalDeviceSurfaceFormats(device, surface, &count, surface_formats.data()));
+    return surface_formats;
+  }
+
+  std::vector<VkPresentModeKHR> getPhysicalDeviceSurfacePresentModes(VkPhysicalDevice device, VkSurfaceKHR surface)
+  {
+    uint32_t count;
+    THROW_ON_ERROR(this->vkGetPhysicalDeviceSurfacePresentModes(device, surface, &count, nullptr));
+    std::vector<VkPresentModeKHR> present_modes(count);
+    THROW_ON_ERROR(this->vkGetPhysicalDeviceSurfacePresentModes(device, surface, &count, present_modes.data()));
+    return present_modes;
+  }
+
   PFN_vkQueuePresentKHR vkQueuePresent;
   PFN_vkCreateSwapchainKHR vkCreateSwapchain;
   PFN_vkAcquireNextImageKHR vkAcquireNextImage;

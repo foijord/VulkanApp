@@ -7,17 +7,8 @@ namespace Innovator {
   namespace Core {
     namespace Math {
 
-      template <typename T, int N>
-      class vec {
-      public:
-        T v[N];
-      };
-
-      template <typename T, int N>
-      class mat {
-      public:
-        vec<T,N> m[N];
-      };
+      template <typename T, int N> class vec;
+      template <typename T, int N> class mat;
 
       template <typename T>
       using vec2 = vec<T, 2>;
@@ -46,22 +37,67 @@ namespace Innovator {
       using mat3d = mat3<double>;
       using mat4d = mat4<double>;
 
+
+      template <typename T, int N>
+      class vec {
+      public:
+        const vec<T, N> & operator += (const vec<T, N> & v) {
+          for (auto i = 0; i < N; i++) {
+            this->v[i] += v.v[i];
+          }
+          return *this;
+        }
+
+        const vec<T, N> & operator -= (const vec<T, N> & v) {
+          for (auto i = 0; i < N; i++) {
+            this->v[i] -= v.v[i];
+          }
+          return *this;
+        }
+
+        const vec<T, N> & operator *= (T s) {
+          for (size_t i = 0; i < N; i++) {
+            this->v[i] *= s;
+          }
+          return *this;
+        }
+
+        const vec<T, N> & operator /= (T s) {
+          for (size_t i = 0; i < N; i++) {
+            this->v[i] /= s;
+          }
+          return *this;
+        }
+
+        T length() {
+          return sqrt((*this) * (*this));
+        }
+
+        const vec<T, N> & normalize()
+        {
+          (*this) /= this->length();
+          return *this;
+        }
+
+        const vec<T, N> & negate()
+        {
+          (*this) *= T(-1);
+          return *this;
+        }
+
+        T v[N];
+      };
+
       template <typename T, int N>
       vec<T, N> operator + (vec<T, N> v0, const vec<T, N> & v1)
       {
-        for (size_t i = 0; i < N; i++) {
-          v0.v[i] += v1.v[i];
-        }
-        return v0;
+        return v0 += v1;
       }
 
       template <typename T, int N>
       vec<T, N> operator - (vec<T, N> v0, const vec<T, N> & v1)
       {
-        for (size_t i = 0; i < N; i++) {
-          v0.v[i] -= v1.v[i];
-        }
-        return v0;
+        return v0 -= v1;
       }
 
       template <typename T, int N>
@@ -77,28 +113,25 @@ namespace Innovator {
       template <typename T, int N>
       vec<T, N> operator * (vec<T, N> v, T s)
       {
-        for (size_t i = 0; i < N; i++) {
-          v.v[i] *= s;
-        }
-        return v;
+        return v *= s;
       }
 
       template <typename T, int N>
-      T length(const vec<T, N> & v)
+      T length(vec<T, N> v)
       {
-        return sqrt(v * v);
+        return v.length();
       }
 
       template <typename T, int N>
-      vec<T, N> normalize(const vec<T, N> & v)
+      vec<T, N> normalize(vec<T, N> v)
       {
-        return v * (T(1) / length(v));
+        return v.normalize();
       }
 
       template <typename T, int N>
-      vec<T, N> negate(const vec<T, N> & v)
+      vec<T, N> negate(vec<T, N> v)
       {
-        return scale(v, T(-1));
+        return v.negate();
       }
 
       template <typename T>
@@ -112,15 +145,27 @@ namespace Innovator {
       }
 
       template <typename T, int N>
-      mat<T, N> transpose(const mat<T, N> & m)
-      {
-        mat<T, N> t;
-        for (size_t i = 0; i < N; i++) {
-          for (size_t j = 0; j < N; j++) {
-            t.m[i].v[j] = m.m[j].v[i];
+      class mat {
+      public:
+        const mat<T, N> & transpose()
+        {
+          mat<T, N> t;
+          for (size_t i = 0; i < N; i++) {
+            for (size_t j = 0; j < N; j++) {
+              t.m[i].v[j] = this->m[j].v[i];
+            }
           }
+          *this = t;
+          return *this;
         }
-        return t;
+
+        vec<T,N> m[N];
+      };
+
+      template <typename T, int N>
+      mat<T, N> transpose(mat<T, N> m)
+      {
+        return m.transpose();
       }
 
       template <typename T, int N>

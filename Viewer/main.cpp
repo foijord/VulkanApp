@@ -126,13 +126,6 @@ public:
 
   VulkanWindow(QWindow * parent = nullptr) : QWindow(parent) {}
 
-  void loadSceneGraph(const std::string & filename)
-  {
-    File file;
-    this->scene = file.open("Scenes/crate.scene");
-    this->viewer->setSceneGraph(scene);
-  }
-
   void resizeEvent(QResizeEvent * e) override
   {
     QWindow::resizeEvent(e);
@@ -143,24 +136,24 @@ public:
 
   void reloadShaders() const
   {
-    try {
-      std::vector<std::shared_ptr<Shader>> shaders;
-      SearchAction(this->scene, shaders);
+    // try {
+    //   std::vector<std::shared_ptr<Shader>> shaders;
+    //   SearchAction(this->scene, shaders);
 
-      MemoryAllocator allocator(this->viewer->device);
+    //   MemoryAllocator allocator(this->viewer->device);
 
-      for (auto & shader : shaders) {
-        shader->readFile();
-        shader->alloc(&allocator);
-      }
+    //   for (auto & shader : shaders) {
+    //     shader->readFile();
+    //     shader->alloc(&allocator);
+    //   }
 
-      this->viewer->pipeline();
-      this->viewer->record();
-      this->viewer->redraw();
-    }
-    catch (std::exception & e) {
-      std::cerr << e.what() << std::endl;
-    }
+    //   this->viewer->pipeline();
+    //   this->viewer->record();
+    //   this->viewer->redraw();
+    // }
+    // catch (std::exception & e) {
+    //   std::cerr << e.what() << std::endl;
+    // }
   }
 
   void keyPressEvent(QKeyEvent * e) override
@@ -203,31 +196,12 @@ public:
     }
   }
 
-  std::shared_ptr<::VulkanSurface> surface;
   std::shared_ptr<Camera> camera;
   std::shared_ptr<VulkanViewer> viewer;
-  std::shared_ptr<Separator> scene;
 
   Qt::MouseButton button{ Qt::MouseButton::NoButton };
   bool mouse_pressed{ false };
   vec2d mouse_pos{};
-};
-
-class VulkanApplication : public QApplication {
-public:
-  VulkanApplication(int argc, char* argv[]) 
-    : QApplication(argc, argv) 
-  {}
-  
-  bool notify(QObject * receiver, QEvent * event) override {
-    try {
-      return QApplication::notify(receiver, event);
-    } 
-    catch (std::exception & e) {
-      std::cerr << e.what() << std::endl;
-    }
-    return false;
-  }
 };
 
 int main(int argc, char *argv[])
@@ -240,19 +214,16 @@ int main(int argc, char *argv[])
       "VK_LAYER_LUNARG_standard_validation",
 #endif
     };
+
+    std::vector<const char *> instance_extensions{
+      VK_KHR_SURFACE_EXTENSION_NAME,
+      VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-    std::vector<const char *> instance_extensions{
-      VK_KHR_SURFACE_EXTENSION_NAME,
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-      VK_EXT_DEBUG_REPORT_EXTENSION_NAME
-    };
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
-    std::vector<const char *> instance_extensions{
-      VK_KHR_SURFACE_EXTENSION_NAME,
-      VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-      VK_EXT_DEBUG_REPORT_EXTENSION_NAME
-    };
+      VK_KHR_XCB_SURFACE_EXTENSION_NAME
 #endif
+    };
 
     VkApplicationInfo application_info{
       VK_STRUCTURE_TYPE_APPLICATION_INFO, // sType
@@ -304,8 +275,9 @@ int main(int argc, char *argv[])
     window.camera = camera;
     window.viewer = viewer;
 
-    window.loadSceneGraph("Scenes/crate.scene");
-    window.resize(512, 512);
+    File file;
+    auto scene = file.open("Scenes/crate.scene");
+    viewer->setSceneGraph(scene);
 
     return QApplication::exec();
   }
