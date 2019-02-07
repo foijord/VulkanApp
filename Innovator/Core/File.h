@@ -66,7 +66,7 @@ public:
       }
       flags |= static_cast<uint32_t>(number->value);
     }
-    return std::make_shared<NodeExpression>(std::make_shared<T>(flags));
+    return std::make_shared<NodeExpression>(std::make_shared<T>(flags, 0));
   }
 };
 

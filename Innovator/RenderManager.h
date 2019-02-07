@@ -55,36 +55,25 @@ public:
 private:
   void allocate()
   {
-    for (auto & image : this->imageobjects) {
-      image->bind();
+    for (auto & image_object : this->imageobjects) {
+      const auto memory = std::make_shared<VulkanMemory>(
+        this->device,
+        image_object->memory_requirements.size,
+        image_object->memory_type_index);
+
+      const VkDeviceSize offset = 0;
+      image_object->bind(memory, offset);
     }
 
     for (auto & buffer_object : this->bufferobjects) {
-      const auto buffer = std::make_shared<VulkanBuffer>(
-        this->device,
-        buffer_object->flags,
-        buffer_object->size,
-        buffer_object->usage,
-        buffer_object->sharingMode);
-
-      VkMemoryRequirements memory_requirements;
-      vkGetBufferMemoryRequirements(
-        this->device->device,
-        buffer->buffer,
-        &memory_requirements);
-
-      auto memory_type_index = buffer->device->physical_device.getMemoryTypeIndex(
-        memory_requirements.memoryTypeBits,
-        buffer_object->memory_property_flags);
 
       const auto memory = std::make_shared<VulkanMemory>(
         this->device,
-        memory_requirements.size,
-        memory_type_index);
+        buffer_object->memory_requirements.size,
+        buffer_object->memory_type_index);
 
       const VkDeviceSize offset = 0;
-
-      buffer_object->bind(buffer, memory, offset);
+      buffer_object->bind(memory, offset);
     }
   }
 };

@@ -209,6 +209,16 @@ int main(int argc, char *argv[])
   try {
     VulkanImageFactory::Register<QTextureImage>();
 
+    VkApplicationInfo application_info{
+      VK_STRUCTURE_TYPE_APPLICATION_INFO, // sType
+      nullptr,                            // pNext
+      "Innovator Viewer",                 // pApplicationName
+      1,                                  // applicationVersion
+      "Innovator",                        // pEngineName
+      1,                                  // engineVersion
+      VK_API_VERSION_1_0,                 // apiVersion
+    };
+
     std::vector<const char *> instance_layers{
 #ifdef _DEBUG
       "VK_LAYER_LUNARG_standard_validation",
@@ -225,16 +235,6 @@ int main(int argc, char *argv[])
 #endif
     };
 
-    VkApplicationInfo application_info{
-      VK_STRUCTURE_TYPE_APPLICATION_INFO, // sType
-      nullptr,                            // pNext
-      "Innovator Viewer",                 // pApplicationName
-      1,                                  // applicationVersion
-      "Innovator",                        // pEngineName
-      1,                                  // engineVersion
-      VK_API_VERSION_1_0,                 // apiVersion
-    };
-
     auto vulkan = std::make_shared<VulkanInstance>(
       application_info,
       instance_layers,
@@ -248,8 +248,8 @@ int main(int argc, char *argv[])
       VK_DEBUG_REPORT_ERROR_BIT_EXT,
       DebugCallback);
 #endif
-    QApplication app(argc, argv);
 
+    QApplication app(argc, argv);
     VulkanWindow window;
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
@@ -277,30 +277,17 @@ int main(int argc, char *argv[])
 
     auto physical_device = vulkan->selectPhysicalDevice(required_device_features);
 
-    std::vector<VkBool32> presentation_filter(physical_device.queue_family_properties.size());
-    for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
-      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, surface->surface, &presentation_filter[i]);
-    }
-
-    float queue_priorities[1] = { 1.0f };
-    const auto queue_index = physical_device.getQueueIndex(
-      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
-      presentation_filter);
-
-    std::vector<VkDeviceQueueCreateInfo> queue_create_infos{ {
-        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,   // sType
-        nullptr,                                      // pNext
-        0,                                            // flags
-        queue_index,                                  // queueFamilyIndex
-        1,                                            // queueCount   
-        queue_priorities                              // pQueuePriorities
-    } };
+    VkQueueFlags queue_flags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos{ 
+      physical_device.getQueueCreateInfo(queue_flags, surface->surface)
+    };
 
     std::vector<const char *> device_layers{
 #ifdef _DEBUG
       "VK_LAYER_LUNARG_standard_validation",
 #endif
     };
+
     std::vector<const char *> device_extensions{
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };

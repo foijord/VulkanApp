@@ -14,23 +14,21 @@ public:
   BufferObject() = delete;
   ~BufferObject() = default;
   
-  BufferObject(VkDeviceSize size,
-               VkBufferUsageFlags usage,
-               VkSharingMode sharingMode,
-               VkMemoryPropertyFlags memory_property_flags,
-               VkBufferCreateFlags flags = 0) :
-    flags(flags),
-    size(size),
-    usage(usage),
-    sharingMode(sharingMode),
-    memory_property_flags(memory_property_flags)    
-  {}
-
-  void bind(std::shared_ptr<VulkanBuffer> buffer,
-            std::shared_ptr<VulkanMemory> memory, 
-            VkDeviceSize offset)
+  BufferObject(std::shared_ptr<VulkanBuffer> buffer,
+               VkMemoryPropertyFlags memory_property_flags) :
+    buffer(std::move(buffer))
   {
-    this->buffer = std::move(buffer);
+    vkGetBufferMemoryRequirements(this->buffer->device->device,
+                                  this->buffer->buffer,
+                                  &this->memory_requirements);
+
+    this->memory_type_index = this->buffer->device->physical_device.getMemoryTypeIndex(
+      this->memory_requirements.memoryTypeBits,
+      memory_property_flags);
+  }
+
+  void bind(std::shared_ptr<VulkanMemory> memory, VkDeviceSize offset)
+  {
     this->memory = std::move(memory);
     this->offset = offset;
 
@@ -42,19 +40,14 @@ public:
 
   void memcpy(const void * data) const
   {
-    this->memory->memcpy(data, this->size, this->offset);
+    this->memory->memcpy(data, this->memory_requirements.size, this->offset);
   }
 
   std::shared_ptr<VulkanBuffer> buffer;
-
-  VkBufferCreateFlags flags;
-  VkDeviceSize size;
   VkDeviceSize offset{ 0 };
   VkDeviceSize range{ VK_WHOLE_SIZE };
-  VkBufferUsageFlags usage;
-  VkSharingMode sharingMode;
-
-  VkMemoryPropertyFlags memory_property_flags;
+  VkMemoryRequirements memory_requirements;
+  uint32_t memory_type_index;
   std::shared_ptr<VulkanMemory> memory;
 };
 
@@ -66,43 +59,31 @@ public:
 
   ImageObject(std::shared_ptr<VulkanImage> image,
               VkMemoryPropertyFlags memory_property_flags) :
-    image(std::move(image)),
-    memory_property_flags(memory_property_flags)
-  {}
-
-  void bind()
+    image(std::move(image))
   {
-    VkMemoryRequirements memory_requirements;
-    vkGetImageMemoryRequirements(
-      this->image->device->device,
-      this->image->image,
-      &memory_requirements);
+    vkGetImageMemoryRequirements(this->image->device->device,
+                                 this->image->image,
+                                 &this->memory_requirements);
 
-    auto memory_type_index = this->image->device->physical_device.getMemoryTypeIndex(
-      memory_requirements.memoryTypeBits,
+    this->memory_type_index = this->image->device->physical_device.getMemoryTypeIndex(
+      this->memory_requirements.memoryTypeBits,
       memory_property_flags);
-
-    const auto memory = std::make_shared<VulkanMemory>(
-      this->image->device,
-      memory_requirements.size,
-      memory_type_index);
-
-    const VkDeviceSize offset = 0;
-
-    this->bind(memory, offset);
   }
 
   void bind(std::shared_ptr<VulkanMemory> memory, VkDeviceSize offset)
   {
     this->memory = std::move(memory);
+    this->offset = offset;
 
     THROW_ON_ERROR(vkBindImageMemory(this->image->device->device,
                                      this->image->image,
                                      this->memory->memory,
-                                     offset));
+                                     this->offset));
   }
 
   std::shared_ptr<VulkanImage> image;
-  VkMemoryPropertyFlags memory_property_flags;
+  VkDeviceSize offset{ 0 };
+  VkMemoryRequirements memory_requirements;
+  uint32_t memory_type_index;
   std::shared_ptr<VulkanMemory> memory;
 };

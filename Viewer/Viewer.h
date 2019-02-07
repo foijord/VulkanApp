@@ -69,7 +69,13 @@ public:
         this->color_buffer,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-      this->color_buffer_object->bind();
+      const auto memory = std::make_shared<VulkanMemory>(
+        this->device,
+        this->color_buffer_object->memory_requirements.size,
+        this->color_buffer_object->memory_type_index);
+
+      const VkDeviceSize offset = 0;
+      this->color_buffer_object->bind(memory, offset);
 
       this->color_buffer_view = std::make_unique<VulkanImageView>(
         this->color_buffer,
@@ -119,7 +125,13 @@ public:
         this->depth_buffer,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-      this->depth_buffer_object->bind();
+      const auto memory = std::make_shared<VulkanMemory>(
+        this->device,
+        this->depth_buffer_object->memory_requirements.size,
+        this->depth_buffer_object->memory_type_index);
+
+      const VkDeviceSize offset = 0;
+      this->depth_buffer_object->bind(memory, offset);
 
       this->depth_buffer_view = std::make_unique<VulkanImageView>(
         this->depth_buffer,

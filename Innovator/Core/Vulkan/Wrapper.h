@@ -41,14 +41,11 @@ public:
     THROW_ON_ERROR(vkEnumerateDeviceExtensionProperties(this->device, nullptr, &count, this->extension_properties.data()));
   }
   
-  uint32_t getQueueIndex(VkQueueFlags required_flags, std::vector<VkBool32> filter = std::vector<VkBool32>())
+  uint32_t getQueueIndex(VkQueueFlags required_flags, VkSurfaceKHR surface)
   {
-    if (filter.empty()) {
-      filter.resize(this->queue_family_properties.size());
-      std::fill(filter.begin(), filter.end(), VK_TRUE);
-    }
-    if (filter.size() != this->queue_family_properties.size()) {
-      throw std::runtime_error("VulkanDevice::getQueueIndex: invalid filter size");
+    std::vector<VkBool32> filter(this->queue_family_properties.size());
+    for (uint32_t i = 0; i < this->queue_family_properties.size(); i++) {
+      vkGetPhysicalDeviceSurfaceSupportKHR(this->device, i, surface, &filter[i]);
     }
     // check for exact match of required flags
     for (uint32_t queue_index = 0; queue_index < this->queue_family_properties.size(); queue_index++) {
@@ -78,7 +75,21 @@ public:
         }
       }
     }
-    throw std::runtime_error("VulkanDevice::getQueueIndex: could not find suitable memory type");
+    throw std::runtime_error("VulkanDevice::getMemoryTypeIndex: could not find suitable memory type");
+  }
+
+  VkDeviceQueueCreateInfo getQueueCreateInfo(VkQueueFlags flags, VkSurfaceKHR surface)
+  {
+    std::array<float, 1> priorities = { 1.0f };
+
+    return {
+        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,    // sType
+        nullptr,                                       // pNext
+        0,                                             // flags
+        this->getQueueIndex(flags, surface),           // queueFamilyIndex
+        static_cast<uint32_t>(priorities.size()),      // queueCount   
+        priorities.data()                              // pQueuePriorities
+    };
   }
   
   bool supportsFeatures(const VkPhysicalDeviceFeatures & required_features) const

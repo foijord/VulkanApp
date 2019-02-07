@@ -152,8 +152,8 @@ public:
   CpuMemoryBuffer() = delete;
   virtual ~CpuMemoryBuffer() = default;
 
-  explicit CpuMemoryBuffer(VkBufferUsageFlags buffer_usage_flags) :
-    buffer_usage_flags(buffer_usage_flags)
+  explicit CpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags) :
+    usage_flags(usage_flags), create_flags(create_flags)
   {}
 
 private:
@@ -170,9 +170,11 @@ private:
   void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      allocator->state.buffer_data_description.size,
-      this->buffer_usage_flags,
-      VK_SHARING_MODE_EXCLUSIVE,
+      std::make_shared<VulkanBuffer>(allocator->device,
+                                     this->create_flags,
+                                     allocator->state.buffer_data_description.size,
+                                     this->usage_flags,
+                                     VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     allocator->bufferobjects.push_back(this->buffer);
@@ -194,7 +196,8 @@ private:
     recorder->state.buffer = this->buffer->buffer->buffer;
   }
 
-  VkBufferUsageFlags buffer_usage_flags;
+  VkBufferUsageFlags usage_flags;
+  VkBufferCreateFlags create_flags;
   std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
@@ -204,17 +207,19 @@ public:
   GpuMemoryBuffer() = delete;
   virtual ~GpuMemoryBuffer() = default;
 
-  explicit GpuMemoryBuffer(VkBufferUsageFlags buffer_usage_flags) : 
-    buffer_usage_flags(buffer_usage_flags)
+  explicit GpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags) : 
+    usage_flags(usage_flags), create_flags(create_flags)
   {}
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      allocator->state.buffer_data_description.size,
-      this->buffer_usage_flags,
-      VK_SHARING_MODE_EXCLUSIVE,
+      std::make_shared<VulkanBuffer>(allocator->device,
+                                     this->create_flags,
+                                     allocator->state.buffer_data_description.size,
+                                     this->usage_flags,
+                                     VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     allocator->bufferobjects.push_back(this->buffer);
@@ -249,7 +254,8 @@ private:
     recorder->state.buffer = this->buffer->buffer->buffer;
   }
 
-  VkBufferUsageFlags buffer_usage_flags;
+  VkBufferUsageFlags usage_flags;
+  VkBufferCreateFlags create_flags;
   std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
@@ -263,9 +269,11 @@ private:
   void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      sizeof(Innovator::Core::Math::mat4f) * 2,
-      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-      VK_SHARING_MODE_EXCLUSIVE,
+      std::make_shared<VulkanBuffer>(allocator->device,
+                                     0,                                     
+                                     sizeof(Innovator::Core::Math::mat4f) * 2,
+                                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                     VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     allocator->bufferobjects.push_back(this->buffer);
@@ -342,7 +350,7 @@ private:
   void doRecord(CommandRecorder * recorder) override
   {
     recorder->state.vertex_attribute_buffers.push_back(recorder->state.buffer);
-    recorder->state.vertex_attribute_buffer_offsets.push_back(0);
+    recorder->state.vertex_attribute_buffer_offsets.push_back(this->vertex_input_attribute_description.offset);
   }
 
   VkVertexInputAttributeDescription vertex_input_attribute_description;
@@ -564,9 +572,11 @@ private:
       &image_format_properties));
 
     this->buffer = std::make_shared<BufferObject>(
-      this->texture->size(),
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      VK_SHARING_MODE_EXCLUSIVE,
+      std::make_shared<VulkanBuffer>(allocator->device,
+                                     0,                                     
+                                     this->texture->size(),
+                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                     VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     allocator->bufferobjects.push_back(this->buffer);
