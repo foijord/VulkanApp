@@ -307,7 +307,7 @@ int main(int argc, char *argv[])
     window.viewer = viewer;
 
     File file;
-    auto scene = file.open("Scenes/crate.scene");
+    auto scene = file.open("crate.scene");
     viewer->setSceneGraph(scene);
 
     window.resize(512, 512);
