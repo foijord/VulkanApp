@@ -19,9 +19,9 @@ private slots:
 
   void testTokenizer()
   {
-    std::string input("() + - * / symbol symbol_underscore 0 1 2 3 4 5 6 7 8 9");
+    std::string input("() + - * / abc abc_def abc_def_123 0 1 2 12 34");
     std::vector<std::string> expected_tokens({ 
-      "(", ")", "+", "-", "*", "/", "symbol", "symbol_underscore", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" 
+      "(", ")", "+", "-", "*", "/", "abc", "abc_def", "abc_def_123", "0", "1", "2", "12", "34" 
     });
 
     std::sregex_token_iterator tokens(input.begin(), input.end(), this->scheme.tokenizer);

@@ -602,7 +602,7 @@ static Environment global_env{
 class Scheme {
 public:
   Scheme()
-    : tokenizer(R"([()]|"([^\"]|\.)*"|[a-zA-Z_-]+|[0-9]+|[+*-/<>=])"),
+    : tokenizer(R"([()]|"([^\"]|\.)*"|[a-zA-Z0-9_-]+|[0-9]+|[+*-/<>=])"),
       environment(std::make_shared<Environment>(global_env.begin(), global_env.end()))
   {}
 

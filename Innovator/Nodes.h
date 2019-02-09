@@ -153,20 +153,11 @@ public:
   virtual ~CpuMemoryBuffer() = default;
 
   explicit CpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags) :
-    usage_flags(usage_flags), create_flags(create_flags)
+    usage_flags(usage_flags), 
+    create_flags(create_flags)
   {}
 
 private:
-  template <typename StateType>
-  void updateState(StateType & state)
-  {
-    state.descriptor_buffer_info = {
-      this->buffer->buffer->buffer,
-      this->buffer->offset,
-      this->buffer->range,
-    };
-  }
-
   void doAlloc(MemoryAllocator * allocator) override
   {
     this->buffer = std::make_shared<BufferObject>(
@@ -182,13 +173,13 @@ private:
 
   void doStage(MemoryStager * stager) override
   {
-    this->updateState(stager->state);
+    stager->state.buffer = this->buffer->buffer->buffer;
     this->buffer->memcpy(stager->state.buffer_data_description.data);
   }
 
   void doPipeline(PipelineCreator * creator) override
   {
-    this->updateState(creator->state);
+    creator->state.buffer = this->buffer->buffer->buffer;
   }
 
   void doRecord(CommandRecorder * recorder) override
@@ -208,7 +199,8 @@ public:
   virtual ~GpuMemoryBuffer() = default;
 
   explicit GpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags) : 
-    usage_flags(usage_flags), create_flags(create_flags)
+    usage_flags(usage_flags), 
+    create_flags(create_flags)
   {}
 
 private:
@@ -228,13 +220,13 @@ private:
   void doStage(MemoryStager * stager) override
   {
     std::vector<VkBufferCopy> regions = { {
-        stager->state.descriptor_buffer_info.offset,     // srcOffset
-        this->buffer->offset,                            // dstOffset
+        0,                                               // srcOffset
+        0,                                               // dstOffset
         stager->state.buffer_data_description.size,      // size
     } };
 
     vkCmdCopyBuffer(stager->command,
-                    stager->state.descriptor_buffer_info.buffer,
+                    stager->state.buffer,
                     this->buffer->buffer->buffer,
                     static_cast<uint32_t>(regions.size()),
                     regions.data());
@@ -242,11 +234,7 @@ private:
 
   void doPipeline(PipelineCreator * creator) override
   {
-    creator->state.descriptor_buffer_info = {
-      this->buffer->buffer->buffer,
-      this->buffer->offset,
-      this->buffer->range,
-    };
+    creator->state.buffer = this->buffer->buffer->buffer;
   }
 
   void doRecord(CommandRecorder * recorder) override
@@ -281,11 +269,7 @@ private:
 
   void doPipeline(PipelineCreator * creator) override
   {
-    creator->state.descriptor_buffer_info = {
-      this->buffer->buffer->buffer,
-      this->buffer->offset,
-      this->buffer->range,
-    };
+    creator->state.buffer = this->buffer->buffer->buffer;
   }
 
   void doRender(SceneRenderer * renderer) override
@@ -350,7 +334,7 @@ private:
   void doRecord(CommandRecorder * recorder) override
   {
     recorder->state.vertex_attribute_buffers.push_back(recorder->state.buffer);
-    recorder->state.vertex_attribute_buffer_offsets.push_back(this->vertex_input_attribute_description.offset);
+    recorder->state.vertex_attribute_buffer_offsets.push_back(0);
   }
 
   VkVertexInputAttributeDescription vertex_input_attribute_description;
@@ -394,54 +378,58 @@ public:
   DescriptorSetLayoutBinding(uint32_t binding, 
                              VkDescriptorType descriptorType, 
                              VkShaderStageFlags stageFlags) :
-    descriptor_image_info({
-      nullptr, nullptr, VK_IMAGE_LAYOUT_UNDEFINED
-    }),
-    descriptor_buffer_info({
-      nullptr, 0, 0
-    }),
-    descriptor_set_layout_binding({
-      binding,
-      descriptorType,
-      1,
-      stageFlags,
-      nullptr,
-    })
+    binding(binding),
+    descriptorType(descriptorType),
+    stageFlags(stageFlags)
   {}
 
 private:
   void doPipeline(PipelineCreator * creator) override
   {
     creator->state.descriptor_pool_sizes.push_back({
-      this->descriptor_set_layout_binding.descriptorType,                // type 
-      this->descriptor_set_layout_binding.descriptorCount,               // descriptorCount
+      this->descriptorType,                // type 
+      1,                                   // descriptorCount
     });
 
     creator->state.descriptor_set_layout_bindings.push_back({
-      this->descriptor_set_layout_binding
+      this->binding,
+      this->descriptorType,
+      1,
+      this->stageFlags,
+      nullptr,
     });
 
-    // copy these so they don't get overwritten!
-    this->descriptor_image_info = creator->state.descriptor_image_info;
-    this->descriptor_buffer_info = creator->state.descriptor_buffer_info;
+    this->descriptor_image_info = {
+      creator->state.sampler,
+      creator->state.imageView,
+      creator->state.imageLayout
+    };
+
+    this->descriptor_buffer_info = {
+      creator->state.buffer,                          // buffer
+      0,                                              // offset
+      VK_WHOLE_SIZE                                   // range
+    };
    
     creator->state.write_descriptor_sets.push_back({
-      VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                           // sType
-      nullptr,                                                          // pNext
-      nullptr,                                                          // dstSet
-      this->descriptor_set_layout_binding.binding,                      // dstBinding
-      0,                                                                // dstArrayElement
-      this->descriptor_set_layout_binding.descriptorCount,              // descriptorCount
-      this->descriptor_set_layout_binding.descriptorType,               // descriptorType
-      &this->descriptor_image_info,                                     // pImageInfo
-      &this->descriptor_buffer_info,                                    // pBufferInfo
-      nullptr,                                                          // pTexelBufferView
+      VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,          // sType
+      nullptr,                                         // pNext
+      nullptr,                                         // dstSet
+      this->binding,                                   // dstBinding
+      0,                                               // dstArrayElement
+      1,                                               // descriptorCount
+      this->descriptorType,                            // descriptorType
+      &this->descriptor_image_info,                    // pImageInfo
+      &this->descriptor_buffer_info,                   // pBufferInfo
+      nullptr,                                         // pTexelBufferView
     });
   }
 
+  uint32_t binding;
+  VkDescriptorType descriptorType;
+  VkShaderStageFlags stageFlags;
   VkDescriptorImageInfo descriptor_image_info{};
   VkDescriptorBufferInfo descriptor_buffer_info{};
-  VkDescriptorSetLayoutBinding descriptor_set_layout_binding;
 };
 
 class Shader : public Node {
@@ -663,11 +651,8 @@ private:
 
   void doPipeline(PipelineCreator * creator) override
   {
-    creator->state.descriptor_image_info = {
-      creator->state.sampler,
-      this->view->view,
-      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+    creator->state.imageView = this->view->view;
+    creator->state.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   }
 
   std::shared_ptr<VulkanTextureImage> texture;

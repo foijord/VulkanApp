@@ -201,15 +201,15 @@ public:
       { "sampler", std::make_shared<SamplerFunction>() },
       { "indexeddrawcommand", std::make_shared<IndexedDrawCommandFunction>() },
       { "image", std::make_shared<ImageFunction>() },
-      { "bufferdataui", std::make_shared<BufferDataFunction<uint32_t>>() },
-      { "bufferdataf", std::make_shared<BufferDataFunction<float>>() },
+      { "bufferdataui32", std::make_shared<BufferDataFunction<uint32_t>>() },
+      { "bufferdataf32", std::make_shared<BufferDataFunction<float>>() },
       { "cpumemorybuffer", std::make_shared<CpuMemoryBufferFunction>() },
       { "gpumemorybuffer", std::make_shared<GpuMemoryBufferFunction>() },
       { "transformbuffer", std::make_shared<TransformBufferFunction>() },
       { "indexbufferdescription", std::make_shared<IndexBufferDescriptionFunction>() },
       { "vertexinputattributedescription", std::make_shared<VertexInputAttributeDescriptionFunction>() },
       { "vertexinputbindingdescription", std::make_shared<VertexInputBindingDescriptionFunction>() },
-      { "VK_INDEX_TYPE_UINT", std::make_shared<Number>(VK_INDEX_TYPE_UINT32) },
+      { "VK_INDEX_TYPE_UINT32", std::make_shared<Number>(VK_INDEX_TYPE_UINT32) },
       { "VK_SHADER_STAGE_VERTEX_BIT", std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT) },
       { "VK_SHADER_STAGE_COMPUTE_BIT", std::make_shared<Number>(VK_SHADER_STAGE_COMPUTE_BIT) },
       { "VK_SHADER_STAGE_FRAGMENT_BIT", std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT) },
@@ -223,7 +223,7 @@ public:
       { "VK_BUFFER_USAGE_VERTEX_BUFFER_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) },
       { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST", std::make_shared<Number>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) },
       { "VK_VERTEX_INPUT_RATE_VERTEX", std::make_shared<Number>(VK_VERTEX_INPUT_RATE_VERTEX) },
-      { "VK_FORMAT_SFLOAT", std::make_shared<Number>(VK_FORMAT_R32G32B32_SFLOAT) },
+      { "VK_FORMAT_R32G32B32_SFLOAT", std::make_shared<Number>(VK_FORMAT_R32G32B32_SFLOAT) },
     };
 
     this->scheme.environment->outer = std::make_shared<Environment>(node_env.begin(), node_env.end());

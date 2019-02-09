@@ -29,9 +29,7 @@ struct MemoryState {
 };
 
 struct StageState {
-  VkDescriptorBufferInfo descriptor_buffer_info{
-    nullptr, 0, 0
-  };
+  VkBuffer buffer;
   VulkanBufferDataDescription buffer_data_description{
     0, 0, nullptr
   };
@@ -54,17 +52,10 @@ struct PipelineState {
     1.0f,                                                       // lineWidth
   };
 
-  VkDescriptorBufferInfo descriptor_buffer_info{
-    nullptr, 0, 0
-  };
-
-  VkDescriptorImageInfo descriptor_image_info{
-    nullptr, nullptr, VK_IMAGE_LAYOUT_UNDEFINED
-  };
-
-  VkSampler sampler{
-    nullptr
-  };
+  VkBuffer buffer { nullptr };
+  VkImageView imageView { nullptr };
+  VkImageLayout imageLayout { VK_IMAGE_LAYOUT_UNDEFINED };
+  VkSampler sampler{ nullptr };
 
   VulkanBufferDataDescription buffer_data_description{
     0, 0, nullptr

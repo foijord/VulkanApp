@@ -45,7 +45,6 @@ public:
 
   std::shared_ptr<VulkanBuffer> buffer;
   VkDeviceSize offset{ 0 };
-  VkDeviceSize range{ VK_WHOLE_SIZE };
   VkMemoryRequirements memory_requirements;
   uint32_t memory_type_index;
   std::shared_ptr<VulkanMemory> memory;

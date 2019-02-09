@@ -401,7 +401,7 @@ public:
       attachment_descriptions,
       subpass_descriptions);
 
-    this->renderaction = std::make_unique<RenderManager>(this->device);
+    this->rendermanager = std::make_unique<RenderManager>(this->device);
 
     this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
                                                               this->device,
@@ -435,11 +435,11 @@ public:
 
   void redraw() const
   {
-    this->renderaction->render(this->root.get(),
-                               this->framebuffer->framebuffer,
-                               this->renderpass->renderpass,
-                               this->camera.get(),
-                               this->swapchain->extent2d);
+    this->rendermanager->render(this->root.get(),
+                                this->framebuffer->framebuffer,
+                                this->renderpass->renderpass,
+                                this->camera.get(),
+                                this->swapchain->extent2d);
 
     this->swapBuffers();
   }
@@ -448,16 +448,16 @@ public:
   {
     this->root = std::move(scene);
 
-    this->renderaction->alloc(this->root.get());
-    this->renderaction->stage(this->root.get());
+    this->rendermanager->alloc(this->root.get());
+    this->rendermanager->stage(this->root.get());
 
-    this->renderaction->pipeline(this->root.get(), 
+    this->rendermanager->pipeline(this->root.get(), 
                                  this->renderpass->renderpass);
 
-    this->renderaction->record(this->root.get(), 
-                               this->framebuffer->framebuffer, 
-                               this->renderpass->renderpass, 
-                               this->swapchain->extent2d);
+    this->rendermanager->record(this->root.get(), 
+                                this->framebuffer->framebuffer, 
+                                this->renderpass->renderpass, 
+                                this->swapchain->extent2d);
   }
 
   void swapBuffers() const
@@ -498,10 +498,10 @@ public:
     this->camera->aspectratio = static_cast<float>(this->swapchain->extent2d.width) /
                                 static_cast<float>(this->swapchain->extent2d.height);
 
-    this->renderaction->record(this->root.get(),
-                               this->framebuffer->framebuffer,
-                               this->renderpass->renderpass,
-                               this->swapchain->extent2d);
+    this->rendermanager->record(this->root.get(),
+                                this->framebuffer->framebuffer,
+                                this->renderpass->renderpass,
+                                this->swapchain->extent2d);
 
     this->redraw();
   }
@@ -514,7 +514,7 @@ public:
   std::shared_ptr<Camera> camera;
   std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFramebuffer> framebuffer;
-  std::unique_ptr<RenderManager> renderaction;
+  std::unique_ptr<RenderManager> rendermanager;
   std::unique_ptr<VulkanSwapchainObject> swapchain;
   std::shared_ptr<Separator> root;
 
