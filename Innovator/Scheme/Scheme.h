@@ -7,7 +7,9 @@
 #include <regex>
 #include <vector>
 #include <memory>
+#include <sstream>
 #include <numeric>
+#include <iostream>
 #include <typeinfo>
 #include <algorithm>
 #include <functional>
@@ -517,9 +519,9 @@ inline exp_ptr eval(exp_ptr & exp, env_ptr env)
 
 class ParseTree : public std::vector<ParseTree> {
 public:
-  explicit ParseTree(std::sregex_token_iterator & it)
+  explicit ParseTree(std::istream_iterator<std::string> & it)
   {
-    if (it->str() == "(") {
+    if (*it == "(") {
       while (*(++it) != ")") {
         // TODO: handle mismatched parentheses
         this->push_back(ParseTree(it));
@@ -527,6 +529,7 @@ public:
     }
     this->token = *it;
   }
+
   std::string token;
 };
 
@@ -602,18 +605,20 @@ static Environment global_env{
 class Scheme {
 public:
   Scheme()
-    : tokenizer(R"([()]|"([^\"]|\.)*"|[a-zA-Z0-9_-]+|[0-9]+|[+*-/<>=])"),
-      environment(std::make_shared<Environment>(global_env.begin(), global_env.end()))
+    : environment(std::make_shared<Environment>(global_env.begin(), global_env.end()))
   {}
 
-  exp_ptr eval(const std::string & input) const
+  exp_ptr eval(std::string input) const
   {
-    std::sregex_token_iterator tokens(input.begin(), input.end(), this->tokenizer);
+    input = std::regex_replace(input, std::regex(R"([(])"), " ( ");
+    input = std::regex_replace(input, std::regex(R"([)])"), " ) ");
+
+    std::istringstream iss(input);
+    std::istream_iterator<std::string> tokens(iss);
     const ParseTree parsetree(tokens);
     auto exp = parse(parsetree);
     return ::eval(exp, this->environment);
   }
 
-  const std::regex tokenizer;
   env_ptr environment;
 };
