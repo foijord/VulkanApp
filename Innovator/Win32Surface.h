@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Innovator/Core/Vulkan/Wrapper.h>
+#include <Innovator/Vulkan/Wrapper.h>
 #include <Windows.h>
 
 class VulkanSurface {

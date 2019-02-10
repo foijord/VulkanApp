@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Innovator/Core/Misc/Defines.h>
-#include <Innovator/Core/VulkanObjects.h>
+#include <Innovator/Misc/Defines.h>
+#include <Innovator/VulkanObjects.h>
 #include <Innovator/Nodes.h>
 #include <Innovator/Camera.h>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Innovator/Core/Misc/Defines.h>
+#include <Innovator/Misc/Defines.h>
 
 #include <map>
 #include <list>

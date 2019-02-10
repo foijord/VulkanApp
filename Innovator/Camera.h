@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Innovator/Core/Misc/Defines.h>
-#include <Innovator/Core/Math/Matrix.h>
+#include <Innovator/Misc/Defines.h>
+#include <Innovator/Math/Matrix.h>
 
 using namespace Innovator::Core::Math;
 

@@ -1,10 +1,10 @@
 #pragma once
 
 #include <Innovator/RenderManager.h>
-#include <Innovator/Core/Node.h>
-#include <Innovator/Core/Math/Matrix.h>
-#include <Innovator/Core/Misc/Defines.h>
-#include <Innovator/Core/Misc/Factory.h>
+#include <Innovator/Node.h>
+#include <Innovator/Math/Matrix.h>
+#include <Innovator/Misc/Defines.h>
+#include <Innovator/Misc/Factory.h>
 
 #include <vulkan/vulkan.h>
 

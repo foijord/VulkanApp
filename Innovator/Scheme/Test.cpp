@@ -1,5 +1,5 @@
 #include <QtTest/QtTest>
-#include <Innovator/Core/Scheme/Scheme.h>
+#include <Innovator/Scheme/Scheme.h>
 
 #include <string>
 #include <iostream>

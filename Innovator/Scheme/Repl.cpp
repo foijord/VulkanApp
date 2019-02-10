@@ -1,5 +1,5 @@
 
-#include <Innovator/Core/Scheme/Scheme.h>
+#include <Innovator/Scheme/Scheme.h>
 
 #include <iostream>
 #include <string>

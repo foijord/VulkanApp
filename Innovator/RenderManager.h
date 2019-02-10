@@ -2,9 +2,9 @@
 
 #include <Innovator/Camera.h>
 
-#include <Innovator/Core/Misc/Defines.h>
-#include <Innovator/Core/Node.h>
-#include <Innovator/Core/State.h>
+#include <Innovator/Misc/Defines.h>
+#include <Innovator/Node.h>
+#include <Innovator/State.h>
 
 #include <map>
 #include <memory>

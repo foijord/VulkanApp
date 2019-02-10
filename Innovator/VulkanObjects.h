@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Innovator/Core/Misc/Defines.h>
-#include <Innovator/Core/Vulkan/Wrapper.h>
+#include <Innovator/Misc/Defines.h>
+#include <Innovator/Vulkan/Wrapper.h>
 
 #include <vulkan/vulkan.h>
 

@@ -1,8 +1,8 @@
 
 #include <Viewer.h>
 #include <Innovator/Nodes.h>
-#include <Innovator/Core/File.h>
-#include <Innovator/Core/Misc/Factory.h>
+#include <Innovator/File.h>
+#include <Innovator/Misc/Factory.h>
 
 #include <QApplication>
 #include <QWindow>

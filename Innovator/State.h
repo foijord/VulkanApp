@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Innovator/Core/Vulkan/Wrapper.h>
-#include <Innovator/Core/Math/Matrix.h>
+#include <Innovator/Vulkan/Wrapper.h>
+#include <Innovator/Math/Matrix.h>
 
 #include <vector>
 
