@@ -4,8 +4,7 @@
 #include <cmath>
 
 namespace Innovator {
-  namespace Core {
-    namespace Math {
+  namespace Math {
 
       template <typename T, int N> class vec;
       template <typename T, int N> class mat;
@@ -211,5 +210,4 @@ namespace Innovator {
         return mat;
       }
     }
-  }
 }

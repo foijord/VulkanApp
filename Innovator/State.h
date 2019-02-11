@@ -5,7 +5,7 @@
 
 #include <vector>
 
-using namespace Innovator::Core::Math;
+using namespace Innovator::Math;
 
 struct VulkanIndexBufferDescription {
   VkIndexType type;

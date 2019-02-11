@@ -12,7 +12,7 @@
 #include <vector>
 #include <memory>
 
-using namespace Innovator::Core::Math;
+using namespace Innovator::Math;
 
 template <typename Traverser, typename State>
 class StateScope {
@@ -259,7 +259,7 @@ private:
     this->buffer = std::make_shared<BufferObject>(
       std::make_shared<VulkanBuffer>(allocator->device,
                                      0,                                     
-                                     sizeof(Innovator::Core::Math::mat4f) * 2,
+                                     sizeof(Innovator::Math::mat4f) * 2,
                                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -904,18 +904,20 @@ public:
   NO_COPY_OR_ASSIGNMENT(DrawCommand)
   virtual ~DrawCommand() = default;
 
-  explicit DrawCommand(VkPrimitiveTopology topology, uint32_t count) :
-    DrawCommandBase(topology),
-    count(count)
+  explicit DrawCommand(VkPrimitiveTopology topology) :
+    DrawCommandBase(topology)
   {}
 
 private:
-  void execute(VkCommandBuffer command, CommandRecorder *) override
+  void execute(VkCommandBuffer command, CommandRecorder * recorder) override
   {
-    vkCmdDraw(command, this->count, 1, 0, 0);
-  }
+    uint32_t vertex_count = static_cast<uint32_t>(
+      recorder->state.buffer_data_description.size / 
+      recorder->state.buffer_data_description.stride /
+      3);
 
-  uint32_t count;  
+    vkCmdDraw(command, vertex_count, 1, 0, 0);
+  }
 };
 
 class IndexedDrawCommand : public DrawCommandBase {

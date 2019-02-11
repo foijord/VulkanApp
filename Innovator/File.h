@@ -1,11 +1,16 @@
 #pragma once
 
 #include <Innovator/Nodes.h>
+#include <Innovator/Math/Matrix.h>
 #include <Innovator/Scheme/Scheme.h>
+
+using namespace Innovator::Math;
 
 #include <string>
 #include <memory>
+#include <vector>
 #include <fstream>
+#include <iterator>
 
 class NodeExpression : public Expression {
 public:
@@ -47,6 +52,38 @@ public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
     check_num_args(args);
+    if (args->children.size() == 1) {
+      const auto filename = get_string(args, 0);
+      std::ifstream input(filename->value, std::ios::binary);
+      std::vector<unsigned char> bytes(std::istreambuf_iterator<char>(input), {});
+
+      size_t offset = 80; // skip header
+      uint32_t num_triangles;
+      std::copy(reinterpret_cast<const char*>(&bytes[offset + 0]),
+                reinterpret_cast<const char*>(&bytes[offset + 4]),
+                reinterpret_cast<char*>(&num_triangles));
+
+      std::cout << "num triangles: " << num_triangles << std::endl;
+
+      offset += 4;
+
+      size_t num_bytes = num_triangles * 50 + 80 + 4;
+      if (num_bytes != bytes.size()) {
+        throw std::runtime_error("unable to read stl file");
+      }
+
+      std::vector<T> buffer(num_triangles * 9);
+
+      for (size_t i = 0; i < num_triangles; i++) {
+        std::copy(reinterpret_cast<const char*>(&bytes[offset + 12]),
+                  reinterpret_cast<const char*>(&bytes[offset + 48]),
+                  reinterpret_cast<char*>(&buffer[i * 9]));
+
+        offset += 50;
+      }
+      auto bufferdata = std::make_shared<BufferData<T>>(buffer);
+      return std::make_shared<NodeExpression>(bufferdata);
+    }
     auto bufferdata = std::make_shared<BufferData<T>>(get_values<T>(args));
     return std::make_shared<NodeExpression>(bufferdata);
   }
@@ -104,6 +141,18 @@ public:
       static_cast<uint32_t>(binding->value),
       static_cast<uint32_t>(stride->value),
       static_cast<VkVertexInputRate>(uint32_t(inputRate->value))));
+  }
+};
+
+class DrawCommandFunction : public Callable {
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
+    check_num_args(args, 1);
+    const auto topology = get_number(args, 0);
+
+    return std::make_shared<NodeExpression>(std::make_shared<DrawCommand>(
+      static_cast<VkPrimitiveTopology>(uint32_t(topology->value))));
   }
 };
 
@@ -199,6 +248,7 @@ public:
       { "shader", std::make_shared<ShaderFunction>() },
       { "layout-binding", std::make_shared<LayoutBindingFunction>() },
       { "sampler", std::make_shared<SamplerFunction>() },
+      { "drawcommand", std::make_shared<DrawCommandFunction>() },
       { "indexeddrawcommand", std::make_shared<IndexedDrawCommandFunction>() },
       { "image", std::make_shared<ImageFunction>() },
       { "bufferdataui32", std::make_shared<BufferDataFunction<uint32_t>>() },

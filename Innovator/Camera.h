@@ -3,7 +3,7 @@
 #include <Innovator/Misc/Defines.h>
 #include <Innovator/Math/Matrix.h>
 
-using namespace Innovator::Core::Math;
+using namespace Innovator::Math;
 
 class Camera {
 public:

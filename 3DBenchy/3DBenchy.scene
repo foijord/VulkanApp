@@ -1,0 +1,11 @@
+(separator
+ (shader "3DBenchy/3DBenchy.vert" VK_SHADER_STAGE_VERTEX_BIT)
+ (shader "3DBenchy/3DBenchy.frag" VK_SHADER_STAGE_FRAGMENT_BIT)
+ (bufferdataf32 "3DBenchy/3DBenchy.stl")
+ (cpumemorybuffer VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
+ (gpumemorybuffer VK_BUFFER_USAGE_VERTEX_BUFFER_BIT VK_BUFFER_USAGE_TRANSFER_DST_BIT)
+ (vertexinputattributedescription 0 0 VK_FORMAT_R32G32B32_SFLOAT 0)
+ (vertexinputbindingdescription 0 3 VK_VERTEX_INPUT_RATE_VERTEX)
+ (transformbuffer)
+ (layout-binding 0 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER VK_SHADER_STAGE_VERTEX_BIT)
+ (drawcommand VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST))
