@@ -370,7 +370,7 @@ public:
 
   ~VulkanMemory();
 
-  void* map(VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags = 0) const;
+  uint8_t* map(VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags = 0) const;
   void unmap() const;
   void memcpy(const void* src, VkDeviceSize size, VkDeviceSize offset);
 
@@ -942,12 +942,12 @@ VulkanMemory::~VulkanMemory()
   vkFreeMemory(this->device->device, this->memory, nullptr);
 }
 
-inline void* 
+inline uint8_t* 
 VulkanMemory::map(VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags) const
 {
-  void* data;
+  void * data;
   THROW_ON_ERROR(vkMapMemory(this->device->device, this->memory, offset, size, flags, &data));
-  return data;
+  return reinterpret_cast<uint8_t*>(data);
 }
 
 inline void 

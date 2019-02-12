@@ -4,6 +4,7 @@
 #include <Innovator/Math/Matrix.h>
 #include <Innovator/Scheme/Scheme.h>
 
+
 using namespace Innovator::Math;
 
 #include <string>
@@ -11,6 +12,8 @@ using namespace Innovator::Math;
 #include <vector>
 #include <fstream>
 #include <iterator>
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
 
 class NodeExpression : public Expression {
 public:
@@ -51,41 +54,60 @@ class BufferDataFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    check_num_args(args);
-    if (args->children.size() == 1) {
-      const auto filename = get_string(args, 0);
-      std::ifstream input(filename->value, std::ios::binary);
-      std::vector<unsigned char> bytes(std::istreambuf_iterator<char>(input), {});
+    #if 1
+    check_num_args(args, 1);
 
-      size_t offset = 80; // skip header
-      uint32_t num_triangles;
-      std::copy(reinterpret_cast<const char*>(&bytes[offset + 0]),
-                reinterpret_cast<const char*>(&bytes[offset + 4]),
-                reinterpret_cast<char*>(&num_triangles));
+    const auto filename = get_string(args, 0);
+    std::ifstream input(filename->value, std::ios::binary);
 
-      std::cout << "num triangles: " << num_triangles << std::endl;
+    std::uintmax_t file_size = fs::file_size(fs::current_path() / filename->value);
+    std::cout << "std::file_size reported size of: " << file_size << std::endl;
 
-      offset += 4;
+    // header is first 80 bytes
+    char header[80];
+    input.read(&header[0], 80);
 
-      size_t num_bytes = num_triangles * 50 + 80 + 4;
-      if (num_bytes != bytes.size()) {
-        throw std::runtime_error("unable to read stl file");
-      }
+    std::cout << "header: " << std::string(header) << std::endl;
 
-      std::vector<T> buffer(num_triangles * 9);
+    // num triangles is next 4 bytes
+    uint32_t num_triangles;
+    input.read(reinterpret_cast<char*>(&num_triangles), 4);
 
-      for (size_t i = 0; i < num_triangles; i++) {
-        std::copy(reinterpret_cast<const char*>(&bytes[offset + 12]),
-                  reinterpret_cast<const char*>(&bytes[offset + 48]),
-                  reinterpret_cast<char*>(&buffer[i * 9]));
+    std::cout << "num triangles: " << num_triangles << std::endl;
 
-        offset += 50;
-      }
-      auto bufferdata = std::make_shared<BufferData<T>>(buffer);
-      return std::make_shared<NodeExpression>(bufferdata);
+    if (num_triangles * 50 != file_size - 84) {
+      throw std::runtime_error("unable to read stl file");
     }
-    auto bufferdata = std::make_shared<BufferData<T>>(get_values<T>(args));
+
+    // read the rest of the file
+    std::vector<uint8_t> bytes(std::istreambuf_iterator<char>(input), {});
+
+    size_t num_bytes = num_triangles * 50;
+    if (num_bytes != bytes.size()) {
+      throw std::runtime_error("unable to read stl file");
+    }
+
+    auto bufferdata = std::make_shared<BufferData>();
+    bufferdata->values.resize(num_triangles * 36);
+    for (size_t i = 0; i < num_triangles; i++) {
+      std::copy(reinterpret_cast<const char*>(&bytes[i * 50 + 12]),
+                reinterpret_cast<const char*>(&bytes[i * 50 + 48]),
+                &bufferdata->values[i * 36]);
+    }
+
     return std::make_shared<NodeExpression>(bufferdata);
+    #else
+    check_num_args(args);
+    std::vector<T> values = get_values<T>(args);
+    std::vector<uint8_t> bytes(values.size() * sizeof(T));
+
+    std::copy(reinterpret_cast<uint8_t*>(&values[0]),
+              reinterpret_cast<uint8_t*>(&values[values.size()]),
+              &bytes[0]);
+
+    auto bufferdata = std::make_shared<BufferData>(bytes);
+    return std::make_shared<NodeExpression>(bufferdata);
+    #endif
   }
 };
 
@@ -148,11 +170,13 @@ class DrawCommandFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    check_num_args(args, 1);
-    const auto topology = get_number(args, 0);
+    check_num_args(args, 2);
+    const auto stride = get_number(args, 0);
+    const auto topology = get_number(args, 1);
 
     return std::make_shared<NodeExpression>(std::make_shared<DrawCommand>(
-      static_cast<VkPrimitiveTopology>(uint32_t(topology->value))));
+      static_cast<VkPrimitiveTopology>(uint32_t(topology->value)),
+      static_cast<VkDeviceSize>(stride->value)));
   }
 };
 

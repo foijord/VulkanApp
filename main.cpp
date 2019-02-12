@@ -16,10 +16,10 @@
 
 static VkBool32 DebugCallback(
   VkFlags flags,
-  VkDebugReportObjectTypeEXT type,
-  uint64_t src,
-  size_t location,
-  int32_t code,
+  VkDebugReportObjectTypeEXT,
+  uint64_t,
+  size_t,
+  int32_t,
   const char *layer,
   const char *msg,
   void *)
@@ -57,7 +57,7 @@ public:
 
   virtual ~QTextureImage() = default;
 
-  VkExtent3D extent(size_t mip_level) const override
+  VkExtent3D extent(size_t) const override
   {
     return {
       static_cast<uint32_t>(this->image.size().width()),
@@ -91,7 +91,7 @@ public:
     return this->image.sizeInBytes();
   }
 
-  size_t size(size_t level) const override
+  size_t size(size_t) const override
   {
     return this->image.sizeInBytes();
   }
@@ -308,6 +308,7 @@ int main(int argc, char *argv[])
 
     File file;
     auto scene = file.open("3DBenchy/3DBenchy.scene");
+    //auto scene = file.open("crate.scene");
     viewer->setSceneGraph(scene);
 
     window.resize(512, 512);

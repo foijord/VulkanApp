@@ -7,6 +7,7 @@
 
 #include <utility>
 #include <memory>
+#include <assert.h>
 
 class BufferObject {
 public:
@@ -36,6 +37,13 @@ public:
                                       this->buffer->buffer,
                                       this->memory->memory,
                                       this->offset));
+  }
+
+  void memcpy(const std::vector<uint8_t> * src) const
+  {
+    uint8_t * dst = this->memory->map(src->size(), this->offset);
+    std::copy(src->begin(), src->end(), dst);
+    this->memory->unmap();
   }
 
   void memcpy(const void * data) const

@@ -105,45 +105,38 @@ private:
   };
 };
 
-template <typename T>
 class BufferData : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(BufferData)
-  BufferData() = delete;
+  BufferData() = default;
   virtual ~BufferData() = default;
 
-  explicit BufferData(std::vector<T> values) :
-    values(std::move(values)),
-    buffer_data_description({
-      sizeof(T),                        // stride
-      sizeof(T) * this->values.size(),  // size
-      this->values.data(),              // data
-    })
+  explicit BufferData(std::vector<uint8_t> values) :
+    values(std::move(values))
   {}
+
+  std::vector<uint8_t> values;
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
-    allocator->state.buffer_data_description = this->buffer_data_description;
+    allocator->state.bufferdata = &this->values;
   }
 
   void doStage(MemoryStager * stager) override
   {
-    stager->state.buffer_data_description = this->buffer_data_description;
+    stager->state.bufferdata = &this->values;
   }
 
   void doPipeline(PipelineCreator * creator) override
   {
-    creator->state.buffer_data_description = this->buffer_data_description;
+    creator->state.bufferdata = &this->values;
   }
 
   void doRecord(CommandRecorder * recorder) override
   {
-    recorder->state.buffer_data_description = this->buffer_data_description;
+    recorder->state.bufferdata = &this->values;
   }
-
-  std::vector<T> values;
-  VulkanBufferDataDescription buffer_data_description;
 };
 
 class CpuMemoryBuffer : public Node {
@@ -163,7 +156,7 @@ private:
     this->buffer = std::make_shared<BufferObject>(
       std::make_shared<VulkanBuffer>(allocator->device,
                                      this->create_flags,
-                                     allocator->state.buffer_data_description.size,
+                                     allocator->state.bufferdata->size(),
                                      this->usage_flags,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -174,7 +167,7 @@ private:
   void doStage(MemoryStager * stager) override
   {
     stager->state.buffer = this->buffer->buffer->buffer;
-    this->buffer->memcpy(stager->state.buffer_data_description.data);
+    this->buffer->memcpy(stager->state.bufferdata);
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -209,7 +202,7 @@ private:
     this->buffer = std::make_shared<BufferObject>(
       std::make_shared<VulkanBuffer>(allocator->device,
                                      this->create_flags,
-                                     allocator->state.buffer_data_description.size,
+                                     allocator->state.bufferdata->size(),
                                      this->usage_flags,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -220,9 +213,9 @@ private:
   void doStage(MemoryStager * stager) override
   {
     std::vector<VkBufferCopy> regions = { {
-        0,                                               // srcOffset
-        0,                                               // dstOffset
-        stager->state.buffer_data_description.size,      // size
+        0,                                                  // srcOffset
+        0,                                                  // dstOffset
+        stager->state.bufferdata->size(),                   // size
     } };
 
     vkCmdCopyBuffer(stager->command,
@@ -298,7 +291,7 @@ public:
 private:
   void doRecord(CommandRecorder * recorder) override
   {
-    const auto count = recorder->state.buffer_data_description.size / recorder->state.buffer_data_description.stride;
+    const auto count = recorder->state.bufferdata->size() / sizeof(uint32_t);
 
     recorder->state.indices.push_back({
       this->type,
@@ -359,7 +352,7 @@ private:
   {
     creator->state.vertex_input_bindings.push_back({
       this->binding,
-      static_cast<uint32_t>(creator->state.buffer_data_description.stride * this->stride),
+      this->stride,
       this->inputRate,
     });
   }
@@ -904,20 +897,22 @@ public:
   NO_COPY_OR_ASSIGNMENT(DrawCommand)
   virtual ~DrawCommand() = default;
 
-  explicit DrawCommand(VkPrimitiveTopology topology) :
-    DrawCommandBase(topology)
+  explicit DrawCommand(VkPrimitiveTopology topology, VkDeviceSize stride) :
+    DrawCommandBase(topology),
+    stride(stride)
   {}
 
 private:
   void execute(VkCommandBuffer command, CommandRecorder * recorder) override
   {
     uint32_t vertex_count = static_cast<uint32_t>(
-      recorder->state.buffer_data_description.size / 
-      recorder->state.buffer_data_description.stride /
-      3);
-
-    vkCmdDraw(command, vertex_count, 1, 0, 0);
+      recorder->state.bufferdata->size() / this->stride
+    );
+    std::cout << "vertex count: " << vertex_count << std::endl;
+    vkCmdDraw(command, 677118, 1, 0, 0);
   }
+
+  VkDeviceSize stride;
 };
 
 class IndexedDrawCommand : public DrawCommandBase {
@@ -933,6 +928,7 @@ private:
   void execute(VkCommandBuffer command, CommandRecorder * recorder) override
   {
     for (const auto& indexbuffer : recorder->state.indices) {
+      std::cout << "count: " << indexbuffer.count << std::endl;
       vkCmdBindIndexBuffer(command, indexbuffer.buffer, 0, indexbuffer.type);
       vkCmdDrawIndexed(command, indexbuffer.count, 1, 0, 0, 1);
     }

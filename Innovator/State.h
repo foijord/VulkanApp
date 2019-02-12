@@ -13,26 +13,16 @@ struct VulkanIndexBufferDescription {
   uint32_t count;
 };
 
-struct VulkanBufferDataDescription {
-  VkDeviceSize stride;
-  size_t size;
-  void * data;
-};
-
 struct MemoryState {
   VkDescriptorBufferInfo descriptor_buffer_info{
     nullptr, 0, 0
   };
-  VulkanBufferDataDescription buffer_data_description{
-    0, 0, nullptr
-  };
+  const std::vector<uint8_t> * bufferdata;
 };
 
 struct StageState {
-  VkBuffer buffer;
-  VulkanBufferDataDescription buffer_data_description{
-    0, 0, nullptr
-  };
+  VkBuffer buffer{ nullptr };
+  const std::vector<uint8_t> * bufferdata;
 };
 
 struct PipelineState {
@@ -57,9 +47,7 @@ struct PipelineState {
   VkImageLayout imageLayout { VK_IMAGE_LAYOUT_UNDEFINED };
   VkSampler sampler{ nullptr };
 
-  VulkanBufferDataDescription buffer_data_description{
-    0, 0, nullptr
-  };
+  const std::vector<uint8_t> * bufferdata;
   
   std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
   std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
@@ -70,12 +58,9 @@ struct PipelineState {
 };
 
 struct RecordState {
-  VulkanBufferDataDescription buffer_data_description{
-    0, 0, nullptr
-  };
-  VkBuffer buffer{
-    nullptr
-  };
+  VkBuffer buffer{ nullptr };
+  const std::vector<uint8_t> * bufferdata;
+
   std::vector<VulkanIndexBufferDescription> indices;
   std::vector<VkBuffer> vertex_attribute_buffers;
   std::vector<VkDeviceSize> vertex_attribute_buffer_offsets;
