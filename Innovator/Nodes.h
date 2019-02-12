@@ -908,8 +908,7 @@ private:
     uint32_t vertex_count = static_cast<uint32_t>(
       recorder->state.bufferdata->size() / this->stride
     );
-    std::cout << "vertex count: " << vertex_count << std::endl;
-    vkCmdDraw(command, 677118, 1, 0, 0);
+    vkCmdDraw(command, vertex_count, 1, 0, 0);
   }
 
   VkDeviceSize stride;
@@ -928,7 +927,6 @@ private:
   void execute(VkCommandBuffer command, CommandRecorder * recorder) override
   {
     for (const auto& indexbuffer : recorder->state.indices) {
-      std::cout << "count: " << indexbuffer.count << std::endl;
       vkCmdBindIndexBuffer(command, indexbuffer.buffer, 0, indexbuffer.type);
       vkCmdDrawIndexed(command, indexbuffer.count, 1, 0, 0, 1);
     }

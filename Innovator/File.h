@@ -99,13 +99,13 @@ public:
     #else
     check_num_args(args);
     std::vector<T> values = get_values<T>(args);
-    std::vector<uint8_t> bytes(values.size() * sizeof(T));
+    auto bufferdata = std::make_shared<BufferData>();
+    bufferdata->values.resize(values.size() * sizeof(T));
 
     std::copy(reinterpret_cast<uint8_t*>(&values[0]),
               reinterpret_cast<uint8_t*>(&values[values.size()]),
-              &bytes[0]);
+              &bufferdata->values[0]);
 
-    auto bufferdata = std::make_shared<BufferData>(bytes);
     return std::make_shared<NodeExpression>(bufferdata);
     #endif
   }
