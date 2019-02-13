@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 #include <memory>
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
 
 using namespace Innovator::Math;
 
@@ -112,30 +114,72 @@ public:
   virtual ~BufferData() = default;
 
   explicit BufferData(std::vector<uint8_t> values) :
-    values(std::move(values))
+    values(std::move(values)),
+    values_size(values.size())
   {}
 
+  explicit BufferData(std::string filename) :
+    filename(std::move(filename))
+  {
+    std::uintmax_t file_size = fs::file_size(fs::current_path() / this->filename);
+    std::cout << "std::file_size reported size of: " << file_size << std::endl;
+
+    uint32_t num_triangles = (file_size - 84) / 50;
+    std::cout << "num triangles should be " << num_triangles << std::endl;
+
+    this->values_size = num_triangles * 36;
+  }
+
+  void copy(char * dst) 
+  {
+    std::ifstream input(this->filename, std::ios::binary);
+    // header is first 80 bytes
+    char header[80];
+    input.read(header, 80);
+    std::cout << "header: " << std::string(header) << std::endl;
+
+    // num triangles is next 4 bytes after header
+    uint32_t num_triangles;
+    input.read(reinterpret_cast<char*>(&num_triangles), 4);
+    std::cout << "num triangles: " << num_triangles << std::endl;
+
+    char normal[12];
+    char attrib[2];
+    for (size_t i = 0; i < num_triangles; i++) {
+      input.read(normal, 12); // skip normal
+      input.read(dst + i * 36, 36);
+      input.read(attrib, 2);  // skip attribute
+    }
+  }
+
   std::vector<uint8_t> values;
+  std::string filename;
+  size_t values_size;
+
+  size_t size() const
+  {
+    return this->values_size;
+  }
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
-    allocator->state.bufferdata = &this->values;
+    allocator->state.bufferdata = this;
   }
 
   void doStage(MemoryStager * stager) override
   {
-    stager->state.bufferdata = &this->values;
+    stager->state.bufferdata = this;
   }
 
   void doPipeline(PipelineCreator * creator) override
   {
-    creator->state.bufferdata = &this->values;
+    creator->state.bufferdata = this;
   }
 
   void doRecord(CommandRecorder * recorder) override
   {
-    recorder->state.bufferdata = &this->values;
+    recorder->state.bufferdata = this;
   }
 };
 
@@ -167,7 +211,9 @@ private:
   void doStage(MemoryStager * stager) override
   {
     stager->state.buffer = this->buffer->buffer->buffer;
-    this->buffer->memcpy(stager->state.bufferdata);
+    char * dst = this->buffer->memory->map(stager->state.bufferdata->size(), this->buffer->offset);
+    stager->state.bufferdata->copy(dst);
+    this->buffer->memory->unmap();
   }
 
   void doPipeline(PipelineCreator * creator) override

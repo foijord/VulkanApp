@@ -39,13 +39,6 @@ public:
                                       this->offset));
   }
 
-  void memcpy(const std::vector<uint8_t> * src) const
-  {
-    uint8_t * dst = this->memory->map(src->size(), this->offset);
-    std::copy(src->begin(), src->end(), dst);
-    this->memory->unmap();
-  }
-
   void memcpy(const void * data) const
   {
     this->memory->memcpy(data, this->memory_requirements.size, this->offset);

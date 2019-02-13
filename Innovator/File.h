@@ -12,8 +12,6 @@ using namespace Innovator::Math;
 #include <vector>
 #include <fstream>
 #include <iterator>
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
 
 class NodeExpression : public Expression {
 public:
@@ -54,49 +52,12 @@ class BufferDataFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-    #if 1
+#if 1
     check_num_args(args, 1);
-
     const auto filename = get_string(args, 0);
-    std::ifstream input(filename->value, std::ios::binary);
-
-    std::uintmax_t file_size = fs::file_size(fs::current_path() / filename->value);
-    std::cout << "std::file_size reported size of: " << file_size << std::endl;
-
-    // header is first 80 bytes
-    char header[80];
-    input.read(&header[0], 80);
-
-    std::cout << "header: " << std::string(header) << std::endl;
-
-    // num triangles is next 4 bytes
-    uint32_t num_triangles;
-    input.read(reinterpret_cast<char*>(&num_triangles), 4);
-
-    std::cout << "num triangles: " << num_triangles << std::endl;
-
-    if (num_triangles * 50 != file_size - 84) {
-      throw std::runtime_error("unable to read stl file");
-    }
-
-    // read the rest of the file
-    std::vector<uint8_t> bytes(std::istreambuf_iterator<char>(input), {});
-
-    size_t num_bytes = num_triangles * 50;
-    if (num_bytes != bytes.size()) {
-      throw std::runtime_error("unable to read stl file");
-    }
-
-    auto bufferdata = std::make_shared<BufferData>();
-    bufferdata->values.resize(num_triangles * 36);
-    for (size_t i = 0; i < num_triangles; i++) {
-      std::copy(reinterpret_cast<const char*>(&bytes[i * 50 + 12]),
-                reinterpret_cast<const char*>(&bytes[i * 50 + 48]),
-                &bufferdata->values[i * 36]);
-    }
-
+    const auto bufferdata = std::make_shared<BufferData>(filename->value);
     return std::make_shared<NodeExpression>(bufferdata);
-    #else
+#else
     check_num_args(args);
     std::vector<T> values = get_values<T>(args);
     auto bufferdata = std::make_shared<BufferData>();

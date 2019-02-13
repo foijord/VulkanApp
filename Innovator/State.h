@@ -17,12 +17,12 @@ struct MemoryState {
   VkDescriptorBufferInfo descriptor_buffer_info{
     nullptr, 0, 0
   };
-  const std::vector<uint8_t> * bufferdata;
+  class BufferData * bufferdata;
 };
 
 struct StageState {
   VkBuffer buffer{ nullptr };
-  const std::vector<uint8_t> * bufferdata;
+  class BufferData * bufferdata;
 };
 
 struct PipelineState {
@@ -47,8 +47,8 @@ struct PipelineState {
   VkImageLayout imageLayout { VK_IMAGE_LAYOUT_UNDEFINED };
   VkSampler sampler{ nullptr };
 
-  const std::vector<uint8_t> * bufferdata;
-  
+  class BufferData * bufferdata;
+
   std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
   std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
   std::vector<VkWriteDescriptorSet> write_descriptor_sets;
@@ -59,8 +59,8 @@ struct PipelineState {
 
 struct RecordState {
   VkBuffer buffer{ nullptr };
-  const std::vector<uint8_t> * bufferdata;
-
+  class BufferData * bufferdata;
+  
   std::vector<VulkanIndexBufferDescription> indices;
   std::vector<VkBuffer> vertex_attribute_buffers;
   std::vector<VkDeviceSize> vertex_attribute_buffer_offsets;
