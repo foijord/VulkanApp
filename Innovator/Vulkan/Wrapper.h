@@ -956,25 +956,29 @@ VulkanMemory::unmap() const
   vkUnmapMemory(this->device->device, this->memory);
 }
 
-class MemoryCopy {
+class MemoryMap {
 public:
-  NO_COPY_OR_ASSIGNMENT(MemoryCopy)
+  NO_COPY_OR_ASSIGNMENT(MemoryMap)
 
-  MemoryCopy(VulkanMemory * memory, const void * src, VkDeviceSize size, VkDeviceSize offset)
+  MemoryMap(VulkanMemory * memory, VkDeviceSize size, VkDeviceSize offset)
     : memory(memory)
   {
-    ::memcpy(this->memory->map(size, offset), src, size);
+    this->mem = this->memory->map(size, offset);
   }
-  ~MemoryCopy() {
+
+  ~MemoryMap() {
     this->memory->unmap();
   }
+
   VulkanMemory * memory{ nullptr };
+  char * mem;
 };
 
 inline void 
 VulkanMemory::memcpy(const void* src, VkDeviceSize size, VkDeviceSize offset)
 {
-  MemoryCopy copy(this, src, size, offset);
+  MemoryMap memmap(this, size, offset);
+  ::memcpy(memmap.mem, src, size);
 }
 
 class VulkanImageView {

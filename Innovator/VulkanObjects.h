@@ -39,9 +39,9 @@ public:
                                       this->offset));
   }
 
-  void memcpy(const void * data) const
+  void memcpy(const void * data, size_t size) const
   {
-    this->memory->memcpy(data, this->memory_requirements.size, this->offset);
+    this->memory->memcpy(data, size, this->offset);
   }
 
   std::shared_ptr<VulkanBuffer> buffer;

@@ -18,7 +18,7 @@ public:
   virtual uint32_t layers() const = 0;
   virtual size_t size() const = 0;
   virtual size_t size(size_t level) const = 0;
-  virtual const void * data() const = 0;
+  virtual const unsigned char * data() const = 0;
   virtual VkFormat format() const = 0;
   virtual VkImageType image_type() const = 0;
   virtual VkImageViewType image_view_type() const = 0;

@@ -113,12 +113,64 @@ public:
   BufferData() = default;
   virtual ~BufferData() = default;
 
-  explicit BufferData(std::vector<uint8_t> values) :
-    values(std::move(values)),
-    values_size(values.size())
+  virtual void copy(char * dst) const = 0;
+  virtual size_t size() const = 0;
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    allocator->state.bufferdata = this;
+  }
+
+  void doStage(MemoryStager * stager) override
+  {
+    stager->state.bufferdata = this;
+  }
+
+  void doPipeline(PipelineCreator * creator) override
+  {
+    creator->state.bufferdata = this;
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.bufferdata = this;
+  }
+};
+
+template <typename T>
+class InlineBufferData : public BufferData {
+public:
+  NO_COPY_OR_ASSIGNMENT(InlineBufferData);
+  InlineBufferData() = delete;
+  virtual ~InlineBufferData() = default;
+
+  explicit InlineBufferData(std::vector<T> values) :
+    values(std::move(values))
   {}
 
-  explicit BufferData(std::string filename) :
+  void copy(char * dst) const override
+  {
+    std::copy(this->values.begin(),
+              this->values.end(),
+              reinterpret_cast<T*>(dst));
+  }
+
+  size_t size() const override
+  {
+    return this->values.size() * sizeof(T);
+  }
+
+  std::vector<T> values;
+};
+
+class STLBufferData : public BufferData {
+public:
+  NO_COPY_OR_ASSIGNMENT(STLBufferData)
+  STLBufferData() = delete;
+  virtual ~STLBufferData() = default;
+
+  explicit STLBufferData(std::string filename) :
     filename(std::move(filename))
   {
     std::uintmax_t file_size = fs::file_size(fs::current_path() / this->filename);
@@ -130,7 +182,7 @@ public:
     this->values_size = num_triangles * 36;
   }
 
-  void copy(char * dst) 
+  void copy(char * dst) const override
   {
     std::ifstream input(this->filename, std::ios::binary);
     // header is first 80 bytes
@@ -152,34 +204,12 @@ public:
     }
   }
 
-  std::vector<uint8_t> values;
   std::string filename;
   size_t values_size;
 
-  size_t size() const
+  size_t size() const override
   {
     return this->values_size;
-  }
-
-private:
-  void doAlloc(MemoryAllocator * allocator) override
-  {
-    allocator->state.bufferdata = this;
-  }
-
-  void doStage(MemoryStager * stager) override
-  {
-    stager->state.bufferdata = this;
-  }
-
-  void doPipeline(PipelineCreator * creator) override
-  {
-    creator->state.bufferdata = this;
-  }
-
-  void doRecord(CommandRecorder * recorder) override
-  {
-    recorder->state.bufferdata = this;
   }
 };
 
@@ -211,9 +241,8 @@ private:
   void doStage(MemoryStager * stager) override
   {
     stager->state.buffer = this->buffer->buffer->buffer;
-    char * dst = this->buffer->memory->map(stager->state.bufferdata->size(), this->buffer->offset);
-    stager->state.bufferdata->copy(dst);
-    this->buffer->memory->unmap();
+    MemoryMap memmap(this->buffer->memory.get(), stager->state.bufferdata->size(), this->buffer->offset);
+    stager->state.bufferdata->copy(memmap.mem);
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -289,16 +318,20 @@ private:
 class TransformBuffer : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(TransformBuffer)
-  TransformBuffer() = default;
   virtual ~TransformBuffer() = default;
+
+  TransformBuffer()
+    : size(sizeof(mat4f) * 2)
+  {}
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
+    
     this->buffer = std::make_shared<BufferObject>(
       std::make_shared<VulkanBuffer>(allocator->device,
                                      0,                                     
-                                     sizeof(Innovator::Math::mat4f) * 2,
+                                     this->size,
                                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -313,14 +346,16 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    mat4f data[] = {
+    std::array<mat4f, 2> data = {
       cast<float>(renderer->camera->viewmatrix() * renderer->state.ModelMatrix),
       cast<float>(renderer->camera->projmatrix())
     };
 
-    this->buffer->memcpy(data);
+    MemoryMap map(this->buffer->memory.get(), this->size, this->buffer->offset);
+    std::copy(data.begin(), data.end(), reinterpret_cast<mat4f*>(map.mem));
   }
 
+  size_t size;
   std::shared_ptr<BufferObject> buffer{ nullptr };
 };
 
@@ -628,7 +663,7 @@ private:
 
   void doStage(MemoryStager * stager) override
   {
-    this->buffer->memcpy(this->texture->data());
+    this->buffer->memcpy(this->texture->data(), this->texture->size());
 
     this->view = std::make_unique<VulkanImageView>(
       this->image->image,

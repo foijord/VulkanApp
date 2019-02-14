@@ -96,7 +96,7 @@ public:
     return this->image.sizeInBytes();
   }
 
-  const void * data() const override
+  const unsigned char * data() const override
   {
     return this->image.bits();
   }

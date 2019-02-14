@@ -48,27 +48,25 @@ public:
 };
 
 template <typename T>
-class BufferDataFunction : public Callable {
+class InlineBufferDataFunction : public Callable {
 public:
   std::shared_ptr<Expression> operator()(const Expression * args) const override
   {
-#if 1
+    check_num_args(args);
+    auto bufferdata = std::make_shared<InlineBufferData<T>>(get_values<T>(args));
+    return std::make_shared<NodeExpression>(bufferdata);
+  }
+};
+
+template <typename T>
+class STLBufferDataFunction : public Callable {
+public:
+  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  {
     check_num_args(args, 1);
     const auto filename = get_string(args, 0);
-    const auto bufferdata = std::make_shared<BufferData>(filename->value);
+    const auto bufferdata = std::make_shared<STLBufferData>(filename->value);
     return std::make_shared<NodeExpression>(bufferdata);
-#else
-    check_num_args(args);
-    std::vector<T> values = get_values<T>(args);
-    auto bufferdata = std::make_shared<BufferData>();
-    bufferdata->values.resize(values.size() * sizeof(T));
-
-    std::copy(reinterpret_cast<uint8_t*>(&values[0]),
-              reinterpret_cast<uint8_t*>(&values[values.size()]),
-              &bufferdata->values[0]);
-
-    return std::make_shared<NodeExpression>(bufferdata);
-    #endif
   }
 };
 
@@ -236,8 +234,9 @@ public:
       { "drawcommand", std::make_shared<DrawCommandFunction>() },
       { "indexeddrawcommand", std::make_shared<IndexedDrawCommandFunction>() },
       { "image", std::make_shared<ImageFunction>() },
-      { "bufferdataui32", std::make_shared<BufferDataFunction<uint32_t>>() },
-      { "bufferdataf32", std::make_shared<BufferDataFunction<float>>() },
+      { "bufferdataui32", std::make_shared<InlineBufferDataFunction<uint32_t>>() },
+      { "bufferdataf32", std::make_shared<InlineBufferDataFunction<float>>() },
+      { "stlbufferdata", std::make_shared<STLBufferDataFunction<float>>() },
       { "cpumemorybuffer", std::make_shared<CpuMemoryBufferFunction>() },
       { "gpumemorybuffer", std::make_shared<GpuMemoryBufferFunction>() },
       { "transformbuffer", std::make_shared<TransformBufferFunction>() },
