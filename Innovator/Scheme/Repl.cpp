@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 
-int main(int argc, char *argv[])
+int main(int, char **)
 {
   Scheme scheme;
   std::cout << "Innovator Scheme REPL" << std::endl;

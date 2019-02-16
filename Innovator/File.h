@@ -21,26 +21,9 @@ public:
   std::shared_ptr<Node> node;
 };
 
-class LayoutBindingFunction : public Callable {
-public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
-  {
-    check_num_args(args, 3);
-    const auto bindingexpr = get_number(args, 0);
-    const auto typeexpr = get_number(args, 1);
-    const auto stageexpr = get_number(args, 2);
-
-    auto binding = static_cast<uint32_t>(bindingexpr->value);
-    auto type = static_cast<VkDescriptorType>(int(typeexpr->value));
-    auto stage = static_cast<VkShaderStageFlags>(int(stageexpr->value));
-
-    return std::make_shared<NodeExpression>(std::make_shared<DescriptorSetLayoutBinding>(binding, type, stage));
-  }
-};
-
 class SamplerFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 0);
     return std::make_shared<NodeExpression>(std::make_shared<Sampler>());
@@ -50,7 +33,7 @@ public:
 template <typename T>
 class InlineBufferDataFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args);
     auto bufferdata = std::make_shared<InlineBufferData<T>>(get_values<T>(args));
@@ -61,7 +44,7 @@ public:
 template <typename T>
 class STLBufferDataFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
     const auto filename = get_string(args, 0);
@@ -73,7 +56,7 @@ public:
 template <typename T>
 class MemoryBufferFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args);
     uint32_t flags = 0;
@@ -93,7 +76,7 @@ typedef MemoryBufferFunction<GpuMemoryBuffer> GpuMemoryBufferFunction;
 
 class VertexInputAttributeDescriptionFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 4);
     const auto location = get_number(args, 0);
@@ -111,7 +94,7 @@ public:
 
 class VertexInputBindingDescriptionFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 3);
     const auto binding = get_number(args, 0);
@@ -127,7 +110,7 @@ public:
 
 class DrawCommandFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 2);
     const auto stride = get_number(args, 0);
@@ -141,7 +124,7 @@ public:
 
 class IndexedDrawCommandFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
     const auto topology = get_number(args, 0);
@@ -153,7 +136,7 @@ public:
 
 class ImageFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
     const auto filename = get_string(args, 0);
@@ -161,17 +144,102 @@ public:
   }
 };
 
+class ShaderStageFlagBits : public Expression {
+public:
+  NO_COPY_OR_ASSIGNMENT(ShaderStageFlagBits)
+  ShaderStageFlagBits() = delete;
+  virtual ~ShaderStageFlagBits() = default;
+
+  explicit ShaderStageFlagBits(const VkShaderStageFlagBits value) 
+    : value(value) {}
+
+  VkShaderStageFlagBits value;
+};
+
+class ShaderStageFlags : public Expression {
+public:
+  NO_COPY_OR_ASSIGNMENT(ShaderStageFlags)
+  ShaderStageFlags() = delete;
+  virtual ~ShaderStageFlags() = default;
+
+  explicit ShaderStageFlags(const VkShaderStageFlags value) 
+    : value(value) {}
+
+  VkShaderStageFlags value;
+};
+
+Environment shader_stage_flag_bits {
+  { "VK_SHADER_STAGE_VERTEX_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_VERTEX_BIT) },
+  { "VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) },
+  { "VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) },
+  { "VK_SHADER_STAGE_GEOMETRY_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_GEOMETRY_BIT) },
+  { "VK_SHADER_STAGE_FRAGMENT_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_FRAGMENT_BIT) },
+  { "VK_SHADER_STAGE_COMPUTE_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_COMPUTE_BIT) }
+};
+
+class ShaderStageFlagBitsFunction : public Callable {
+public:
+  exp_ptr operator()(const Expression * args) const override
+  {
+    check_num_args(args, 1);
+    const auto flag = std::dynamic_pointer_cast<ShaderStageFlagBits>(args->children.front());
+    if (!flag) {
+      throw std::invalid_argument("shader-stage: argument must be shader stage flag");
+    }
+    return std::make_shared<ShaderStageFlagBits>(flag->value);
+  }
+};
+
+class ShaderStageFlagsFunction : public Callable {
+public:
+  exp_ptr operator()(const Expression * args) const override
+  {
+    // TODO: or together multiple arguments
+    check_num_args(args, 1);
+    const auto flag = std::dynamic_pointer_cast<ShaderStageFlagBits>(args->children.front());
+    if (!flag) {
+      throw std::invalid_argument("shader-stage: argument must be shader stage flag");
+    }
+    return std::make_shared<ShaderStageFlags>(flag->value);
+  }
+};
+
+class LayoutBindingFunction : public Callable {
+public:
+  exp_ptr operator()(const Expression * args) const override
+  {
+    check_num_args(args, 3);
+    const auto bindingexpr = get_number(args, 0);
+    const auto typeexpr = get_number(args, 1);
+
+    const auto it = std::next(args->children.begin(), 2);
+    const auto stage_flags = std::dynamic_pointer_cast<ShaderStageFlags>(*it);
+    if (!stage_flags) {
+      throw std::invalid_argument("parameter must be one or more shader stage flags");
+    }
+
+    auto binding = static_cast<uint32_t>(bindingexpr->value);
+    auto type = static_cast<VkDescriptorType>(int(typeexpr->value));
+    auto stage = stage_flags->value;
+
+    return std::make_shared<NodeExpression>(std::make_shared<DescriptorSetLayoutBinding>(binding, type, stage));
+  }
+};
+
 class ShaderFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 2);
-    const auto stage = get_number(args, 1);
+
+    const auto it = std::next(args->children.begin(), 1);
+    const auto stage = std::dynamic_pointer_cast<ShaderStageFlagBits>(*it);
+
     const auto filename = get_string(args, 0);
 
     auto node = std::make_shared<Shader>(
       filename->value, 
-      static_cast<VkShaderStageFlagBits>(uint32_t(stage->value)));
+      stage->value);
 
     return std::make_shared<NodeExpression>(node);
   }
@@ -179,7 +247,7 @@ public:
 
 class IndexBufferDescriptionFunction: public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
     const auto type = get_number(args, 0);
@@ -189,7 +257,7 @@ public:
 };
 
 class TransformBufferFunction : public Callable {
-  std::shared_ptr<Expression> operator()(const Expression *) const override
+  exp_ptr operator()(const Expression *) const override
   {
     auto node = std::make_shared<TransformBuffer>();
     return std::make_shared<NodeExpression>(node);
@@ -211,7 +279,7 @@ static std::shared_ptr<Node> extract_node(const exp_ptr exp)
 
 class SeparatorFunction : public Callable {
 public:
-  std::shared_ptr<Expression> operator()(const Expression * args) const override
+  exp_ptr operator()(const Expression * args) const override
   {
     std::vector<std::shared_ptr<Node>> children(args->children.size());
     std::transform(args->children.begin(), args->children.end(), children.begin(), extract_node);
@@ -228,6 +296,8 @@ public:
   {
     Environment node_env {
       { "separator", std::make_shared<SeparatorFunction>() },
+      { "shader-stage-flag-bits", std::make_shared<ShaderStageFlagBitsFunction>() },
+      { "shader-stage-flags", std::make_shared<ShaderStageFlagsFunction>() },
       { "shader", std::make_shared<ShaderFunction>() },
       { "layout-binding", std::make_shared<LayoutBindingFunction>() },
       { "sampler", std::make_shared<SamplerFunction>() },
@@ -244,9 +314,6 @@ public:
       { "vertexinputattributedescription", std::make_shared<VertexInputAttributeDescriptionFunction>() },
       { "vertexinputbindingdescription", std::make_shared<VertexInputBindingDescriptionFunction>() },
       { "VK_INDEX_TYPE_UINT32", std::make_shared<Number>(VK_INDEX_TYPE_UINT32) },
-      { "VK_SHADER_STAGE_VERTEX_BIT", std::make_shared<Number>(VK_SHADER_STAGE_VERTEX_BIT) },
-      { "VK_SHADER_STAGE_COMPUTE_BIT", std::make_shared<Number>(VK_SHADER_STAGE_COMPUTE_BIT) },
-      { "VK_SHADER_STAGE_FRAGMENT_BIT", std::make_shared<Number>(VK_SHADER_STAGE_FRAGMENT_BIT) },
       { "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER", std::make_shared<Number>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) },
       { "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER", std::make_shared<Number>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) },
       { "VK_BUFFER_USAGE_TRANSFER_SRC_BIT", std::make_shared<Number>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) },
@@ -259,6 +326,8 @@ public:
       { "VK_VERTEX_INPUT_RATE_VERTEX", std::make_shared<Number>(VK_VERTEX_INPUT_RATE_VERTEX) },
       { "VK_FORMAT_R32G32B32_SFLOAT", std::make_shared<Number>(VK_FORMAT_R32G32B32_SFLOAT) },
     };
+
+    node_env.insert(shader_stage_flag_bits.begin(), shader_stage_flag_bits.end());
 
     this->scheme.environment->outer = std::make_shared<Environment>(node_env.begin(), node_env.end());
   }
