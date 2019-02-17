@@ -362,26 +362,17 @@ public:
     }
   }
 
-  static std::shared_ptr<String> 
-  get_string(const Expression * args, size_t n)
+  template <typename T>
+  static std::shared_ptr<T> 
+  get_arg(const Expression * args)
   {
-    const auto it = std::next(args->children.begin(), n);
-    const auto string = std::dynamic_pointer_cast<String>(*it);
-    if (!string) {
-      throw std::invalid_argument("parameter must be a string");
+    for (auto arg : args->children) {
+      auto arg_t = std::dynamic_pointer_cast<T>(arg);
+      if (arg_t) {
+        return arg_t;
+      }
     }
-    return string;
-  }
-
-  static std::shared_ptr<Number>
-  get_number(const Expression * args, size_t n)
-  {
-    const auto it = std::next(args->children.begin(), n);
-    const auto number = std::dynamic_pointer_cast<Number>(*it);
-    if (!number) {
-      throw std::invalid_argument("parameter must be a number");
-    }
-    return number;
+    throw std::invalid_argument("missing argument");
   }
 };
 

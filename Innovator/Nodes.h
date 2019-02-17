@@ -115,6 +115,7 @@ public:
 
   virtual void copy(char * dst) const = 0;
   virtual size_t size() const = 0;
+  virtual size_t stride() const = 0;
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
@@ -159,6 +160,11 @@ public:
   size_t size() const override
   {
     return this->values.size() * sizeof(T);
+  }
+
+  size_t stride() const override
+  {
+    return sizeof(T);
   }
 
   std::vector<T> values;
@@ -211,6 +217,11 @@ public:
   {
     return this->values_size;
   }
+
+  size_t stride() const override
+  {
+    return sizeof(float);
+  }
 };
 
 class CpuMemoryBuffer : public Node {
@@ -219,7 +230,7 @@ public:
   CpuMemoryBuffer() = delete;
   virtual ~CpuMemoryBuffer() = default;
 
-  explicit CpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags) :
+  explicit CpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags = 0) :
     usage_flags(usage_flags), 
     create_flags(create_flags)
   {}
@@ -266,7 +277,7 @@ public:
   GpuMemoryBuffer() = delete;
   virtual ~GpuMemoryBuffer() = default;
 
-  explicit GpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags) : 
+  explicit GpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags = 0) : 
     usage_flags(usage_flags), 
     create_flags(create_flags)
   {}
@@ -978,21 +989,18 @@ public:
   NO_COPY_OR_ASSIGNMENT(DrawCommand)
   virtual ~DrawCommand() = default;
 
-  explicit DrawCommand(VkPrimitiveTopology topology, VkDeviceSize stride) :
-    DrawCommandBase(topology),
-    stride(stride)
+  explicit DrawCommand(VkPrimitiveTopology topology) :
+    DrawCommandBase(topology)
   {}
 
 private:
   void execute(VkCommandBuffer command, CommandRecorder * recorder) override
   {
     uint32_t vertex_count = static_cast<uint32_t>(
-      recorder->state.bufferdata->size() / this->stride
+      recorder->state.bufferdata->size() / recorder->state.bufferdata->stride() / 3
     );
     vkCmdDraw(command, vertex_count, 1, 0, 0);
   }
-
-  VkDeviceSize stride;
 };
 
 class IndexedDrawCommand : public DrawCommandBase {
