@@ -311,23 +311,24 @@ class Callable : public Expression {
 public:
   virtual exp_ptr operator()(const Expression * args) const = 0;
 
-  static std::vector<std::shared_ptr<Number>> get_numbers(const Expression * args)
+  template <typename T>
+  static std::vector<std::shared_ptr<T>> get_args(const Expression * args)
   {
-    std::vector<std::shared_ptr<Number>> numbers(args->children.size());
-    std::transform(args->children.begin(), args->children.end(), numbers.begin(), [](auto arg) {
-      const auto number = std::dynamic_pointer_cast<Number>(arg);
-      if (!number) {
-        throw std::invalid_argument("parameter must be a number");
+    std::vector<std::shared_ptr<T>> args_t(args->children.size());
+    std::transform(args->children.begin(), args->children.end(), args_t.begin(), [](auto arg) {
+      const auto arg_t = std::dynamic_pointer_cast<T>(arg);
+      if (!arg_t) {
+        throw std::invalid_argument("invalid argument type");
       }
-      return number;
+      return arg_t;
     });
-    return numbers;
+    return args_t;
   }
 
   template <typename T>
   static std::vector<T> get_values(const Expression * args)
   {
-    std::vector<std::shared_ptr<Number>> numbers = get_numbers(args);
+    auto numbers = get_args<Number>(args);
     std::vector<T> values(numbers.size());
 
     std::transform(numbers.begin(), numbers.end(), values.begin(), [](auto number) {

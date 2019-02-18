@@ -21,39 +21,35 @@ public:
 
 class LocationValue : public Expression {
 public:
-  explicit LocationValue(const uint32_t value) : value(value) {}
+  explicit LocationValue(const double value) : value(static_cast<uint32_t>(value)) {}
   uint32_t value;
 };
 
 class StrideValue : public Expression {
 public:
-  explicit StrideValue(const uint32_t value) : value(value) {}
+  explicit StrideValue(const double value) : value(static_cast<uint32_t>(value)) {}
   uint32_t value;
 };
 
 class BindingValue : public Expression {
 public:
-  explicit BindingValue(const uint32_t value) : value(value) {}
+  explicit BindingValue(const double value) : value(static_cast<uint32_t>(value)) {}
   uint32_t value;
 };
 
 class OffsetValue : public Expression {
 public:
-  explicit OffsetValue(const uint32_t value) : value(value) {}
+  explicit OffsetValue(const double value) : value(static_cast<uint32_t>(value)) {}
   uint32_t value;
 };
 
-template <typename ValueType, typename ArgType>
+template <typename ValueExpression, typename ArgExpression>
 class ValueFunction : public Callable {
 public:
   exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
-    const auto flag = std::dynamic_pointer_cast<ArgType>(args->children.front());
-    if (!flag) {
-      throw std::invalid_argument("ValueFunction: argument must be ValueType");
-    }
-    return std::make_shared<ValueType>(flag->value);
+    return std::make_shared<ValueExpression>(get_arg<ArgExpression>(args)->value);
   }
 };
 
@@ -64,24 +60,14 @@ public:
   {
     check_num_args(args);
     uint32_t flags = 0;
-    for (auto arg : args->children) {
-      const auto flagbits = std::dynamic_pointer_cast<ValueType>(arg);
-      if (!flagbits) {
-        throw std::invalid_argument("invalid argument to FlagsFunction");
-      }
+    for (auto flagbits : get_args<ValueType>(args)) {
       flags |= flagbits->value;
     }
     return std::make_shared<FlagsType>(flags);
   }
 };
 
-class NodeExpression : public Expression {
-public:
-  explicit NodeExpression(std::shared_ptr<Node> node)
-    : node(std::move(node))
-  {}
-  std::shared_ptr<Node> node;
-};
+typedef Value<std::shared_ptr<Node>> NodeExpression;
 
 template <typename NodeType>
 class NoArgsFunction : public Callable {
@@ -143,11 +129,6 @@ public:
   }
 };
 
-typedef ValueFunction<StrideValue, Number> StrideValueFunction;
-typedef ValueFunction<OffsetValue, Number> OffsetValueFunction;
-typedef ValueFunction<BindingValue, Number> BindingValueFunction;
-typedef ValueFunction<LocationValue, Number> LocationValueFunction;
-
 typedef Value<VkBufferUsageFlags> BufferUsageFlags;
 typedef Value<VkBufferUsageFlagBits> BufferUsageFlagBits;
 typedef FlagsFunction<BufferUsageFlags, BufferUsageFlagBits> BufferUsageFlagsFunction;
@@ -196,7 +177,7 @@ private:
     if (!node_exp) {
       throw std::invalid_argument("expression does not evaluate to a node");
     }
-    const auto node = std::dynamic_pointer_cast<Node>(node_exp->node);
+    const auto node = std::dynamic_pointer_cast<Node>(node_exp->value);
     if (!node) {
       throw std::logic_error("NodeExpression does not contain a node!");
     }
@@ -218,10 +199,10 @@ public:
   File() 
   {
     static Environment node_env {
-      { "stride", std::make_shared<StrideValueFunction>() },
-      { "offset", std::make_shared<OffsetValueFunction>() },
-      { "binding", std::make_shared<BindingValueFunction>() },
-      { "location", std::make_shared<LocationValueFunction>() },
+      { "stride", std::make_shared<ValueFunction<StrideValue, Number>>() },
+      { "offset", std::make_shared<ValueFunction<OffsetValue, Number>>() },
+      { "binding", std::make_shared<ValueFunction<BindingValue, Number>>() },
+      { "location", std::make_shared<ValueFunction<LocationValue, Number>>() },
       // buffer usage flags
       { "buffer-usage-flags", std::make_shared<BufferUsageFlagsFunction>() },
       { "VK_BUFFER_USAGE_TRANSFER_SRC_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) },
@@ -233,11 +214,7 @@ public:
       { "VK_BUFFER_USAGE_INDEX_BUFFER_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) },
       { "VK_BUFFER_USAGE_VERTEX_BUFFER_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) },
       { "VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) },
-      { "VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT) },
-      { "VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_COUNTER_BUFFER_BIT_EXT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_COUNTER_BUFFER_BIT_EXT) },
       { "VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT) },
-      { "VK_BUFFER_USAGE_RAY_TRACING_BIT_NV", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_RAY_TRACING_BIT_NV) },
-      { "VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_EXT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_EXT) },
       { "VK_BUFFER_USAGE_FLAG_BITS_MAX_ENUM", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_FLAG_BITS_MAX_ENUM) },
       // shader stage flags
       { "shader-stage-flags", std::make_shared<ShaderStageFlagsFunction>() },
@@ -260,7 +237,6 @@ public:
       { "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) },
       { "VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT) },
       { "VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT) },
-      { "VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV) },
       { "VK_DESCRIPTOR_TYPE_BEGIN_RANGE", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_BEGIN_RANGE) },
       { "VK_DESCRIPTOR_TYPE_END_RANGE", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_END_RANGE) },
       { "VK_DESCRIPTOR_TYPE_RANGE_SIZE", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_RANGE_SIZE) },
@@ -304,7 +280,6 @@ public:
       // index type
       { "VK_INDEX_TYPE_UINT16", std::make_shared<IndexType>(VK_INDEX_TYPE_UINT16) },
       { "VK_INDEX_TYPE_UINT32", std::make_shared<IndexType>(VK_INDEX_TYPE_UINT32) },
-      { "VK_INDEX_TYPE_NONE_NV", std::make_shared<IndexType>(VK_INDEX_TYPE_NONE_NV) },
       { "VK_INDEX_TYPE_BEGIN_RANGE", std::make_shared<IndexType>(VK_INDEX_TYPE_BEGIN_RANGE) },
       { "VK_INDEX_TYPE_END_RANGE", std::make_shared<IndexType>(VK_INDEX_TYPE_END_RANGE) },
       { "VK_INDEX_TYPE_RANGE_SIZE", std::make_shared<IndexType>(VK_INDEX_TYPE_RANGE_SIZE) },
@@ -339,7 +314,7 @@ public:
     if (!node_exp) {
       throw std::invalid_argument("top level expression must be a Node");
     }
-    auto separator = std::dynamic_pointer_cast<Separator>(node_exp->node);
+    auto separator = std::dynamic_pointer_cast<Separator>(node_exp->value);
     if (!separator) {
       throw std::invalid_argument("top level node must be a Separator");
     }

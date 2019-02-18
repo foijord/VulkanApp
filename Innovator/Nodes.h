@@ -182,7 +182,7 @@ public:
     std::uintmax_t file_size = fs::file_size(fs::current_path() / this->filename);
     std::cout << "std::file_size reported size of: " << file_size << std::endl;
 
-    uint32_t num_triangles = (file_size - 84) / 50;
+    size_t num_triangles = (file_size - 84) / 50;
     std::cout << "num triangles should be " << num_triangles << std::endl;
 
     this->values_size = num_triangles * 36;
