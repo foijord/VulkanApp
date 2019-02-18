@@ -383,13 +383,10 @@ public:
 private:
   void doRecord(CommandRecorder * recorder) override
   {
-    const auto count = recorder->state.bufferdata->size() / sizeof(uint32_t);
-
-    recorder->state.indices.push_back({
+    recorder->state.index_buffer_description = {
       this->type,
-      recorder->state.buffer,
-      static_cast<uint32_t>(count),
-    });
+      recorder->state.buffer
+    };
   }
 
   VkIndexType type;
@@ -989,18 +986,28 @@ public:
   NO_COPY_OR_ASSIGNMENT(DrawCommand)
   virtual ~DrawCommand() = default;
 
-  explicit DrawCommand(VkPrimitiveTopology topology) :
-    DrawCommandBase(topology)
+  explicit DrawCommand(uint32_t vertexcount,
+                       uint32_t instancecount,
+                       uint32_t firstvertex,
+                       uint32_t firstinstance,
+                       VkPrimitiveTopology topology) :
+    DrawCommandBase(topology),
+    vertexcount(vertexcount),
+    instancecount(instancecount),
+    firstvertex(firstvertex),
+    firstinstance(firstinstance)
   {}
 
 private:
-  void execute(VkCommandBuffer command, CommandRecorder * recorder) override
+  void execute(VkCommandBuffer command, CommandRecorder *) override
   {
-    uint32_t vertex_count = static_cast<uint32_t>(
-      recorder->state.bufferdata->size() / recorder->state.bufferdata->stride() / 3
-    );
-    vkCmdDraw(command, vertex_count, 1, 0, 0);
+    vkCmdDraw(command, this->vertexcount, this->instancecount, this->firstvertex, this->firstinstance);
   }
+
+  uint32_t vertexcount;
+  uint32_t instancecount;
+  uint32_t firstvertex;
+  uint32_t firstinstance;
 };
 
 class IndexedDrawCommand : public DrawCommandBase {
@@ -1008,16 +1015,41 @@ public:
   NO_COPY_OR_ASSIGNMENT(IndexedDrawCommand)
   virtual ~IndexedDrawCommand() = default;
 
-  explicit IndexedDrawCommand(VkPrimitiveTopology topology) :
-    DrawCommandBase(topology)
+  explicit IndexedDrawCommand(uint32_t indexcount,
+                              uint32_t instancecount,
+                              uint32_t firstindex,
+                              int32_t vertexoffset,
+                              uint32_t firstinstance,
+                              VkPrimitiveTopology topology) :
+    DrawCommandBase(topology),
+    indexcount(indexcount),
+    instancecount(instancecount),
+    firstindex(firstindex),
+    vertexoffset(vertexoffset),
+    firstinstance(firstinstance),
+    offset(0)
   {}
 
 private:
   void execute(VkCommandBuffer command, CommandRecorder * recorder) override
   {
-    for (const auto& indexbuffer : recorder->state.indices) {
-      vkCmdBindIndexBuffer(command, indexbuffer.buffer, 0, indexbuffer.type);
-      vkCmdDrawIndexed(command, indexbuffer.count, 1, 0, 0, 1);
-    }
+    vkCmdBindIndexBuffer(command, 
+                         recorder->state.index_buffer_description.buffer, 
+                         this->offset, 
+                         recorder->state.index_buffer_description.type);
+
+    vkCmdDrawIndexed(command, 
+                     this->indexcount, 
+                     this->instancecount, 
+                     this->firstindex, 
+                     this->vertexoffset, 
+                     this->firstinstance);
   }
+
+  uint32_t indexcount;
+  uint32_t instancecount;
+  uint32_t firstindex;
+  int32_t vertexoffset;
+  uint32_t firstinstance;
+  VkDeviceSize offset;
 };

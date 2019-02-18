@@ -10,19 +10,18 @@ using namespace Innovator::Math;
 struct VulkanIndexBufferDescription {
   VkIndexType type;
   VkBuffer buffer;
-  uint32_t count;
 };
 
 struct MemoryState {
   VkDescriptorBufferInfo descriptor_buffer_info{
     nullptr, 0, 0
   };
-  class BufferData * bufferdata;
+  class BufferData * bufferdata{ nullptr };
 };
 
 struct StageState {
   VkBuffer buffer{ nullptr };
-  class BufferData * bufferdata;
+  class BufferData * bufferdata{ nullptr };
 };
 
 struct PipelineState {
@@ -47,7 +46,7 @@ struct PipelineState {
   VkImageLayout imageLayout { VK_IMAGE_LAYOUT_UNDEFINED };
   VkSampler sampler{ nullptr };
 
-  class BufferData * bufferdata;
+  class BufferData * bufferdata { nullptr };
 
   std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
   std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
@@ -59,9 +58,9 @@ struct PipelineState {
 
 struct RecordState {
   VkBuffer buffer{ nullptr };
-  class BufferData * bufferdata;
-  
-  std::vector<VulkanIndexBufferDescription> indices;
+  class BufferData * bufferdata { nullptr };
+
+  VulkanIndexBufferDescription index_buffer_description;
   std::vector<VkBuffer> vertex_attribute_buffers;
   std::vector<VkDeviceSize> vertex_attribute_buffer_offsets;
 };

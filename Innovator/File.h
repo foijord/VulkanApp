@@ -19,29 +19,26 @@ public:
   T value;
 };
 
-class LocationValue : public Expression {
-public:
-  explicit LocationValue(const double value) : value(static_cast<uint32_t>(value)) {}
-  uint32_t value;
-};
+#define VALUETYPE(Class, Type)            \
+class Class : public Expression {         \
+public:                                   \
+  explicit Class(const double value)      \
+    : value(static_cast<Type>(value))     \
+  {}                                      \
+  Type value;                             \
+}                                         \
 
-class StrideValue : public Expression {
-public:
-  explicit StrideValue(const double value) : value(static_cast<uint32_t>(value)) {}
-  uint32_t value;
-};
-
-class BindingValue : public Expression {
-public:
-  explicit BindingValue(const double value) : value(static_cast<uint32_t>(value)) {}
-  uint32_t value;
-};
-
-class OffsetValue : public Expression {
-public:
-  explicit OffsetValue(const double value) : value(static_cast<uint32_t>(value)) {}
-  uint32_t value;
-};
+VALUETYPE(LocationValue, uint32_t);
+VALUETYPE(StrideValue, uint32_t);
+VALUETYPE(BindingValue, uint32_t);
+VALUETYPE(OffsetValue, uint32_t);
+VALUETYPE(VertexCount, uint32_t);
+VALUETYPE(InstanceCount, uint32_t);
+VALUETYPE(FirstVertex, uint32_t);
+VALUETYPE(FirstInstance, uint32_t);
+VALUETYPE(IndexCount, uint32_t);
+VALUETYPE(FirstIndex, uint32_t);
+VALUETYPE(VertexOffset, int32_t);
 
 template <typename ValueExpression, typename ArgExpression>
 class ValueFunction : public Callable {
@@ -129,6 +126,37 @@ public:
   }
 };
 
+template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3, typename ArgType4>
+class FiveArgFunction : public Callable {
+public:
+  exp_ptr operator()(const Expression * args) const override
+  {
+    check_num_args(args, 5);
+    return std::make_shared<NodeExpression>(
+      std::make_shared<NodeType>(get_arg<ArgType0>(args)->value, 
+                                 get_arg<ArgType1>(args)->value, 
+                                 get_arg<ArgType2>(args)->value,
+                                 get_arg<ArgType3>(args)->value,
+                                 get_arg<ArgType4>(args)->value));
+  }
+};
+
+template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3, typename ArgType4, typename ArgType5>
+class SixArgFunction : public Callable {
+public:
+  exp_ptr operator()(const Expression * args) const override
+  {
+    check_num_args(args, 6);
+    return std::make_shared<NodeExpression>(
+      std::make_shared<NodeType>(get_arg<ArgType0>(args)->value, 
+                                 get_arg<ArgType1>(args)->value, 
+                                 get_arg<ArgType2>(args)->value,
+                                 get_arg<ArgType3>(args)->value,
+                                 get_arg<ArgType4>(args)->value,
+                                 get_arg<ArgType5>(args)->value));
+  }
+};
+
 typedef Value<VkBufferUsageFlags> BufferUsageFlags;
 typedef Value<VkBufferUsageFlagBits> BufferUsageFlagBits;
 typedef FlagsFunction<BufferUsageFlags, BufferUsageFlagBits> BufferUsageFlagsFunction;
@@ -147,8 +175,6 @@ typedef Value<VkIndexType> IndexType;
 typedef NoArgsFunction<Sampler> SamplerFunction;
 typedef NoArgsFunction<TransformBuffer> TransformBufferFunction;
 typedef OneArgFunction<STLBufferData, String> STLBufferDataFunction;
-typedef OneArgFunction<DrawCommand, PrimitiveTopology> DrawCommandFunction;
-typedef OneArgFunction<IndexedDrawCommand, PrimitiveTopology> IndexedDrawCommandFunction;
 typedef OneArgFunction<Image, String> ImageFunction;
 typedef OneArgFunction<CpuMemoryBuffer, BufferUsageFlags> CpuMemoryBufferFunction;
 typedef OneArgFunction<GpuMemoryBuffer, BufferUsageFlags> GpuMemoryBufferFunction;
@@ -157,6 +183,8 @@ typedef TwoArgFunction<Shader, String, ShaderStageFlagBits> ShaderFunction;
 typedef ThreeArgFunction<VertexInputBindingDescription, BindingValue, StrideValue, VertexInputRate> VertexInputBindingDescriptionFunction;
 typedef ThreeArgFunction<DescriptorSetLayoutBinding, BindingValue, DescriptorType, ShaderStageFlags> DescriptorSetLayoutBindingFunction;
 typedef FourArgFunction<VertexInputAttributeDescription, LocationValue, BindingValue, Format, OffsetValue> VertexInputAttributeDescriptionFunction;
+typedef FiveArgFunction<DrawCommand, VertexCount, InstanceCount, FirstVertex, FirstInstance, PrimitiveTopology> DrawCommandFunction;
+typedef SixArgFunction<IndexedDrawCommand, IndexCount, InstanceCount, FirstIndex, VertexOffset, FirstInstance, PrimitiveTopology> IndexedDrawCommandFunction;
 
 template <typename T>
 class InlineBufferDataFunction : public Callable {
@@ -203,8 +231,15 @@ public:
       { "offset", std::make_shared<ValueFunction<OffsetValue, Number>>() },
       { "binding", std::make_shared<ValueFunction<BindingValue, Number>>() },
       { "location", std::make_shared<ValueFunction<LocationValue, Number>>() },
+      { "vertexcount", std::make_shared<ValueFunction<VertexCount, Number>>() },
+      { "instancecount", std::make_shared<ValueFunction<InstanceCount, Number>>() },
+      { "firstvertex", std::make_shared<ValueFunction<FirstVertex, Number>>() },
+      { "firstinstance", std::make_shared<ValueFunction<FirstInstance, Number>>() },
+      { "indexcount", std::make_shared<ValueFunction<IndexCount, Number>>() },
+      { "firstindex", std::make_shared<ValueFunction<FirstIndex, Number>>() },
+      { "vertexoffset", std::make_shared<ValueFunction<VertexOffset, Number>>() },
       // buffer usage flags
-      { "buffer-usage-flags", std::make_shared<BufferUsageFlagsFunction>() },
+      { "bufferusageflags", std::make_shared<BufferUsageFlagsFunction>() },
       { "VK_BUFFER_USAGE_TRANSFER_SRC_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) },
       { "VK_BUFFER_USAGE_TRANSFER_DST_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) },
       { "VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT) },
@@ -214,10 +249,8 @@ public:
       { "VK_BUFFER_USAGE_INDEX_BUFFER_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) },
       { "VK_BUFFER_USAGE_VERTEX_BUFFER_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) },
       { "VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) },
-      { "VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT) },
-      { "VK_BUFFER_USAGE_FLAG_BITS_MAX_ENUM", std::make_shared<BufferUsageFlagBits>(VK_BUFFER_USAGE_FLAG_BITS_MAX_ENUM) },
       // shader stage flags
-      { "shader-stage-flags", std::make_shared<ShaderStageFlagsFunction>() },
+      { "shaderstageflags", std::make_shared<ShaderStageFlagsFunction>() },
       { "VK_SHADER_STAGE_VERTEX_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_VERTEX_BIT) },
       { "VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) },
       { "VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT", std::make_shared<ShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) },
@@ -236,11 +269,6 @@ public:
       { "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) },
       { "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) },
       { "VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT) },
-      { "VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT) },
-      { "VK_DESCRIPTOR_TYPE_BEGIN_RANGE", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_BEGIN_RANGE) },
-      { "VK_DESCRIPTOR_TYPE_END_RANGE", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_END_RANGE) },
-      { "VK_DESCRIPTOR_TYPE_RANGE_SIZE", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_RANGE_SIZE) },
-      { "VK_DESCRIPTOR_TYPE_MAX_ENUM", std::make_shared<DescriptorType>(VK_DESCRIPTOR_TYPE_MAX_ENUM) },
       // primitive topology
       { "VK_PRIMITIVE_TOPOLOGY_POINT_LIST", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_POINT_LIST) },
       { "VK_PRIMITIVE_TOPOLOGY_LINE_LIST", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_LINE_LIST) },
@@ -253,17 +281,9 @@ public:
       { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY) },
       { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY) },
       { "VK_PRIMITIVE_TOPOLOGY_PATCH_LIST", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST) },
-      { "VK_PRIMITIVE_TOPOLOGY_BEGIN_RANGE", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_BEGIN_RANGE) },
-      { "VK_PRIMITIVE_TOPOLOGY_END_RANGE", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_END_RANGE) },
-      { "VK_PRIMITIVE_TOPOLOGY_RANGE_SIZE", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_RANGE_SIZE) },
-      { "VK_PRIMITIVE_TOPOLOGY_MAX_ENUM", std::make_shared<PrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_MAX_ENUM) },
       // vertex input rate
       { "VK_VERTEX_INPUT_RATE_VERTEX", std::make_shared<VertexInputRate>(VK_VERTEX_INPUT_RATE_VERTEX) },
       { "VK_VERTEX_INPUT_RATE_INSTANCE", std::make_shared<VertexInputRate>(VK_VERTEX_INPUT_RATE_INSTANCE) },
-      { "VK_VERTEX_INPUT_RATE_BEGIN_RANGE", std::make_shared<VertexInputRate>(VK_VERTEX_INPUT_RATE_BEGIN_RANGE) },
-      { "VK_VERTEX_INPUT_RATE_END_RANGE", std::make_shared<VertexInputRate>(VK_VERTEX_INPUT_RATE_END_RANGE) },
-      { "VK_VERTEX_INPUT_RATE_RANGE_SIZE", std::make_shared<VertexInputRate>(VK_VERTEX_INPUT_RATE_RANGE_SIZE) },
-      { "VK_VERTEX_INPUT_RATE_MAX_ENUM", std::make_shared<VertexInputRate>(VK_VERTEX_INPUT_RATE_MAX_ENUM) },
       // format
       { "VK_FORMAT_R32_UINT", std::make_shared<Format>(VK_FORMAT_R32_UINT) },
       { "VK_FORMAT_R32_SINT", std::make_shared<Format>(VK_FORMAT_R32_SINT) },
@@ -280,14 +300,10 @@ public:
       // index type
       { "VK_INDEX_TYPE_UINT16", std::make_shared<IndexType>(VK_INDEX_TYPE_UINT16) },
       { "VK_INDEX_TYPE_UINT32", std::make_shared<IndexType>(VK_INDEX_TYPE_UINT32) },
-      { "VK_INDEX_TYPE_BEGIN_RANGE", std::make_shared<IndexType>(VK_INDEX_TYPE_BEGIN_RANGE) },
-      { "VK_INDEX_TYPE_END_RANGE", std::make_shared<IndexType>(VK_INDEX_TYPE_END_RANGE) },
-      { "VK_INDEX_TYPE_RANGE_SIZE", std::make_shared<IndexType>(VK_INDEX_TYPE_RANGE_SIZE) },
-      { "VK_INDEX_TYPE_MAX_ENUM", std::make_shared<IndexType>(VK_INDEX_TYPE_MAX_ENUM) },
       // nodes
       { "separator", std::make_shared<SeparatorFunction>() },
       { "shader", std::make_shared<ShaderFunction>() },
-      { "descriptor-set-layout-binding", std::make_shared<DescriptorSetLayoutBindingFunction>() },
+      { "descriptorsetlayoutbinding", std::make_shared<DescriptorSetLayoutBindingFunction>() },
       { "sampler", std::make_shared<SamplerFunction>() },
       { "drawcommand", std::make_shared<DrawCommandFunction>() },
       { "indexeddrawcommand", std::make_shared<IndexedDrawCommandFunction>() },

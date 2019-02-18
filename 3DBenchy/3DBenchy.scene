@@ -10,11 +10,11 @@
    (stlbufferdata "3DBenchy/3DBenchy.stl")
 
    (cpumemorybuffer 
-      (buffer-usage-flags 
+      (bufferusageflags 
          VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
 
    (gpumemorybuffer 
-      (buffer-usage-flags 
+      (bufferusageflags 
          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT 
          VK_BUFFER_USAGE_TRANSFER_DST_BIT))
 
@@ -31,9 +31,14 @@
  
    (transformbuffer)
 
-   (descriptor-set-layout-binding 
+   (descriptorsetlayoutbinding 
       (binding 0)
       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER 
-      (shader-stage-flags VK_SHADER_STAGE_VERTEX_BIT))
+      (shaderstageflags VK_SHADER_STAGE_VERTEX_BIT))
 
-   (drawcommand VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST))
+   (drawcommand 
+      (vertexcount 677118)
+      (instancecount 1)
+      (firstvertex 0)
+      (firstinstance 0)
+      VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST))
