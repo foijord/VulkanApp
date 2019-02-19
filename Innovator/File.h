@@ -337,9 +337,6 @@ public:
     std::ifstream input(filename, std::ios::in);
     const std::string code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
 
-    std::shared_ptr<Expression> test = scheme.eval(code);
-    std::cout << test->toString() << std::endl;
-
     const auto node_exp = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
     if (!node_exp) {
       throw std::invalid_argument("top level expression must be a Node");
