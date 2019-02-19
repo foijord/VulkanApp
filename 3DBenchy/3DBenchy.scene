@@ -1,43 +1,28 @@
 (separator
-   (shader 
-      "3DBenchy/3DBenchy.vert" 
-      VK_SHADER_STAGE_VERTEX_BIT)
-   
-   (shader 
-      "3DBenchy/3DBenchy.frag" 
-      VK_SHADER_STAGE_FRAGMENT_BIT)
-
-   (stlbufferdata "3DBenchy/3DBenchy.stl")
-
-   (cpumemorybuffer 
-      (bufferusageflags 
-         VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
-
-   (gpumemorybuffer 
-      (bufferusageflags 
-         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT 
-         VK_BUFFER_USAGE_TRANSFER_DST_BIT))
-
+   (define vertices (stlbufferdata "3DBenchy/3DBenchy.stl"))
+   (cpumemorybuffer (bufferusageflags VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
+   (gpumemorybuffer (bufferusageflags VK_BUFFER_USAGE_VERTEX_BUFFER_BIT VK_BUFFER_USAGE_TRANSFER_DST_BIT))
    (vertexinputattributedescription 
       (binding 0) 
       (location 0) 
       (offset 0)
       VK_FORMAT_R32G32B32_SFLOAT)
- 
    (vertexinputbindingdescription 
       (binding 0) 
       (stride 12) 
       VK_VERTEX_INPUT_RATE_VERTEX)
  
    (transformbuffer)
-
    (descriptorsetlayoutbinding 
       (binding 0)
       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER 
       (shaderstageflags VK_SHADER_STAGE_VERTEX_BIT))
 
+   (shader "3DBenchy/3DBenchy.vert" VK_SHADER_STAGE_VERTEX_BIT)
+   (shader "3DBenchy/3DBenchy.frag" VK_SHADER_STAGE_FRAGMENT_BIT)
+
    (drawcommand 
-      (vertexcount 677118)
+      (vertexcount (/ (count vertices) 3))
       (instancecount 1)
       (firstvertex 0)
       (firstinstance 0)

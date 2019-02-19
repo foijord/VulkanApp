@@ -197,6 +197,20 @@ public:
   }
 };
 
+class BufferDataCountFunction : public Callable {
+public:
+  exp_ptr operator()(const Expression * args) const override
+  {
+    check_num_args(args, 1);
+    const auto node_exp = get_arg<NodeExpression>(args);
+    const auto bufferdata = std::dynamic_pointer_cast<BufferData>(node_exp->value);
+    if (!bufferdata) {
+      throw std::invalid_argument("count supported on BufferData nodes only");
+    }
+    return std::make_shared<Number>(static_cast<double>(bufferdata->size() / bufferdata->stride()));
+  }
+};
+
 class SeparatorFunction : public Callable {
 private:
   static std::shared_ptr<Node> extract_node(const exp_ptr exp)
@@ -205,11 +219,7 @@ private:
     if (!node_exp) {
       throw std::invalid_argument("expression does not evaluate to a node");
     }
-    const auto node = std::dynamic_pointer_cast<Node>(node_exp->value);
-    if (!node) {
-      throw std::logic_error("NodeExpression does not contain a node!");
-    }
-    return node;
+    return node_exp->value;
   }
 public:
   exp_ptr operator()(const Expression * args) const override
@@ -309,6 +319,7 @@ public:
       { "indexeddrawcommand", std::make_shared<IndexedDrawCommandFunction>() },
       { "image", std::make_shared<ImageFunction>() },
       { "bufferdataui32", std::make_shared<InlineBufferDataFunction<uint32_t>>() },
+      { "count", std::make_shared<BufferDataCountFunction>() },
       { "bufferdataf32", std::make_shared<InlineBufferDataFunction<float>>() },
       { "stlbufferdata", std::make_shared<STLBufferDataFunction>() },
       { "cpumemorybuffer", std::make_shared<CpuMemoryBufferFunction>() },
@@ -325,6 +336,9 @@ public:
   {
     std::ifstream input(filename, std::ios::in);
     const std::string code((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
+
+    std::shared_ptr<Expression> test = scheme.eval(code);
+    std::cout << test->toString() << std::endl;
 
     const auto node_exp = std::dynamic_pointer_cast<NodeExpression>(scheme.eval(code));
     if (!node_exp) {

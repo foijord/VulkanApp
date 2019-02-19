@@ -41,14 +41,24 @@ public:
 
   virtual std::string toString() const
   {
-    std::string s("(");
+    std::string s("( ");
     for (auto child : this->children) {
-      s += child->toString();
+      s += child->toString() + " ";
     }
     return s + ")";
   }
 
   exp_list children;
+};
+
+class List : public Expression {
+public:
+  NO_COPY_OR_ASSIGNMENT(List)
+  List() = default;
+  virtual ~List() = default;
+
+  explicit List(exp_list::const_iterator begin, exp_list::const_iterator end)
+    : Expression(begin, end) {}
 };
 
 class Symbol : public Expression {
@@ -232,8 +242,9 @@ public:
   
   exp_ptr eval(env_ptr env) override
   {
-    (*env)[this->var->token] = ::eval(this->exp, env);
-    return std::make_shared<Expression>();
+    auto exp = ::eval(this->exp, env);
+    (*env)[this->var->token] = exp;
+    return exp;
   }
   
   std::shared_ptr<Symbol> var;
@@ -377,6 +388,35 @@ public:
   }
 };
 
+class ListForm : public Callable {
+public:
+  NO_COPY_OR_ASSIGNMENT(ListForm)
+  ListForm() = default;
+  virtual ~ListForm() = default;
+
+  exp_ptr operator()(const Expression * args) const override
+  {
+    return std::make_shared<List>(args->children.begin(), args->children.end());
+  }
+};
+
+class Length : public Callable {
+public:
+  NO_COPY_OR_ASSIGNMENT(Length)
+  Length() = default;
+  virtual ~Length() = default;
+
+  exp_ptr operator()(const Expression * args) const override
+  {
+    check_num_args(args, 1);
+    const auto list = std::dynamic_pointer_cast<List>(args->children.front());
+    if (!list) {
+      throw std::invalid_argument("length: parameter was not a list");
+    }
+    return std::make_shared<Number>(list->children.size());
+  }
+};
+
 template <typename T>
 class Operator : public Callable {
 public:
@@ -448,10 +488,12 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    if (args->children.empty()) {
-      throw std::logic_error("internal error: 'car' performed on empty list");
+    check_num_args(args, 1);
+    const auto list = std::dynamic_pointer_cast<List>(args->children.front());
+    if (!list) {
+      throw std::invalid_argument("car performed on object that is not a list");
     }
-    return args->children.front();
+    return list->children.front();
   }
 };
 
@@ -463,10 +505,12 @@ public:
 
   exp_ptr operator()(const Expression * args) const override
   {
-    if (args->children.empty()) {
-      throw std::logic_error("internal error: 'cdr' performed on empty list");
+    check_num_args(args, 1);
+    const auto list = std::dynamic_pointer_cast<List>(args->children.front());
+    if (!list) {
+      throw std::invalid_argument("cdr performed on object that is not a list");
     }
-    return std::make_shared<Expression>(next(args->children.begin()), args->children.end());
+    return std::make_shared<List>(next(list->children.begin()), list->children.end());
   }
 };
 
@@ -572,10 +616,6 @@ inline exp_ptr parse(const ParseTree & parsetree)
     if (parsetree.size() != 3) {
       throw std::invalid_argument("wrong number of arguments to " + token);
     }
-  } else if (token == "list") {
-    if (parsetree.size() < 2) {
-      throw std::invalid_argument("too few arguments to list");
-    }
   }
 
   return std::make_shared<Expression>(exp_vec.begin(), exp_vec.end());
@@ -591,6 +631,8 @@ static Environment global_env{
   { "=",   std::make_shared<Same>() },
   { "car", std::make_shared<Car>() },
   { "cdr", std::make_shared<Cdr>() },
+  { "list", std::make_shared<ListForm>() },
+  { "length", std::make_shared<Length>() },
   { "pi",  std::make_shared<Number>(PI) },
 };
 
