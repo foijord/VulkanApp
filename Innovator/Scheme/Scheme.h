@@ -22,7 +22,6 @@ typedef std::shared_ptr<Environment> env_ptr;
 
 exp_ptr eval(exp_ptr & exp, env_ptr env);
 
-typedef std::list<exp_ptr> exp_list;
 typedef std::vector<exp_ptr> exp_vec;
 
 class Expression {
@@ -31,11 +30,8 @@ public:
   Expression() = default;
   virtual ~Expression() = default;
 
-  explicit Expression(exp_list::const_iterator begin, exp_list::const_iterator end)
-    : children(exp_list(begin, end)) {}
-
   explicit Expression(exp_vec::const_iterator begin, exp_vec::const_iterator end)
-    : children(exp_list(begin, end)) {}
+    : children(exp_vec(begin, end)) {}
 
   virtual exp_ptr eval(env_ptr env);
 
@@ -48,17 +44,7 @@ public:
     return s + ")";
   }
 
-  exp_list children;
-};
-
-class List : public Expression {
-public:
-  NO_COPY_OR_ASSIGNMENT(List)
-  List() = default;
-  virtual ~List() = default;
-
-  explicit List(exp_list::const_iterator begin, exp_list::const_iterator end)
-    : Expression(begin, end) {}
+  exp_vec children;
 };
 
 class Symbol : public Expression {
@@ -199,6 +185,70 @@ public:
   std::string value;
 };
 
+static void
+check_num_args(const Expression * args, size_t num)
+{
+  if (args->children.size() != num) {
+    throw std::invalid_argument("invalid number of arguments");
+  }
+}
+
+static void
+check_num_args(const Expression * args)
+{
+  if (args->children.empty()) {
+    throw std::invalid_argument("invalid number of arguments");
+  }
+}
+template <typename T>
+static std::vector<std::shared_ptr<T>> get_args(const Expression * args)
+{
+  std::vector<std::shared_ptr<T>> args_t(args->children.size());
+  std::transform(args->children.begin(), args->children.end(), args_t.begin(), [](auto arg) {
+    const auto arg_t = std::dynamic_pointer_cast<T>(arg);
+    if (!arg_t) {
+      throw std::invalid_argument("invalid argument type");
+    }
+    return arg_t;
+  });
+  return args_t;
+}
+
+template <typename T>
+static std::vector<T> get_values(const Expression * args)
+{
+  auto numbers = get_args<Number>(args);
+  std::vector<T> values(numbers.size());
+
+  std::transform(numbers.begin(), numbers.end(), values.begin(), [](auto number) {
+    return static_cast<T>(number->value);
+  });
+  return values;
+}
+
+template <typename T>
+static std::vector<T> get_values(const Expression * args, size_t expected_size)
+{
+  auto argvec = get_values<T>(args);
+  if (argvec.size() != expected_size) {
+    throw std::logic_error("internal error: wrong number of arguments!");
+  }
+  return argvec;
+}
+
+template <typename T>
+static std::shared_ptr<T> get_arg(const Expression * args)
+{
+  for (auto arg : args->children) {
+    auto arg_t = std::dynamic_pointer_cast<T>(arg);
+    if (arg_t) {
+      return arg_t;
+    }
+  }
+  throw std::invalid_argument("missing argument");
+}
+
+
 class Quote : public Expression {
 public:
   NO_COPY_OR_ASSIGNMENT(Quote)
@@ -210,7 +260,7 @@ public:
     if (args.size() != 2) {
       throw std::invalid_argument("wrong number of arguments to quote");
     }
-    this->exp = args[0];
+    this->exp = args[1];
   }
   
   exp_ptr eval(env_ptr) override
@@ -321,82 +371,17 @@ public:
 class Callable : public Expression {
 public:
   virtual exp_ptr operator()(const Expression * args) const = 0;
-
-  template <typename T>
-  static std::vector<std::shared_ptr<T>> get_args(const Expression * args)
-  {
-    std::vector<std::shared_ptr<T>> args_t(args->children.size());
-    std::transform(args->children.begin(), args->children.end(), args_t.begin(), [](auto arg) {
-      const auto arg_t = std::dynamic_pointer_cast<T>(arg);
-      if (!arg_t) {
-        throw std::invalid_argument("invalid argument type");
-      }
-      return arg_t;
-    });
-    return args_t;
-  }
-
-  template <typename T>
-  static std::vector<T> get_values(const Expression * args)
-  {
-    auto numbers = get_args<Number>(args);
-    std::vector<T> values(numbers.size());
-
-    std::transform(numbers.begin(), numbers.end(), values.begin(), [](auto number) {
-      return static_cast<T>(number->value);
-    });
-    return values;
-  }
-
-  template <typename T>
-  static std::vector<T> get_values(const Expression * args, size_t expected_size)
-  {
-    auto argvec = get_values<T>(args);
-    if (argvec.size() != expected_size) {
-      throw std::logic_error("internal error: wrong number of arguments!");
-    }
-    return argvec;
-  }
-
-  static void
-  check_num_args(const Expression * args)
-  {
-    if (args->children.empty()) {
-      throw std::invalid_argument("invalid number of arguments");
-    }
-  }
-
-  static void 
-  check_num_args(const Expression * args, size_t num)
-  {
-    if (args->children.size() != num) {
-      throw std::invalid_argument("invalid number of arguments");
-    }
-  }
-
-  template <typename T>
-  static std::shared_ptr<T> 
-  get_arg(const Expression * args)
-  {
-    for (auto arg : args->children) {
-      auto arg_t = std::dynamic_pointer_cast<T>(arg);
-      if (arg_t) {
-        return arg_t;
-      }
-    }
-    throw std::invalid_argument("missing argument");
-  }
 };
 
-class ListForm : public Callable {
+class List : public Callable {
 public:
-  NO_COPY_OR_ASSIGNMENT(ListForm)
-  ListForm() = default;
-  virtual ~ListForm() = default;
+  NO_COPY_OR_ASSIGNMENT(List)
+  List() = default;
+  virtual ~List() = default;
 
   exp_ptr operator()(const Expression * args) const override
   {
-    return std::make_shared<List>(args->children.begin(), args->children.end());
+    return std::make_shared<Expression>(args->children.begin(), args->children.end());
   }
 };
 
@@ -409,11 +394,8 @@ public:
   exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
-    const auto list = std::dynamic_pointer_cast<List>(args->children.front());
-    if (!list) {
-      throw std::invalid_argument("length: parameter was not a list");
-    }
-    return std::make_shared<Number>(list->children.size());
+    const auto list = args->children.front();
+    return std::make_shared<Number>(static_cast<double>(list->children.size()));
   }
 };
 
@@ -427,9 +409,6 @@ public:
   exp_ptr operator()(const Expression * args) const override
   {
     auto dargs = get_values<double>(args);
-    if (dargs.empty()) {
-      throw std::logic_error("logic error: no arguments to function call");
-    }
     return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs.front(), this->op));
   }
   
@@ -489,10 +468,7 @@ public:
   exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
-    const auto list = std::dynamic_pointer_cast<List>(args->children.front());
-    if (!list) {
-      throw std::invalid_argument("car performed on object that is not a list");
-    }
+    const auto list = args->children.front();
     return list->children.front();
   }
 };
@@ -506,11 +482,9 @@ public:
   exp_ptr operator()(const Expression * args) const override
   {
     check_num_args(args, 1);
-    const auto list = std::dynamic_pointer_cast<List>(args->children.front());
-    if (!list) {
-      throw std::invalid_argument("cdr performed on object that is not a list");
-    }
-    return std::make_shared<List>(next(list->children.begin()), list->children.end());
+    const auto list = args->children.front();
+    list->children.erase(list->children.begin());
+    return list;
   }
 };
 
@@ -538,7 +512,7 @@ inline exp_ptr eval(exp_ptr & exp, env_ptr env)
 
     auto exps = exp->eval(env);
     const auto front = exps->children.front();
-    exps->children.pop_front();
+    exps->children.erase(exps->children.begin());
 
     const auto f = front.get();
     if (typeid(*f) == typeid(Function)) {
@@ -631,7 +605,7 @@ static Environment global_env{
   { "=",   std::make_shared<Same>() },
   { "car", std::make_shared<Car>() },
   { "cdr", std::make_shared<Cdr>() },
-  { "list", std::make_shared<ListForm>() },
+  { "list", std::make_shared<List>() },
   { "length", std::make_shared<Length>() },
   { "pi",  std::make_shared<Number>(PI) },
 };

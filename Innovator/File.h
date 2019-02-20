@@ -26,19 +26,19 @@ public:                                   \
     : value(static_cast<Type>(value))     \
   {}                                      \
   Type value;                             \
-}                                         \
+};                                        \
 
-VALUETYPE(LocationValue, uint32_t);
-VALUETYPE(StrideValue, uint32_t);
-VALUETYPE(BindingValue, uint32_t);
-VALUETYPE(OffsetValue, uint32_t);
-VALUETYPE(VertexCount, uint32_t);
-VALUETYPE(InstanceCount, uint32_t);
-VALUETYPE(FirstVertex, uint32_t);
-VALUETYPE(FirstInstance, uint32_t);
-VALUETYPE(IndexCount, uint32_t);
-VALUETYPE(FirstIndex, uint32_t);
-VALUETYPE(VertexOffset, int32_t);
+VALUETYPE(LocationValue, uint32_t)
+VALUETYPE(StrideValue, uint32_t)
+VALUETYPE(BindingValue, uint32_t)
+VALUETYPE(OffsetValue, uint32_t)
+VALUETYPE(VertexCount, uint32_t)
+VALUETYPE(InstanceCount, uint32_t)
+VALUETYPE(FirstVertex, uint32_t)
+VALUETYPE(FirstInstance, uint32_t)
+VALUETYPE(IndexCount, uint32_t)
+VALUETYPE(FirstIndex, uint32_t)
+VALUETYPE(VertexOffset, int32_t)
 
 template <typename ValueExpression, typename ArgExpression>
 class ValueFunction : public Callable {
