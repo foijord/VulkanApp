@@ -14,9 +14,27 @@
 #include <algorithm>
 #include <functional>
 
+#define EXP_DECL(Class)                                 \
+  Class() = delete;                                     \
+  virtual ~Class() = default;                           \
+  Class(Class&&) = delete;                              \
+  Class(const Class&) = delete;                         \
+  Class & operator=(Class&&) = delete;                  \
+  Class & operator=(const Class&) = delete;             \
+
+#define CALLABLE_DECL(Class)                            \
+  Class() = default;                                    \
+  virtual ~Class() = default;                           \
+  Class(Class&&) = delete;                              \
+  Class(const Class&) = delete;                         \
+  Class & operator=(Class&&) = delete;                  \
+  Class & operator=(const Class&) = delete;             \
+
+class List;
 class Expression;
 class Environment;
 
+typedef std::shared_ptr<List> lst_ptr;
 typedef std::shared_ptr<Expression> exp_ptr;
 typedef std::shared_ptr<Environment> env_ptr;
 
@@ -24,34 +42,58 @@ exp_ptr eval(exp_ptr & exp, env_ptr env);
 
 typedef std::vector<exp_ptr> exp_vec;
 
-class Expression {
+class Expression : public std::enable_shared_from_this<Expression> {
 public:
   NO_COPY_OR_ASSIGNMENT(Expression)
   Expression() = default;
   virtual ~Expression() = default;
+  virtual std::string toString() const { return ""; }
+  virtual exp_ptr eval(env_ptr) { return nullptr; }
+};
 
-  explicit Expression(exp_vec::const_iterator begin, exp_vec::const_iterator end)
-    : children(exp_vec(begin, end)) {}
+class List : public Expression {
+public:
+  NO_COPY_OR_ASSIGNMENT(List)
+  List() = default;
+  virtual ~List() = default;
+
+  explicit List(exp_vec expressions)
+    : expressions(expressions) {}
+
+  explicit List(exp_vec::iterator begin, exp_vec::iterator end)
+    : expressions(begin, end) {}
+
+  exp_ptr car() 
+  {
+    return this->expressions.front();
+  }
+
+  exp_vec cdr() 
+  {
+    return exp_vec(std::next(this->expressions.begin()), this->expressions.end());
+  }
+
+  virtual exp_ptr operator()(const exp_vec & args) const {
+    return nullptr;
+  }
 
   virtual exp_ptr eval(env_ptr env);
 
   virtual std::string toString() const
   {
     std::string s("( ");
-    for (auto child : this->children) {
+    for (auto child : this->expressions) {
       s += child->toString() + " ";
     }
     return s + ")";
   }
 
-  exp_vec children;
+  exp_vec expressions;
 };
 
 class Symbol : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Symbol)
-  Symbol() = delete;
-  virtual ~Symbol() = default;
+  EXP_DECL(Symbol)
 
   explicit Symbol(std::string token)
     : token(std::move(token)) {}
@@ -68,6 +110,7 @@ public:
 
 class Environment : public std::map<std::string, exp_ptr> {
 public:
+  NO_COPY_OR_ASSIGNMENT(Environment);
   Environment() = default;
 
   explicit Environment(std::initializer_list<value_type> il)
@@ -78,10 +121,10 @@ public:
     : std::map<std::string, exp_ptr>(begin, end)
   {}
 
-  Environment(const Expression * parms, const Expression * args, env_ptr outer)
+  Environment(const exp_vec & parms, const exp_vec & args, env_ptr outer)
     : outer(std::move(outer))
   {
-    for (auto p = parms->children.begin(), a = args->children.begin(); p != parms->children.end() && a != args->children.end(); ++p, ++a) {
+    for (auto p = parms.begin(), a = args.begin(); p != parms.end() && a != args.end(); ++p, ++a) {
       const auto parm = std::dynamic_pointer_cast<Symbol>(*p);
       (*this)[parm->token] = *a;
     }
@@ -102,11 +145,11 @@ public:
 };
 
 inline exp_ptr
-Expression::eval(env_ptr env)
+List::eval(env_ptr env)
 { 
-  auto result = std::make_shared<Expression>();
-  for (auto& exp : this->children) {
-    result->children.push_back(::eval(exp, env));
+  auto result = std::make_shared<List>();
+  for (auto& exp : this->expressions) {
+    result->expressions.push_back(::eval(exp, env));
   }
   return result;
 }
@@ -119,15 +162,18 @@ Symbol::eval(env_ptr env)
 
 class Number : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Number)
-  Number() = delete;
-  virtual ~Number() = default;
+  EXP_DECL(Number)
 
   explicit Number(const double value) 
     : value(value) {}
 
   explicit Number(const std::string & token)
     : Number(stod(token)) {}
+
+  exp_ptr eval(env_ptr) override
+  {
+    return shared_from_this();
+  }
 
   std::string toString() const override
   {
@@ -139,9 +185,7 @@ public:
 
 class Boolean : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Boolean)
-  Boolean() = delete;
-  virtual ~Boolean() = default;
+  EXP_DECL(Boolean)
 
   explicit Boolean(const bool value) 
     : value(value) {}
@@ -155,6 +199,11 @@ public:
     this->value = tokenmap[token];
   }
 
+  exp_ptr eval(env_ptr) override
+  {
+    return shared_from_this();
+  }
+
   std::string toString() const override
   {
     return this->value ? "#t" : "#f";
@@ -165,9 +214,7 @@ public:
 
 class String : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(String)
-  String() = delete;
-  virtual ~String() = default;
+  EXP_DECL(String)
 
   explicit String(const std::string & token)
   {
@@ -175,6 +222,11 @@ public:
       throw std::invalid_argument("invalid string literal: " + token);
     }
     this->value = token.substr(1, token.size() - 2);
+  }
+
+  exp_ptr eval(env_ptr) override
+  {
+    return shared_from_this();
   }
 
   std::string toString() const override
@@ -185,83 +237,13 @@ public:
   std::string value;
 };
 
-static void
-check_num_args(const Expression * args, size_t num)
-{
-  if (args->children.size() != num) {
-    throw std::invalid_argument("invalid number of arguments");
-  }
-}
-
-static void
-check_num_args(const Expression * args)
-{
-  if (args->children.empty()) {
-    throw std::invalid_argument("invalid number of arguments");
-  }
-}
-template <typename T>
-static std::vector<std::shared_ptr<T>> get_args(const Expression * args)
-{
-  std::vector<std::shared_ptr<T>> args_t(args->children.size());
-  std::transform(args->children.begin(), args->children.end(), args_t.begin(), [](auto arg) {
-    const auto arg_t = std::dynamic_pointer_cast<T>(arg);
-    if (!arg_t) {
-      throw std::invalid_argument("invalid argument type");
-    }
-    return arg_t;
-  });
-  return args_t;
-}
-
-template <typename T>
-static std::vector<T> get_values(const Expression * args)
-{
-  auto numbers = get_args<Number>(args);
-  std::vector<T> values(numbers.size());
-
-  std::transform(numbers.begin(), numbers.end(), values.begin(), [](auto number) {
-    return static_cast<T>(number->value);
-  });
-  return values;
-}
-
-template <typename T>
-static std::vector<T> get_values(const Expression * args, size_t expected_size)
-{
-  auto argvec = get_values<T>(args);
-  if (argvec.size() != expected_size) {
-    throw std::logic_error("internal error: wrong number of arguments!");
-  }
-  return argvec;
-}
-
-template <typename T>
-static std::shared_ptr<T> get_arg(const Expression * args)
-{
-  for (auto arg : args->children) {
-    auto arg_t = std::dynamic_pointer_cast<T>(arg);
-    if (arg_t) {
-      return arg_t;
-    }
-  }
-  throw std::invalid_argument("missing argument");
-}
-
 
 class Quote : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Quote)
-  Quote() = delete;
-  virtual ~Quote() = default;
+  EXP_DECL(Quote)
 
-  explicit Quote(const std::vector<exp_ptr> & args)
-  {
-    if (args.size() != 2) {
-      throw std::invalid_argument("wrong number of arguments to quote");
-    }
-    this->exp = args[1];
-  }
+  explicit Quote(exp_ptr exp)
+    : exp(exp) {}
   
   exp_ptr eval(env_ptr) override
   {
@@ -273,22 +255,12 @@ public:
 
 class Define : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Define)
-  Define() = delete;
-  virtual ~Define() = default;
+  EXP_DECL(Define)
 
-  explicit Define(const std::vector<exp_ptr> & args)
-  {
-    if (args.size() != 3) {
-      throw std::invalid_argument("wrong number of arguments to define");
-    }
-    this->var = std::dynamic_pointer_cast<Symbol>(args[1]);
-    this->exp = args[2];
-
-    if (!this->var) {
-      throw std::invalid_argument("variable name must be a symbol");
-    }
-  }
+  explicit Define(std::shared_ptr<Symbol> var, exp_ptr exp) : 
+    var(std::move(var)),
+    exp(std::move(exp))
+  {}
   
   exp_ptr eval(env_ptr env) override
   {
@@ -303,20 +275,13 @@ public:
 
 class If : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(If)
-  If() = delete;
-  virtual ~If() = default;
+  EXP_DECL(If)
 
-  explicit If(const std::vector<exp_ptr> & args)
-  {
-    if (args.size() != 4) {
-      throw std::invalid_argument("wrong number of arguments to if");
-    }
-
-    this->test = args[1];
-    this->conseq = args[2];
-    this->alt = args[3];
-  }
+  explicit If(const std::vector<exp_ptr> & args) :
+    test(args[1]),
+    conseq(args[2]),
+    alt(args[3]) 
+  {}
   
   exp_ptr eval(env_ptr env) override
   {
@@ -333,80 +298,126 @@ public:
 
 class Function : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Function)
-  Function() = delete;
-  virtual ~Function() = default;
+  EXP_DECL(Function)
 
-  Function(exp_ptr parms, exp_ptr body, env_ptr env)
-    : parms(std::move(parms)), body(std::move(body)), env(std::move(env)) 
+  Function(exp_vec parms, lst_ptr body, env_ptr env) : 
+    parms(std::move(parms)), 
+    body(std::move(body)), 
+    env(std::move(env))
   {}
   
-  exp_ptr parms, body;
+  exp_vec parms;
+  lst_ptr body;
   env_ptr env;
 };
 
 class Lambda : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(Lambda)
-  Lambda() = delete;
-  virtual ~Lambda() = default;
+  EXP_DECL(Lambda)
 
-  explicit Lambda(const std::vector<exp_ptr> & args)
-  {
-    if (args.size() != 3) {
-      throw std::invalid_argument("wrong number of arguments to lambda");
-    }
-    this->parms = args[1];
-    this->body = args[2];
-  }
+  explicit Lambda(exp_vec parms, lst_ptr body) :
+    parms(std::move(parms)),
+    body(std::move(body))
+  {}
   
   exp_ptr eval(env_ptr env) override
   {
     return std::make_shared<Function>(this->parms, this->body, env);
   }
   
-  exp_ptr parms, body;
+  exp_vec parms;
+  lst_ptr body;
 };
 
-class Callable : public Expression {
-public:
-  virtual exp_ptr operator()(const Expression * args) const = 0;
-};
+static void
+check_num_args(const exp_vec & args, size_t num)
+{
+  if (args.size() != num) {
+    throw std::invalid_argument("invalid number of arguments");
+  }
+}
 
-class List : public Callable {
-public:
-  NO_COPY_OR_ASSIGNMENT(List)
-  List() = default;
-  virtual ~List() = default;
+static void
+check_num_args(const exp_vec & args)
+{
+  if (args.empty()) {
+    throw std::invalid_argument("invalid number of arguments");
+  }
+}
 
-  exp_ptr operator()(const Expression * args) const override
+template <typename T>
+static std::vector<std::shared_ptr<T>> get_args(const exp_vec & args)
+{
+  std::vector<std::shared_ptr<T>> args_t(args.size());
+  std::transform(args.begin(), args.end(), args_t.begin(), [](auto arg) {
+    const auto arg_t = std::dynamic_pointer_cast<T>(arg);
+    if (!arg_t) {
+      throw std::invalid_argument("invalid argument type");
+    }
+    return arg_t;
+  });
+  return args_t;
+}
+
+template <typename T>
+static std::vector<T> get_values(const exp_vec & args)
+{
+  auto numbers = get_args<Number>(args);
+  std::vector<T> values(numbers.size());
+
+  std::transform(numbers.begin(), numbers.end(), values.begin(), [](auto number) {
+    return static_cast<T>(number->value);
+  });
+  return values;
+}
+
+template <typename T>
+static std::vector<T> get_values(const exp_vec & args, size_t expected_size)
+{
+  auto argvec = get_values<T>(args);
+  if (argvec.size() != expected_size) {
+    throw std::logic_error("internal error: wrong number of arguments!");
+  }
+  return argvec;
+}
+
+template <typename T>
+static std::shared_ptr<T> get_arg(const exp_vec & args)
+{
+  for (auto arg : args) {
+    auto arg_t = std::dynamic_pointer_cast<T>(arg);
+    if (arg_t) {
+      return arg_t;
+    }
+  }
+  throw std::invalid_argument("missing argument");
+}
+
+class ListFunction : public List {
+public:
+  CALLABLE_DECL(ListFunction)
+  exp_ptr operator()(const exp_vec & args) const override
   {
-    return std::make_shared<Expression>(args->children.begin(), args->children.end());
+    return std::make_shared<List>(args);
   }
 };
 
-class Length : public Callable {
+class Length : public List {
 public:
-  NO_COPY_OR_ASSIGNMENT(Length)
-  Length() = default;
-  virtual ~Length() = default;
-
-  exp_ptr operator()(const Expression * args) const override
+  CALLABLE_DECL(Length)
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 1);
-    const auto list = args->children.front();
-    return std::make_shared<Number>(static_cast<double>(list->children.size()));
+    const auto list = std::dynamic_pointer_cast<List>(args.front());
+    return std::make_shared<Number>(static_cast<double>(list->expressions.size()));
   }
 };
 
 template <typename T>
-class Operator : public Callable {
+class Operator : public List {
 public:
-  NO_COPY_OR_ASSIGNMENT(Operator)
-  Operator() = default;
-  virtual ~Operator() = default;
-
-  exp_ptr operator()(const Expression * args) const override
+  CALLABLE_DECL(Operator)
+  exp_ptr operator()(const exp_vec & args) const override
   {
     auto dargs = get_values<double>(args);
     return std::make_shared<Number>(std::accumulate(next(dargs.begin()), dargs.end(), dargs.front(), this->op));
@@ -420,71 +431,55 @@ typedef Operator<std::minus<>> Sub;
 typedef Operator<std::divides<>> Div;
 typedef Operator<std::multiplies<>> Mul;
 
-class Less : public Callable {
+class Less : public List {
 public:
-  NO_COPY_OR_ASSIGNMENT(Less)
-  Less() = default;
-  virtual ~Less() = default;
-
-  exp_ptr operator()(const Expression * args) const override
+  CALLABLE_DECL(Less)
+  exp_ptr operator()(const exp_vec & args) const override
   {
     auto dargs = get_values<double>(args, 2);
     return std::make_shared<Boolean>(dargs[0] < dargs[1]);
   }
 };
 
-class More : public Callable {
+class More : public List {
 public:
-  NO_COPY_OR_ASSIGNMENT(More)
-  More() = default;
-  virtual ~More() = default;
-
-  exp_ptr operator()(const Expression * args) const override
+  CALLABLE_DECL(More)
+  exp_ptr operator()(const exp_vec & args) const override
   {
     auto dargs = get_values<double>(args, 2);
     return std::make_shared<Boolean>(dargs[0] > dargs[1]);
   }
 };
 
-class Same: public Callable {
+class Same: public List {
 public:
-  NO_COPY_OR_ASSIGNMENT(Same)
-  Same() = default;
-  virtual ~Same() = default;
-
-  exp_ptr operator()(const Expression * args) const override
+  CALLABLE_DECL(Same)
+  exp_ptr operator()(const exp_vec & args) const override
   {
     auto dargs = get_values<double>(args, 2);
     return std::make_shared<Boolean>(dargs[0] == dargs[1]);
   }
 };
 
-class Car : public Callable {
+class Car : public List {
 public:
-  NO_COPY_OR_ASSIGNMENT(Car)
-  Car() = default;
-  virtual ~Car() = default;
-
-  exp_ptr operator()(const Expression * args) const override
+  CALLABLE_DECL(Car)
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 1);
-    const auto list = args->children.front();
-    return list->children.front();
+    const auto list = std::dynamic_pointer_cast<List>(args.front());
+    return list->car();
   }
 };
 
-class Cdr : public Callable {
+class Cdr : public List {
 public:
-  NO_COPY_OR_ASSIGNMENT(Cdr)
-  Cdr() = default;
-  virtual ~Cdr() = default;
-
-  exp_ptr operator()(const Expression * args) const override
+  CALLABLE_DECL(Cdr)
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 1);
-    const auto list = args->children.front();
-    list->children.erase(list->children.begin());
-    return list;
+    const auto list = std::dynamic_pointer_cast<List>(args.front());
+    return std::make_shared<List>(list->cdr());
   }
 };
 
@@ -494,35 +489,24 @@ inline exp_ptr eval(exp_ptr & exp, env_ptr env)
     const auto e = exp.get();
     const auto & type = typeid(*e);
 
-    if (type == typeid(Number) ||
-        type == typeid(String) ||
-        type == typeid(Boolean)) {
-      return exp;
-    }
-    if (type == typeid(Quote) ||
-        type == typeid(Symbol) ||
-        type == typeid(Define) ||
-        type == typeid(Lambda)) {
-      return exp->eval(env);
-    }
     if (type == typeid(If)) {
       exp = exp->eval(env);
       continue;
     }
+    if (type != typeid(List)) {
+      return exp->eval(env);
+    }
+     
+    auto list = std::dynamic_pointer_cast<List>(exp->eval(env));
 
-    auto exps = exp->eval(env);
-    const auto front = exps->children.front();
-    exps->children.erase(exps->children.begin());
-
-    const auto f = front.get();
-    if (typeid(*f) == typeid(Function)) {
-      auto func = std::dynamic_pointer_cast<Function>(front);
+    if (typeid(*list->car().get()) == typeid(Function)) {
+      auto func = std::dynamic_pointer_cast<Function>(list->car());
       exp = func->body;
-      env = std::make_shared<Environment>(func->parms.get(), exps.get(), func->env);
+      env = std::make_shared<Environment>(func->parms, list->cdr(), func->env);
     }
     else {
-      const auto builtin = std::dynamic_pointer_cast<Callable>(front);
-      return (*builtin)(exps.get());
+      auto car = std::dynamic_pointer_cast<List>(list->car());
+      return (*car)(list->cdr());
     }
   }
 }
@@ -570,18 +554,41 @@ inline exp_ptr parse(const ParseTree & parsetree)
   const std::string token = parsetree[0].token;
 
   if (token == "quote") {
-    return std::make_shared<Quote>(exp_vec);
+    if (exp_vec.size() != 2) {
+      throw std::invalid_argument("wrong number of arguments to quote");
+    }
+    return std::make_shared<Quote>(exp_vec[1]);
   }
   if (token == "if") {
+    if (exp_vec.size() != 4) {
+      throw std::invalid_argument("wrong number of arguments to if");
+    }
     return std::make_shared<If>(exp_vec);
   }
   if (token == "lambda") {
-    return std::make_shared<Lambda>(exp_vec);
+    if (exp_vec.size() != 3) {
+      throw std::invalid_argument("wrong number of arguments to lambda");
+    }
+    auto args = std::dynamic_pointer_cast<List>(exp_vec[1]);
+    if (!args) {
+      throw std::invalid_argument("first parameter to lambda must be a list of arguments");
+    }
+    auto body = std::dynamic_pointer_cast<List>(exp_vec[2]);
+    if (!body) {
+      throw std::invalid_argument("second parameter to lambda must be an expression body");
+    }
+    return std::make_shared<Lambda>(args->expressions, body);
   }
   if (token == "define") {
-    return std::make_shared<Define>(exp_vec);
+    if (exp_vec.size() != 3) {
+      throw std::invalid_argument("wrong number of arguments to define");
+    }
+    auto var = std::dynamic_pointer_cast<Symbol>(exp_vec[1]);
+    if (!var) {
+      throw std::invalid_argument("variable name must be a symbol");
+    }
+    return std::make_shared<Define>(var, exp_vec[2]);
   }
-  
   if (token == "+" || token == "-" || token == "*" || token == "/") {
     if (parsetree.size() < 3) {
       throw std::invalid_argument("too few arguments to " + token);
@@ -592,7 +599,7 @@ inline exp_ptr parse(const ParseTree & parsetree)
     }
   }
 
-  return std::make_shared<Expression>(exp_vec.begin(), exp_vec.end());
+  return std::make_shared<List>(exp_vec);
 }
 
 static Environment global_env{
@@ -605,7 +612,7 @@ static Environment global_env{
   { "=",   std::make_shared<Same>() },
   { "car", std::make_shared<Car>() },
   { "cdr", std::make_shared<Cdr>() },
-  { "list", std::make_shared<List>() },
+  { "list", std::make_shared<ListFunction>() },
   { "length", std::make_shared<Length>() },
   { "pi",  std::make_shared<Number>(PI) },
 };

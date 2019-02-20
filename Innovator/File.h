@@ -41,9 +41,9 @@ VALUETYPE(FirstIndex, uint32_t)
 VALUETYPE(VertexOffset, int32_t)
 
 template <typename ValueExpression, typename ArgExpression>
-class ValueFunction : public Callable {
+class ValueFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 1);
     return std::make_shared<ValueExpression>(get_arg<ArgExpression>(args)->value);
@@ -51,9 +51,9 @@ public:
 };
 
 template <typename FlagsType, typename ValueType>
-class FlagsFunction : public Callable {
+class FlagsFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args);
     uint32_t flags = 0;
@@ -67,9 +67,9 @@ public:
 typedef Value<std::shared_ptr<Node>> NodeExpression;
 
 template <typename NodeType>
-class NoArgsFunction : public Callable {
+class NoArgsFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 0);
     return std::make_shared<NodeExpression>(std::make_shared<NodeType>());
@@ -77,9 +77,9 @@ public:
 };
 
 template <typename NodeType, typename ArgType>
-class OneArgFunction : public Callable {
+class OneArgFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 1);
     return std::make_shared<NodeExpression>(
@@ -88,9 +88,9 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1>
-class TwoArgFunction : public Callable {
+class TwoArgFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 2);
     return std::make_shared<NodeExpression>(
@@ -100,9 +100,9 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2>
-class ThreeArgFunction : public Callable {
+class ThreeArgFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 3);
     return std::make_shared<NodeExpression>(
@@ -113,9 +113,9 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3>
-class FourArgFunction : public Callable {
+class FourArgFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 4);
     return std::make_shared<NodeExpression>(
@@ -127,9 +127,9 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3, typename ArgType4>
-class FiveArgFunction : public Callable {
+class FiveArgFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 5);
     return std::make_shared<NodeExpression>(
@@ -142,9 +142,9 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3, typename ArgType4, typename ArgType5>
-class SixArgFunction : public Callable {
+class SixArgFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 6);
     return std::make_shared<NodeExpression>(
@@ -187,9 +187,9 @@ typedef FiveArgFunction<DrawCommand, VertexCount, InstanceCount, FirstVertex, Fi
 typedef SixArgFunction<IndexedDrawCommand, IndexCount, InstanceCount, FirstIndex, VertexOffset, FirstInstance, PrimitiveTopology> IndexedDrawCommandFunction;
 
 template <typename T>
-class InlineBufferDataFunction : public Callable {
+class InlineBufferDataFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args);
     return std::make_shared<NodeExpression>(
@@ -197,9 +197,9 @@ public:
   }
 };
 
-class BufferDataCountFunction : public Callable {
+class BufferDataCountFunction : public List {
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 1);
     const auto node_exp = get_arg<NodeExpression>(args);
@@ -211,7 +211,7 @@ public:
   }
 };
 
-class SeparatorFunction : public Callable {
+class SeparatorFunction : public List {
 private:
   static std::shared_ptr<Node> extract_node(const exp_ptr exp)
   {
@@ -222,12 +222,12 @@ private:
     return node_exp->value;
   }
 public:
-  exp_ptr operator()(const Expression * args) const override
+  exp_ptr operator()(const exp_vec & args) const override
   {
-    std::vector<std::shared_ptr<Node>> children(args->children.size());
-    std::transform(args->children.begin(), args->children.end(), children.begin(), extract_node);
+    std::vector<std::shared_ptr<Node>> expressions(args.size());
+    std::transform(args.begin(), args.end(), expressions.begin(), extract_node);
 
-    auto sep = std::make_shared<Separator>(children);
+    auto sep = std::make_shared<Separator>(expressions);
     return std::make_shared<NodeExpression>(sep);
   }
 };
