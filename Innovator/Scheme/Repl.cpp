@@ -1,5 +1,5 @@
 
-#include <Innovator/Scheme/Scheme.h>
+#include <Innovator/Scheme/Scheme2.h>
 
 #include <iostream>
 #include <string>
@@ -12,9 +12,9 @@ int main(int, char **)
   while (true) {
     try {
       std::cout << "> ";
-      std::string expression;
-      std::getline(std::cin, expression);
-      std::cout << scheme.eval(expression)->toString() << std::endl;
+      std::string input;
+      std::getline(std::cin, input);
+      std::cout << to_string(scheme.eval(input)) << std::endl;
     }
     catch (std::exception & e) {
       std::cerr << e.what() << std::endl;
