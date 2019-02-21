@@ -44,18 +44,19 @@ typedef std::vector<exp_ptr> exp_vec;
 
 class Expression : public std::enable_shared_from_this<Expression> {
 public:
-  NO_COPY_OR_ASSIGNMENT(Expression)
-  Expression() = default;
-  virtual ~Expression() = default;
+  CALLABLE_DECL(Expression)
   virtual std::string toString() const { return ""; }
   virtual exp_ptr eval(env_ptr) { return nullptr; }
 };
 
+class Callable : public Expression {
+public:
+  virtual exp_ptr operator()(const exp_vec & args) const = 0;
+};
+
 class List : public Expression {
 public:
-  NO_COPY_OR_ASSIGNMENT(List)
-  List() = default;
-  virtual ~List() = default;
+  CALLABLE_DECL(List)
 
   explicit List(exp_vec expressions)
     : expressions(expressions) {}
@@ -68,13 +69,9 @@ public:
     return this->expressions.front();
   }
 
-  exp_vec cdr() 
+  lst_ptr cdr() 
   {
-    return exp_vec(std::next(this->expressions.begin()), this->expressions.end());
-  }
-
-  virtual exp_ptr operator()(const exp_vec & args) const {
-    return nullptr;
+    return std::make_shared<List>(std::next(this->expressions.begin()), this->expressions.end());
   }
 
   virtual exp_ptr eval(env_ptr env);
@@ -110,8 +107,7 @@ public:
 
 class Environment : public std::map<std::string, exp_ptr> {
 public:
-  NO_COPY_OR_ASSIGNMENT(Environment);
-  Environment() = default;
+  EXP_DECL(Environment)
 
   explicit Environment(std::initializer_list<value_type> il)
     : std::map<std::string, exp_ptr>(il)
@@ -147,11 +143,10 @@ public:
 inline exp_ptr
 List::eval(env_ptr env)
 { 
-  auto result = std::make_shared<List>();
-  for (auto& exp : this->expressions) {
-    result->expressions.push_back(::eval(exp, env));
-  }
-  return result;
+  auto list = std::make_shared<List>(this->expressions);
+  std::transform(list->expressions.begin(), list->expressions.end(), list->expressions.begin(), 
+    [&](exp_ptr exp) { return ::eval(exp, env); });
+  return list;
 }
 
 inline exp_ptr
@@ -393,7 +388,7 @@ static std::shared_ptr<T> get_arg(const exp_vec & args)
   throw std::invalid_argument("missing argument");
 }
 
-class ListFunction : public List {
+class ListFunction : public Callable {
 public:
   CALLABLE_DECL(ListFunction)
   exp_ptr operator()(const exp_vec & args) const override
@@ -402,7 +397,7 @@ public:
   }
 };
 
-class Length : public List {
+class Length : public Callable {
 public:
   CALLABLE_DECL(Length)
   exp_ptr operator()(const exp_vec & args) const override
@@ -414,7 +409,7 @@ public:
 };
 
 template <typename T>
-class Operator : public List {
+class Operator : public Callable {
 public:
   CALLABLE_DECL(Operator)
   exp_ptr operator()(const exp_vec & args) const override
@@ -431,7 +426,7 @@ typedef Operator<std::minus<>> Sub;
 typedef Operator<std::divides<>> Div;
 typedef Operator<std::multiplies<>> Mul;
 
-class Less : public List {
+class Less : public Callable {
 public:
   CALLABLE_DECL(Less)
   exp_ptr operator()(const exp_vec & args) const override
@@ -441,7 +436,7 @@ public:
   }
 };
 
-class More : public List {
+class More : public Callable {
 public:
   CALLABLE_DECL(More)
   exp_ptr operator()(const exp_vec & args) const override
@@ -451,7 +446,7 @@ public:
   }
 };
 
-class Same: public List {
+class Same: public Callable {
 public:
   CALLABLE_DECL(Same)
   exp_ptr operator()(const exp_vec & args) const override
@@ -461,7 +456,7 @@ public:
   }
 };
 
-class Car : public List {
+class Car : public Callable {
 public:
   CALLABLE_DECL(Car)
   exp_ptr operator()(const exp_vec & args) const override
@@ -472,14 +467,14 @@ public:
   }
 };
 
-class Cdr : public List {
+class Cdr : public Callable {
 public:
   CALLABLE_DECL(Cdr)
   exp_ptr operator()(const exp_vec & args) const override
   {
     check_num_args(args, 1);
     const auto list = std::dynamic_pointer_cast<List>(args.front());
-    return std::make_shared<List>(list->cdr());
+    return list->cdr();
   }
 };
 
@@ -496,17 +491,19 @@ inline exp_ptr eval(exp_ptr & exp, env_ptr env)
     if (type != typeid(List)) {
       return exp->eval(env);
     }
-     
     auto list = std::dynamic_pointer_cast<List>(exp->eval(env));
 
-    if (typeid(*list->car().get()) == typeid(Function)) {
-      auto func = std::dynamic_pointer_cast<Function>(list->car());
+    auto front = list->car();
+    auto rest = list->cdr()->expressions;
+
+    if (typeid(*front.get()) == typeid(Function)) {
+      auto func = std::dynamic_pointer_cast<Function>(front);
       exp = func->body;
-      env = std::make_shared<Environment>(func->parms, list->cdr(), func->env);
+      env = std::make_shared<Environment>(func->parms, rest, func->env);
     }
     else {
-      auto car = std::dynamic_pointer_cast<List>(list->car());
-      return (*car)(list->cdr());
+      auto car = std::dynamic_pointer_cast<Callable>(front);
+      return (*car)(rest);
     }
   }
 }

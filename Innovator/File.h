@@ -41,7 +41,7 @@ VALUETYPE(FirstIndex, uint32_t)
 VALUETYPE(VertexOffset, int32_t)
 
 template <typename ValueExpression, typename ArgExpression>
-class ValueFunction : public List {
+class ValueFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -51,7 +51,7 @@ public:
 };
 
 template <typename FlagsType, typename ValueType>
-class FlagsFunction : public List {
+class FlagsFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -67,7 +67,7 @@ public:
 typedef Value<std::shared_ptr<Node>> NodeExpression;
 
 template <typename NodeType>
-class NoArgsFunction : public List {
+class NoArgsFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -77,7 +77,7 @@ public:
 };
 
 template <typename NodeType, typename ArgType>
-class OneArgFunction : public List {
+class OneArgFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -88,7 +88,7 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1>
-class TwoArgFunction : public List {
+class TwoArgFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -100,7 +100,7 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2>
-class ThreeArgFunction : public List {
+class ThreeArgFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -113,7 +113,7 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3>
-class FourArgFunction : public List {
+class FourArgFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -127,7 +127,7 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3, typename ArgType4>
-class FiveArgFunction : public List {
+class FiveArgFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -142,7 +142,7 @@ public:
 };
 
 template <typename NodeType, typename ArgType0, typename ArgType1, typename ArgType2, typename ArgType3, typename ArgType4, typename ArgType5>
-class SixArgFunction : public List {
+class SixArgFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -187,7 +187,7 @@ typedef FiveArgFunction<DrawCommand, VertexCount, InstanceCount, FirstVertex, Fi
 typedef SixArgFunction<IndexedDrawCommand, IndexCount, InstanceCount, FirstIndex, VertexOffset, FirstInstance, PrimitiveTopology> IndexedDrawCommandFunction;
 
 template <typename T>
-class InlineBufferDataFunction : public List {
+class InlineBufferDataFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -197,7 +197,7 @@ public:
   }
 };
 
-class BufferDataCountFunction : public List {
+class BufferDataCountFunction : public Callable {
 public:
   exp_ptr operator()(const exp_vec & args) const override
   {
@@ -211,7 +211,7 @@ public:
   }
 };
 
-class SeparatorFunction : public List {
+class SeparatorFunction : public Callable {
 private:
   static std::shared_ptr<Node> extract_node(const exp_ptr exp)
   {
