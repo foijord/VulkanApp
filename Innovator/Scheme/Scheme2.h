@@ -19,7 +19,24 @@ typedef std::function<std::any(lst_ptr)> fun_ptr;
 
 typedef bool Boolean;
 typedef double Number;
-typedef std::string Symbol;
+typedef std::string String;
+
+struct Symbol : public std::string {
+  explicit Symbol(const String & s) : std::string(s) {}
+};
+
+struct Lambda {
+  lst_ptr parms, body;
+};
+
+struct Define {
+  Symbol sym;
+  std::any exp;
+};
+
+struct If {
+  std::any test, conseq, alt;
+};
 
 class Env;
 typedef std::shared_ptr<Env> env_ptr;
@@ -54,19 +71,6 @@ public:
   env_ptr outer { nullptr };
 };
 
-struct Lambda {
-  lst_ptr parms, body;
-};
-
-struct Define {
-  Symbol sym;
-  std::any exp;
-};
-
-struct If {
-  std::any test, conseq, alt;
-};
-
 std::any eval(std::any exp, env_ptr env)
 {
   if (exp.type() == typeid(Number) ||
@@ -77,9 +81,8 @@ std::any eval(std::any exp, env_ptr env)
     return env->eval(std::any_cast<Symbol>(exp));
   }
   if (exp.type() == typeid(If)) {
-    auto test = std::any_cast<If>(exp);
-    test.test = eval(test.test, env);
-    return std::any_cast<Boolean>(test.test) ? test.conseq : test.alt;
+    auto i = std::any_cast<If>(exp);
+    return std::any_cast<Boolean>(eval(i.test, env)) ? i.conseq : i.alt;
   }
   if (exp.type() == typeid(Lambda)) {
     return fun_ptr([=](lst_ptr args) {
@@ -205,17 +208,24 @@ fun_ptr greater = [](lst_ptr lst)
   return Boolean(args[0] > args[1]);
 };
 
+fun_ptr less = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return Boolean(args[0] < args[1]);
+};
+
 
 static std::map<Symbol, std::any> global {
-  { "pi",  Number(3.14159265358979323846) },
-  { "+", plus },
-  { ">", greater }
+  { Symbol("pi"),  Number(3.14159265358979323846) },
+  { Symbol("+"), plus },
+  { Symbol(">"), greater },
+  { Symbol("<"), less }
 };
 
 class Scheme {
 public:
-  Scheme() :
-    env(std::make_shared<Env>(global))
+  Scheme()
+    : env(std::make_shared<Env>(global))
   {}
 
   std::any eval(std::string input) const
