@@ -17,6 +17,7 @@ typedef std::vector<std::any> List;
 typedef std::shared_ptr<List> lst_ptr;
 typedef std::function<std::any(lst_ptr)> fun_ptr;
 
+typedef bool Boolean;
 typedef double Number;
 typedef std::string Symbol;
 
@@ -54,8 +55,7 @@ public:
 };
 
 struct Lambda {
-  lst_ptr parms;
-  lst_ptr body;
+  lst_ptr parms, body;
 };
 
 struct Define {
@@ -63,13 +63,23 @@ struct Define {
   std::any exp;
 };
 
+struct If {
+  std::any test, conseq, alt;
+};
+
 std::any eval(std::any exp, env_ptr env)
 {
-  if (exp.type() == typeid(Number)) {
+  if (exp.type() == typeid(Number) ||
+      exp.type() == typeid(Boolean)) {
     return exp;
   }
   if (exp.type() == typeid(Symbol)) {
     return env->eval(std::any_cast<Symbol>(exp));
+  }
+  if (exp.type() == typeid(If)) {
+    auto test = std::any_cast<If>(exp);
+    test.test = eval(test.test, env);
+    return std::any_cast<Boolean>(test.test) ? test.conseq : test.alt;
   }
   if (exp.type() == typeid(Lambda)) {
     return fun_ptr([=](lst_ptr args) {
@@ -114,12 +124,21 @@ std::string to_string(std::any exp)
   if (exp.type() == typeid(Number)) {
     return std::to_string(std::any_cast<Number>(exp));
   }
+  if (exp.type() == typeid(Boolean)) {
+    return std::any_cast<Boolean>(exp) ? "#t" : "#f";
+  }
   return "not a Number";
 }
 
 inline std::any parse(const ParseTree & parsetree)
 {
   if (parsetree.empty()) {
+    if (parsetree.token == "#t") {
+      return Boolean(true);
+    }
+    if (parsetree.token == "#f") {
+      return Boolean(false);
+    }
     std::regex match_number(R"(^[+-]?([0-9]*[.])?[0-9]+$)");
     if (std::regex_match(parsetree.token, match_number)) {
       return Number(std::stod(parsetree.token));
@@ -132,6 +151,13 @@ inline std::any parse(const ParseTree & parsetree)
 
   const std::string token = parsetree[0].token;
 
+  if (token == "if") {
+    if (exp.size() != 4) {
+      throw std::invalid_argument("wrong number of arguments to if");
+    }
+    return If{ exp[1], exp[2], exp[3] };
+  }
+
   if (token == "lambda") {
     if (exp.size() != 3) {
       throw std::invalid_argument("wrong Number of arguments to lambda");
@@ -142,7 +168,7 @@ inline std::any parse(const ParseTree & parsetree)
     if (exp[2].type() != typeid(lst_ptr)) {
       throw std::invalid_argument("second parameter to lambda must be an expression body");
     }
-    return Lambda { std::any_cast<lst_ptr>(exp[1]), std::any_cast<lst_ptr>(exp[2]) };
+    return Lambda{ std::any_cast<lst_ptr>(exp[1]), std::any_cast<lst_ptr>(exp[2]) };
   }
 
   if (token == "define") {
@@ -158,18 +184,32 @@ inline std::any parse(const ParseTree & parsetree)
   return std::make_shared<List>(exp);
 }
 
-fun_ptr plus = [](lst_ptr args)
+template <typename T>
+std::vector<T> cast(lst_ptr lst)
 {
-  std::vector<Number> dargs(args->size());
-  std::transform(args->begin(), args->end(), dargs.begin(), 
-    [](std::any arg) { return std::any_cast<Number>(arg); });
+  std::vector<T> args(lst->size());
+  std::transform(lst->begin(), lst->end(), args.begin(),
+    [](std::any exp) { return std::any_cast<T>(exp); });
+  return args;
+}
 
-  return std::accumulate(next(dargs.begin()), dargs.end(), dargs.front(), std::plus<Number>());
+fun_ptr plus = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return std::accumulate(next(args.begin()), args.end(), args.front(), std::plus<Number>());
 };
+
+fun_ptr greater = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return Boolean(args[0] > args[1]);
+};
+
 
 static std::map<Symbol, std::any> global {
   { "pi",  Number(3.14159265358979323846) },
-  { "+", plus }
+  { "+", plus },
+  { ">", greater }
 };
 
 class Scheme {
