@@ -38,6 +38,88 @@ struct If {
   std::any test, conseq, alt;
 };
 
+template <typename T>
+std::vector<T> cast(lst_ptr lst)
+{
+  std::vector<T> args(lst->size());
+  std::transform(lst->begin(), lst->end(), args.begin(),
+    [](std::any exp) { return std::any_cast<T>(exp); });
+  return args;
+}
+
+fun_ptr plus = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return std::accumulate(next(args.begin()), args.end(), args.front(), std::plus<Number>());
+};
+
+fun_ptr minus = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return std::accumulate(next(args.begin()), args.end(), args.front(), std::minus<Number>());
+};
+
+fun_ptr divides = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return std::accumulate(next(args.begin()), args.end(), args.front(), std::divides<Number>());
+};
+
+fun_ptr multiplies = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return std::accumulate(next(args.begin()), args.end(), args.front(), std::multiplies<Number>());
+};
+
+fun_ptr greater = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return Boolean(args[0] > args[1]);
+};
+
+fun_ptr less = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return Boolean(args[0] < args[1]);
+};
+
+fun_ptr car = [](lst_ptr lst)
+{
+  auto l = std::any_cast<lst_ptr>(lst->front());
+  return l->front();
+};
+
+fun_ptr cdr = [](lst_ptr lst)
+{
+  auto l = std::any_cast<lst_ptr>(lst->front());
+  return std::make_shared<List>(next(l->begin()), l->end());
+};
+
+fun_ptr list = [](lst_ptr lst)
+{
+  return std::make_shared<List>(lst->begin(), lst->end());
+};
+
+fun_ptr length = [](lst_ptr lst)
+{
+  auto l = std::any_cast<lst_ptr>(lst->front());
+  return static_cast<Number>(l->size());
+};
+
+static std::map<Symbol, std::any> global {
+  { Symbol("pi"),  Number(3.14159265358979323846) },
+  { Symbol("+"), plus },
+  { Symbol("-"), minus },
+  { Symbol("/"), divides },
+  { Symbol("*"), multiplies },
+  { Symbol(">"), greater },
+  { Symbol("<"), less },
+  { Symbol("car"), car },
+  { Symbol("cdr"), cdr },
+  { Symbol("list"), list },
+  { Symbol("length"), length }
+};
+
 class Env;
 typedef std::shared_ptr<Env> env_ptr;
 
@@ -81,8 +163,8 @@ std::any eval(std::any exp, env_ptr env)
     return env->eval(std::any_cast<Symbol>(exp));
   }
   if (exp.type() == typeid(If)) {
-    auto i = std::any_cast<If>(exp);
-    return std::any_cast<Boolean>(eval(i.test, env)) ? i.conseq : i.alt;
+    auto iff = std::any_cast<If>(exp);
+    return std::any_cast<Boolean>(eval(iff.test, env)) ? iff.conseq : iff.alt;
   }
   if (exp.type() == typeid(Lambda)) {
     return fun_ptr([=](lst_ptr args) {
@@ -97,14 +179,39 @@ std::any eval(std::any exp, env_ptr env)
   else {
     auto list = std::any_cast<lst_ptr>(exp);
 
-    std::transform(list->begin(), list->end(), list->begin(), [&](std::any exp) { 
-      return eval(exp, env); 
+    auto args = std::make_shared<List>(list->size());
+    std::transform(list->begin(), list->end(), args->begin(), [&](std::any exp) { 
+      return eval(exp, env);
     });
 
-    auto fun = std::any_cast<fun_ptr>(list->front());
-    list->erase(list->begin());
-    return fun(list);
+    auto fun = std::any_cast<fun_ptr>(args->front());
+    args->erase(args->begin());
+    return fun(args);
   }
+}
+
+std::string to_string(std::any exp) 
+{
+  if (exp.type() == typeid(Number)) {
+    return std::to_string(std::any_cast<Number>(exp));
+  }
+  if (exp.type() == typeid(Symbol)) {
+    return std::any_cast<Symbol>(exp);
+  }
+  if (exp.type() == typeid(Boolean)) {
+    return std::any_cast<Boolean>(exp) ? "#t" : "#f";
+  }
+  if (exp.type() == typeid(lst_ptr)) {
+    auto list = std::any_cast<lst_ptr>(exp);
+
+    std::string result("(");
+    for (auto s : *list) {
+      result += to_string(s) + " ";
+    }
+    result.pop_back();
+    return result + ")";
+  }
+  return "()";
 }
 
 class ParseTree : public std::vector<ParseTree> {
@@ -121,17 +228,6 @@ public:
 
   std::string token;
 };
-
-std::string to_string(std::any exp) 
-{
-  if (exp.type() == typeid(Number)) {
-    return std::to_string(std::any_cast<Number>(exp));
-  }
-  if (exp.type() == typeid(Boolean)) {
-    return std::any_cast<Boolean>(exp) ? "#t" : "#f";
-  }
-  return "not a Number";
-}
 
 inline std::any parse(const ParseTree & parsetree)
 {
@@ -186,41 +282,6 @@ inline std::any parse(const ParseTree & parsetree)
 
   return std::make_shared<List>(exp);
 }
-
-template <typename T>
-std::vector<T> cast(lst_ptr lst)
-{
-  std::vector<T> args(lst->size());
-  std::transform(lst->begin(), lst->end(), args.begin(),
-    [](std::any exp) { return std::any_cast<T>(exp); });
-  return args;
-}
-
-fun_ptr plus = [](lst_ptr lst)
-{
-  std::vector<Number> args = cast<Number>(lst);
-  return std::accumulate(next(args.begin()), args.end(), args.front(), std::plus<Number>());
-};
-
-fun_ptr greater = [](lst_ptr lst)
-{
-  std::vector<Number> args = cast<Number>(lst);
-  return Boolean(args[0] > args[1]);
-};
-
-fun_ptr less = [](lst_ptr lst)
-{
-  std::vector<Number> args = cast<Number>(lst);
-  return Boolean(args[0] < args[1]);
-};
-
-
-static std::map<Symbol, std::any> global {
-  { Symbol("pi"),  Number(3.14159265358979323846) },
-  { Symbol("+"), plus },
-  { Symbol(">"), greater },
-  { Symbol("<"), less }
-};
 
 class Scheme {
 public:
