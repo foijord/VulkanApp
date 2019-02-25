@@ -25,13 +25,25 @@ struct Symbol : public std::string {
   explicit Symbol(const String & s) : std::string(s) {}
 };
 
-struct Lambda {
-  lst_ptr parms, body;
+class Env;
+typedef std::shared_ptr<Env> env_ptr;
+
+struct Quote {
+  std::any exp;
 };
 
 struct Define {
   Symbol sym;
   std::any exp;
+};
+
+struct Lambda {
+  std::any parm, body;
+};
+
+struct Function {
+  std::any parms, exp;
+  env_ptr env;
 };
 
 struct If {
@@ -83,6 +95,12 @@ fun_ptr less = [](lst_ptr lst)
   return Boolean(args[0] < args[1]);
 };
 
+fun_ptr equal = [](lst_ptr lst)
+{
+  std::vector<Number> args = cast<Number>(lst);
+  return Boolean(args[0] == args[1]);
+};
+
 fun_ptr car = [](lst_ptr lst)
 {
   auto l = std::any_cast<lst_ptr>(lst->front());
@@ -106,45 +124,33 @@ fun_ptr length = [](lst_ptr lst)
   return static_cast<Number>(l->size());
 };
 
-static std::map<Symbol, std::any> global {
-  { Symbol("pi"),  Number(3.14159265358979323846) },
-  { Symbol("+"), plus },
-  { Symbol("-"), minus },
-  { Symbol("/"), divides },
-  { Symbol("*"), multiplies },
-  { Symbol(">"), greater },
-  { Symbol("<"), less },
-  { Symbol("car"), car },
-  { Symbol("cdr"), cdr },
-  { Symbol("list"), list },
-  { Symbol("length"), length }
-};
-
-class Env;
-typedef std::shared_ptr<Env> env_ptr;
-
 class Env {
 public:
-  explicit Env(const std::map<Symbol, std::any> & inner)
-    : inner(inner)
-  {}
+  Env() = default;
+  ~Env() = default;
 
-  explicit Env(lst_ptr parms, lst_ptr args, env_ptr outer)
+  explicit Env(std::any parm, lst_ptr args, env_ptr outer)
     : outer(std::move(outer))
   {
-    for (size_t i = 0; i < parms->size(); i++) {
-      auto sym = std::any_cast<Symbol>((*parms)[i]);
-      this->inner[sym] = (*args)[i];
+    if (parm.type() == typeid(lst_ptr)) {
+      auto parms = std::any_cast<lst_ptr>(parm);
+      for (size_t i = 0; i < parms->size(); i++) {
+        auto sym = std::any_cast<Symbol>((*parms)[i]);
+        this->inner[sym] = (*args)[i];
+      }
+    } else {
+      auto sym = std::any_cast<Symbol>(parm);
+      this->inner[sym] = args;
     }
   }
 
-  std::any eval(Symbol sym)
+  std::any get(Symbol sym)
   {
     if (this->inner.find(sym) != this->inner.end()) {
       return this->inner.at(sym);
     }
     if (this->outer) {
-      return this->outer->eval(sym);
+      return this->outer->get(sym);
     }
     throw std::runtime_error("undefined symbol: " + sym);
   }
@@ -153,50 +159,15 @@ public:
   env_ptr outer { nullptr };
 };
 
-std::any eval(std::any exp, env_ptr env)
-{
-  if (exp.type() == typeid(Number) ||
-      exp.type() == typeid(Boolean)) {
-    return exp;
-  }
-  if (exp.type() == typeid(Symbol)) {
-    return env->eval(std::any_cast<Symbol>(exp));
-  }
-  if (exp.type() == typeid(If)) {
-    auto iff = std::any_cast<If>(exp);
-    return std::any_cast<Boolean>(eval(iff.test, env)) ? iff.conseq : iff.alt;
-  }
-  if (exp.type() == typeid(Lambda)) {
-    return fun_ptr([=](lst_ptr args) {
-      auto lambda = std::any_cast<Lambda>(exp);
-      return eval(lambda.body, std::make_shared<Env>(lambda.parms, args, env));
-    });
-  }
-  if (exp.type() == typeid(Define)) {
-    auto define = std::any_cast<Define>(exp);
-    env->inner[define.sym] = eval(define.exp, env);
-  } 
-  else {
-    auto list = std::any_cast<lst_ptr>(exp);
-
-    auto args = std::make_shared<List>(list->size());
-    std::transform(list->begin(), list->end(), args->begin(), [&](std::any exp) { 
-      return eval(exp, env);
-    });
-
-    auto fun = std::any_cast<fun_ptr>(args->front());
-    args->erase(args->begin());
-    return fun(args);
-  }
-}
-
-std::string to_string(std::any exp) 
+std::string to_string(std::any exp, env_ptr env) 
 {
   if (exp.type() == typeid(Number)) {
     return std::to_string(std::any_cast<Number>(exp));
   }
   if (exp.type() == typeid(Symbol)) {
-    return std::any_cast<Symbol>(exp);
+    auto symbol = std::any_cast<Symbol>(exp);
+    auto value = env->get(symbol);
+    return symbol + ": " + to_string(value, env);
   }
   if (exp.type() == typeid(Boolean)) {
     return std::any_cast<Boolean>(exp) ? "#t" : "#f";
@@ -206,12 +177,65 @@ std::string to_string(std::any exp)
 
     std::string result("(");
     for (auto s : *list) {
-      result += to_string(s) + " ";
+      result += to_string(s, env) + " ";
     }
     result.pop_back();
     return result + ")";
   }
   return "()";
+}
+
+std::any eval(std::any exp, env_ptr env)
+{
+  while (true) {
+    if (exp.type() == typeid(Number)) {
+      return exp;      
+    }
+    else if (exp.type() == typeid(Boolean)) {
+      return exp;
+    } 
+    else if (exp.type() == typeid(Symbol)) {
+      auto symbol = std::any_cast<Symbol>(exp);
+      return env->get(symbol);
+    }
+    else if (exp.type() == typeid(Quote)) {
+      auto quote = std::any_cast<Quote>(exp);
+      return quote.exp;
+    }
+    else if (exp.type() == typeid(Define)) {
+      auto define = std::any_cast<Define>(exp);
+      env->inner[define.sym] = eval(define.exp, env);
+      return nullptr;
+    } 
+    else if (exp.type() == typeid(Lambda)) {
+      auto lambda = std::any_cast<Lambda>(exp);
+      return Function{ lambda.parm, lambda.body, env };
+    }
+    else if (exp.type() == typeid(If)) {
+      auto iff = std::any_cast<If>(exp);
+      exp = std::any_cast<Boolean>(eval(iff.test, env)) ? iff.conseq : iff.alt;
+    }
+    else {
+      auto list = std::any_cast<lst_ptr>(exp);
+
+      auto args = std::make_shared<List>(list->size());
+      std::transform(list->begin(), list->end(), args->begin(), [&](std::any exp) { 
+        return eval(exp, env);
+      });
+
+      auto fun = args->front();
+      args->erase(args->begin());
+
+      if (fun.type() == typeid(Function)) {
+        auto f = std::any_cast<Function>(fun);
+        exp = f.exp;
+        env = std::make_shared<Env>(f.parms, args, f.env);
+      } else {
+        auto f = std::any_cast<fun_ptr>(fun);
+        return f(args);
+      }
+    }
+  }
 }
 
 class ParseTree : public std::vector<ParseTree> {
@@ -250,6 +274,13 @@ inline std::any parse(const ParseTree & parsetree)
 
   const std::string token = parsetree[0].token;
 
+  if (token == "quote") {
+    if (exp.size() != 2) {
+      throw std::invalid_argument("wrong number of arguments to quote");
+    }
+    return Quote{ exp[1] };
+  }
+
   if (token == "if") {
     if (exp.size() != 4) {
       throw std::invalid_argument("wrong number of arguments to if");
@@ -261,13 +292,7 @@ inline std::any parse(const ParseTree & parsetree)
     if (exp.size() != 3) {
       throw std::invalid_argument("wrong Number of arguments to lambda");
     }
-    if (exp[1].type() != typeid(lst_ptr)) {
-      throw std::invalid_argument("first parameter to lambda must be a List of arguments");
-    }
-    if (exp[2].type() != typeid(lst_ptr)) {
-      throw std::invalid_argument("second parameter to lambda must be an expression body");
-    }
-    return Lambda{ std::any_cast<lst_ptr>(exp[1]), std::any_cast<lst_ptr>(exp[2]) };
+    return Lambda{ exp[1], exp[2] };
   }
 
   if (token == "define") {
@@ -286,8 +311,23 @@ inline std::any parse(const ParseTree & parsetree)
 class Scheme {
 public:
   Scheme()
-    : env(std::make_shared<Env>(global))
-  {}
+    : env(std::make_shared<Env>())
+  {
+    env->inner = {
+      { Symbol("pi"),  Number(3.14159265358979323846) },
+      { Symbol("+"), plus },
+      { Symbol("-"), minus },
+      { Symbol("/"), divides },
+      { Symbol("*"), multiplies },
+      { Symbol(">"), greater },
+      { Symbol("<"), less },
+      { Symbol("="), equal },
+      { Symbol("car"), car },
+      { Symbol("cdr"), cdr },
+      { Symbol("list"), list },
+      { Symbol("length"), length }
+    };
+  }
 
   std::any eval(std::string input) const
   {
