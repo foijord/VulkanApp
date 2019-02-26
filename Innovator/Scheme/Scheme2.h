@@ -1,7 +1,6 @@
 #pragma once
 
 #include <any>
-#include <map>
 #include <list>
 #include <regex>
 #include <vector>
@@ -12,10 +11,11 @@
 #include <typeinfo>
 #include <algorithm>
 #include <functional>
+#include <unordered_map>
 
 typedef std::vector<std::any> List;
 typedef std::shared_ptr<List> lst_ptr;
-typedef std::function<std::any(lst_ptr)> fun_ptr;
+typedef std::function<std::any(const List & args)> fun_ptr;
 
 typedef bool Boolean;
 typedef double Number;
@@ -51,76 +51,76 @@ struct If {
 };
 
 template <typename T>
-std::vector<T> cast(lst_ptr lst)
+std::vector<T> cast(const List & lst)
 {
-  std::vector<T> args(lst->size());
-  std::transform(lst->begin(), lst->end(), args.begin(),
+  std::vector<T> args(lst.size());
+  std::transform(lst.begin(), lst.end(), args.begin(),
     [](std::any exp) { return std::any_cast<T>(exp); });
   return args;
 }
 
-fun_ptr plus = [](lst_ptr lst)
+fun_ptr plus = [](const List & lst)
 {
   std::vector<Number> args = cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::plus<Number>());
 };
 
-fun_ptr minus = [](lst_ptr lst)
+fun_ptr minus = [](const List & lst)
 {
   std::vector<Number> args = cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::minus<Number>());
 };
 
-fun_ptr divides = [](lst_ptr lst)
+fun_ptr divides = [](const List & lst)
 {
   std::vector<Number> args = cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::divides<Number>());
 };
 
-fun_ptr multiplies = [](lst_ptr lst)
+fun_ptr multiplies = [](const List & lst)
 {
   std::vector<Number> args = cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::multiplies<Number>());
 };
 
-fun_ptr greater = [](lst_ptr lst)
+fun_ptr greater = [](const List & lst)
 {
   std::vector<Number> args = cast<Number>(lst);
   return Boolean(args[0] > args[1]);
 };
 
-fun_ptr less = [](lst_ptr lst)
+fun_ptr less = [](const List & lst)
 {
   std::vector<Number> args = cast<Number>(lst);
   return Boolean(args[0] < args[1]);
 };
 
-fun_ptr equal = [](lst_ptr lst)
+fun_ptr equal = [](const List & lst)
 {
   std::vector<Number> args = cast<Number>(lst);
   return Boolean(args[0] == args[1]);
 };
 
-fun_ptr car = [](lst_ptr lst)
+fun_ptr car = [](const List & lst)
 {
-  auto l = std::any_cast<lst_ptr>(lst->front());
+  auto l = std::any_cast<lst_ptr>(lst.front());
   return l->front();
 };
 
-fun_ptr cdr = [](lst_ptr lst)
+fun_ptr cdr = [](const List & lst)
 {
-  auto l = std::any_cast<lst_ptr>(lst->front());
+  auto l = std::any_cast<lst_ptr>(lst.front());
   return std::make_shared<List>(next(l->begin()), l->end());
 };
 
-fun_ptr list = [](lst_ptr lst)
+fun_ptr list = [](const List & lst)
 {
-  return std::make_shared<List>(lst->begin(), lst->end());
+  return std::make_shared<List>(lst.begin(), lst.end());
 };
 
-fun_ptr length = [](lst_ptr lst)
+fun_ptr length = [](const List & lst)
 {
-  auto l = std::any_cast<lst_ptr>(lst->front());
+  auto l = std::any_cast<lst_ptr>(lst.front());
   return static_cast<Number>(l->size());
 };
 
@@ -129,14 +129,14 @@ public:
   Env() = default;
   ~Env() = default;
 
-  explicit Env(std::any parm, lst_ptr args, env_ptr outer)
+  explicit Env(const std::any & parm, const List & args, env_ptr outer)
     : outer(std::move(outer))
   {
     if (parm.type() == typeid(lst_ptr)) {
       auto parms = std::any_cast<lst_ptr>(parm);
       for (size_t i = 0; i < parms->size(); i++) {
         auto sym = std::any_cast<Symbol>((*parms)[i]);
-        this->inner[sym] = (*args)[i];
+        this->inner[sym] = args[i];
       }
     } else {
       auto sym = std::any_cast<Symbol>(parm);
@@ -155,7 +155,7 @@ public:
     throw std::runtime_error("undefined symbol: " + sym);
   }
     
-  std::map<Symbol, std::any> inner;
+  std::unordered_map<std::string, std::any> inner;
   env_ptr outer { nullptr };
 };
 
@@ -185,7 +185,7 @@ std::string to_string(std::any exp, env_ptr env)
   return "()";
 }
 
-std::any eval(std::any exp, env_ptr env)
+std::any eval(std::any & exp, env_ptr & env)
 {
   while (true) {
     if (exp.type() == typeid(Number)) {
@@ -216,15 +216,13 @@ std::any eval(std::any exp, env_ptr env)
       exp = std::any_cast<Boolean>(eval(iff.test, env)) ? iff.conseq : iff.alt;
     }
     else {
-      auto list = std::any_cast<lst_ptr>(exp);
+      const auto & list = std::any_cast<lst_ptr>(exp);
+      const auto & fun = eval(list->front(), env);
 
-      auto args = std::make_shared<List>(list->size());
-      std::transform(list->begin(), list->end(), args->begin(), [&](std::any exp) { 
+      auto args = List(list->size() - 1);
+      std::transform(next(list->begin()), list->end(), args.begin(), [&](std::any exp) { 
         return eval(exp, env);
       });
-
-      auto fun = args->front();
-      args->erase(args->begin());
 
       if (fun.type() == typeid(Function)) {
         auto f = std::any_cast<Function>(fun);
@@ -238,74 +236,81 @@ std::any eval(std::any exp, env_ptr env)
   }
 }
 
-class ParseTree : public std::vector<ParseTree> {
+class expression : public std::vector<expression> {
 public:
-  explicit ParseTree(std::istream_iterator<std::string> & it)
+  explicit expression(std::istream_iterator<std::string> & it)
   {
     if (*it == "(") {
+      this->token = *(++it);
       while (*(++it) != ")") {
-        this->push_back(ParseTree(it));
+        this->push_back(expression(it));
       }
+    } else {
+      this->token = *it;
     }
-    this->token = *it;
   }
 
   std::string token;
 };
 
-inline std::any parse(const ParseTree & parsetree)
+inline std::any atom(const std::string & token)
 {
-  if (parsetree.empty()) {
-    if (parsetree.token == "#t") {
-      return Boolean(true);
-    }
-    if (parsetree.token == "#f") {
-      return Boolean(false);
-    }
-    std::regex match_number(R"(^[+-]?([0-9]*[.])?[0-9]+$)");
-    if (std::regex_match(parsetree.token, match_number)) {
-      return Number(std::stod(parsetree.token));
-    }
-    return Symbol(parsetree.token);
+  if (token == "#t") {
+    return Boolean(true);
+  }
+  if (token == "#f") {
+    return Boolean(false);
+  }
+  std::regex match_number(R"(^[+-]?([0-9]*[.])?[0-9]+$)");
+  if (std::regex_match(token, match_number)) {
+    return Number(std::stod(token));
+  }
+  return Symbol(token);
+}
+
+inline std::any parse(const expression & exp)
+{
+  if (exp.empty()) {
+    return atom(exp.token);
   }
   
-  List exp(parsetree.size());
-  std::transform(parsetree.begin(), parsetree.end(), exp.begin(), parse);
+  List args(exp.size());
+  std::transform(exp.begin(), exp.end(), args.begin(), parse);
 
-  const std::string token = parsetree[0].token;
-
-  if (token == "quote") {
-    if (exp.size() != 2) {
+  if (exp.token == "quote") {
+    if (args.size() != 1) {
       throw std::invalid_argument("wrong number of arguments to quote");
     }
-    return Quote{ exp[1] };
+    return Quote{ args[0] };
   }
 
-  if (token == "if") {
-    if (exp.size() != 4) {
+  if (exp.token == "if") {
+    if (args.size() != 3) {
       throw std::invalid_argument("wrong number of arguments to if");
     }
-    return If{ exp[1], exp[2], exp[3] };
+    return If{ args[0], args[1], args[2] };
   }
 
-  if (token == "lambda") {
-    if (exp.size() != 3) {
+  if (exp.token == "lambda") {
+    if (args.size() != 2) {
       throw std::invalid_argument("wrong Number of arguments to lambda");
     }
-    return Lambda{ exp[1], exp[2] };
+    return Lambda{ args[0], args[1] };
   }
 
-  if (token == "define") {
-    if (exp.size() != 3) {
+  if (exp.token == "define") {
+    if (args.size() != 2) {
       throw std::invalid_argument("wrong number of arguments to Define");
     }
-    if (exp[1].type() != typeid(Symbol)) {
+    if (args[0].type() != typeid(Symbol)) {
       throw std::invalid_argument("first argument to Define must be a Symbol");
     }
-    return Define{ std::any_cast<Symbol>(exp[1]), exp[2] };
+    return Define{ std::any_cast<Symbol>(args[0]), args[1] };
   }
 
-  return std::make_shared<List>(exp);
+  List list{ Symbol(exp.token) };
+  list.insert(list.end(), args.begin(), args.end());
+  return std::make_shared<List>(list);
 }
 
 class Scheme {
@@ -329,17 +334,18 @@ public:
     };
   }
 
-  std::any eval(std::string input) const
+  std::any eval(std::string input) 
   {
     input = std::regex_replace(input, std::regex(R"([(])"), " ( ");
     input = std::regex_replace(input, std::regex(R"([)])"), " ) ");
 
     std::istringstream iss(input);
     std::istream_iterator<std::string> tokens(iss);
-    const ParseTree parsetree(tokens);
-    auto exp = parse(parsetree);
 
-    return ::eval(exp, this->env);
+    const expression exp(tokens);
+    auto list = parse(exp);
+
+    return ::eval(list, this->env);
   }
 
   env_ptr env;

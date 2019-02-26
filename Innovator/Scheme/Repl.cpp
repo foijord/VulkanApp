@@ -1,8 +1,9 @@
 
 #include <Innovator/Scheme/Scheme2.h>
 
-#include <iostream>
 #include <string>
+#include <chrono>
+#include <iostream>
 
 int main(int, char **)
 {
@@ -18,11 +19,17 @@ int main(int, char **)
   }
 
   while (true) {
+
     try {
       std::cout << "> ";
       std::string input;
       std::getline(std::cin, input);
-      std::cout << to_string(scheme.eval(input), scheme.env) << std::endl;
+      auto start = std::chrono::high_resolution_clock::now();
+      auto result = scheme.eval(input);
+      auto finish = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> elapsed = finish - start;
+      std::cout << to_string(result, scheme.env) << std::endl;
+      std::cout << "Elapsed time: " << elapsed.count() << " seconds" << std::endl;
     }
     catch (std::exception & e) {
       std::cerr << e.what() << std::endl;
