@@ -38,7 +38,7 @@ struct Function {
 };
 
 template <typename T>
-std::vector<T> cast(const List & lst)
+std::vector<T> any_cast(const List & lst)
 {
   std::vector<T> args(lst.size());
   std::transform(lst.begin(), lst.end(), args.begin(),
@@ -48,43 +48,43 @@ std::vector<T> cast(const List & lst)
 
 fun_ptr plus = [](const List & lst)
 {
-  std::vector<Number> args = cast<Number>(lst);
+  std::vector<Number> args = any_cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::plus<Number>());
 };
 
 fun_ptr minus = [](const List & lst)
 {
-  std::vector<Number> args = cast<Number>(lst);
+  std::vector<Number> args = any_cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::minus<Number>());
 };
 
 fun_ptr divides = [](const List & lst)
 {
-  std::vector<Number> args = cast<Number>(lst);
+  std::vector<Number> args = any_cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::divides<Number>());
 };
 
 fun_ptr multiplies = [](const List & lst)
 {
-  std::vector<Number> args = cast<Number>(lst);
+  std::vector<Number> args = any_cast<Number>(lst);
   return std::accumulate(next(args.begin()), args.end(), args.front(), std::multiplies<Number>());
 };
 
 fun_ptr greater = [](const List & lst)
 {
-  std::vector<Number> args = cast<Number>(lst);
+  std::vector<Number> args = any_cast<Number>(lst);
   return Boolean(args[0] > args[1]);
 };
 
 fun_ptr less = [](const List & lst)
 {
-  std::vector<Number> args = cast<Number>(lst);
+  std::vector<Number> args = any_cast<Number>(lst);
   return Boolean(args[0] < args[1]);
 };
 
 fun_ptr equal = [](const List & lst)
 {
-  std::vector<Number> args = cast<Number>(lst);
+  std::vector<Number> args = any_cast<Number>(lst);
   return Boolean(args[0] == args[1]);
 };
 
