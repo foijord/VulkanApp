@@ -1,7 +1,6 @@
 #pragma once
 
 #include <any>
-#include <list>
 #include <regex>
 #include <vector>
 #include <memory>
@@ -28,26 +27,14 @@ struct Symbol : public std::string {
 class Env;
 typedef std::shared_ptr<Env> env_ptr;
 
-struct Quote {
-  std::any exp;
-};
-
-struct Define {
-  Symbol sym;
-  std::any exp;
-};
-
-struct Lambda {
-  std::any parm, body;
-};
+struct If {};
+struct Quote {};
+struct Define {};
+struct Lambda {};
 
 struct Function {
   std::any parms, exp;
   env_ptr env;
-};
-
-struct If {
-  std::any test, conseq, alt;
 };
 
 template <typename T>
@@ -159,15 +146,16 @@ public:
   env_ptr outer { nullptr };
 };
 
-std::string to_string(std::any exp, env_ptr env) 
+std::string to_string(std::any exp) 
 {
   if (exp.type() == typeid(Number)) {
     return std::to_string(std::any_cast<Number>(exp));
   }
   if (exp.type() == typeid(Symbol)) {
-    auto symbol = std::any_cast<Symbol>(exp);
-    auto value = env->get(symbol);
-    return symbol + ": " + to_string(value, env);
+    return std::any_cast<Symbol>(exp);
+  }
+  if (exp.type() == typeid(String)) {
+    return std::any_cast<String>(exp);
   }
   if (exp.type() == typeid(Boolean)) {
     return std::any_cast<Boolean>(exp) ? "#t" : "#f";
@@ -177,7 +165,7 @@ std::string to_string(std::any exp, env_ptr env)
 
     std::string result("(");
     for (auto s : *list) {
-      result += to_string(s, env) + " ";
+      result += to_string(s) + " ";
     }
     result.pop_back();
     return result + ")";
@@ -188,129 +176,127 @@ std::string to_string(std::any exp, env_ptr env)
 std::any eval(std::any & exp, env_ptr & env)
 {
   while (true) {
-    if (exp.type() == typeid(Number)) {
-      return exp;      
-    }
-    else if (exp.type() == typeid(Boolean)) {
-      return exp;
-    } 
-    else if (exp.type() == typeid(Symbol)) {
-      auto symbol = std::any_cast<Symbol>(exp);
-      return env->get(symbol);
-    }
-    else if (exp.type() == typeid(Quote)) {
-      auto quote = std::any_cast<Quote>(exp);
-      return quote.exp;
-    }
-    else if (exp.type() == typeid(Define)) {
-      auto define = std::any_cast<Define>(exp);
-      env->inner[define.sym] = eval(define.exp, env);
-      return nullptr;
-    } 
-    else if (exp.type() == typeid(Lambda)) {
-      auto lambda = std::any_cast<Lambda>(exp);
-      return Function{ lambda.parm, lambda.body, env };
-    }
-    else if (exp.type() == typeid(If)) {
-      auto iff = std::any_cast<If>(exp);
-      exp = std::any_cast<Boolean>(eval(iff.test, env)) ? iff.conseq : iff.alt;
-    }
-    else {
-      const auto & list = std::any_cast<lst_ptr>(exp);
-      const auto & fun = eval(list->front(), env);
+    if (exp.type() == typeid(lst_ptr)) {
+      auto & list = *std::any_cast<lst_ptr>(exp);
+      
+      if (list[0].type() == typeid(Define)) {
+        auto symbol = std::any_cast<Symbol>(list[1]);
+        env->inner[symbol] = eval(list[2], env);
+        return nullptr;
+      }
+      else if (list[0].type() == typeid(Lambda)) {
+        return Function{ list[1], list[2], env };
+      }
+      else if (list[0].type() == typeid(If)) {
+        exp = std::any_cast<Boolean>(eval(list[1], env)) ? list[2]: list[3];
+        continue;
+      }
+      else if (list[0].type() == typeid(Quote)) {
+        return list[1];
+      }
 
-      auto args = List(list->size() - 1);
-      std::transform(next(list->begin()), list->end(), args.begin(), [&](std::any exp) { 
+      auto car = eval(list[0], env);
+      auto cdr = List(list.size() - 1);
+
+      std::transform(next(list.begin()), list.end(), cdr.begin(), [&](std::any exp) { 
         return eval(exp, env);
       });
 
-      if (fun.type() == typeid(Function)) {
-        auto f = std::any_cast<Function>(fun);
+      if (car.type() == typeid(Function)) {
+        auto f = std::any_cast<Function>(car);
         exp = f.exp;
-        env = std::make_shared<Env>(f.parms, args, f.env);
+        env = std::make_shared<Env>(f.parms, cdr, f.env);
       } else {
-        auto f = std::any_cast<fun_ptr>(fun);
-        return f(args);
+        auto f = std::any_cast<fun_ptr>(car);
+        return f(cdr);
+      }
+    }
+    else {
+      if (exp.type() == typeid(Number) ||
+          exp.type() == typeid(Boolean)) {
+        return exp;      
+      }
+      else if (exp.type() == typeid(String)) {
+        auto string = std::any_cast<String>(exp);
+        return string.substr(1, string.size() - 2);
+      }
+      else if (exp.type() == typeid(Symbol)) {
+        auto symbol = std::any_cast<Symbol>(exp);
+        return env->get(symbol);
       }
     }
   }
 }
 
-class expression : public std::vector<expression> {
-public:
-  explicit expression(std::istream_iterator<std::string> & it)
-  {
-    if (*it == "(") {
-      this->token = *(++it);
-      while (*(++it) != ")") {
-        this->push_back(expression(it));
-      }
-    } else {
-      this->token = *it;
+std::any parsetree(std::istream_iterator<std::string> & it)
+{
+  if (*it == "(") {
+    List list;
+    while (*(++it) != ")") {
+      list.push_back(parsetree(it));
     }
+    return list;
+  }
+  else {
+    return *it;
+  }
+}
+
+inline std::any parse(std::any exp)
+{
+  if (exp.type() == typeid(List)) {
+    auto list = std::any_cast<List>(exp);
+    std::transform(list.begin(), list.end(), list.begin(), parse);
+
+    if (list[0].type() == typeid(Symbol)) {
+      auto token = std::any_cast<Symbol>(list[0]);
+
+      if (token == Symbol("quote")) {
+        if (list.size() != 2) {
+          throw std::invalid_argument("wrong number of arguments to quote");
+        }
+        list[0] = Quote{};
+      }
+      if (token == Symbol("if")) {
+        if (list.size() != 4) {
+          throw std::invalid_argument("wrong number of arguments to if");
+        }
+        list[0] = If{};
+      }
+      if (token == Symbol("lambda")) {
+        if (list.size() != 3) {
+          throw std::invalid_argument("wrong Number of arguments to lambda");
+        }
+        list[0] = Lambda{};
+      }
+      if (token == Symbol("define")) {
+        if (list.size() != 3) {
+          throw std::invalid_argument("wrong number of arguments to Define");
+        }
+        if (list[1].type() != typeid(Symbol)) {
+          throw std::invalid_argument("first argument to Define must be a Symbol");
+        }
+        list[0] = Define{};
+      }
+    }
+    return std::make_shared<List>(list);
   }
 
-  std::string token;
-};
-
-inline std::any atom(const std::string & token)
-{
+  auto token = std::any_cast<std::string>(exp);
   if (token == "#t") {
     return Boolean(true);
   }
   if (token == "#f") {
     return Boolean(false);
   }
+  if (token.front() == '"' && token.back() == '"') {
+    return String(token);
+  }
   std::regex match_number(R"(^[+-]?([0-9]*[.])?[0-9]+$)");
   if (std::regex_match(token, match_number)) {
     return Number(std::stod(token));
   }
   return Symbol(token);
-}
-
-inline std::any parse(const expression & exp)
-{
-  if (exp.empty()) {
-    return atom(exp.token);
-  }
-  
-  List args(exp.size());
-  std::transform(exp.begin(), exp.end(), args.begin(), parse);
-
-  if (exp.token == "quote") {
-    if (args.size() != 1) {
-      throw std::invalid_argument("wrong number of arguments to quote");
-    }
-    return Quote{ args[0] };
-  }
-
-  if (exp.token == "if") {
-    if (args.size() != 3) {
-      throw std::invalid_argument("wrong number of arguments to if");
-    }
-    return If{ args[0], args[1], args[2] };
-  }
-
-  if (exp.token == "lambda") {
-    if (args.size() != 2) {
-      throw std::invalid_argument("wrong Number of arguments to lambda");
-    }
-    return Lambda{ args[0], args[1] };
-  }
-
-  if (exp.token == "define") {
-    if (args.size() != 2) {
-      throw std::invalid_argument("wrong number of arguments to Define");
-    }
-    if (args[0].type() != typeid(Symbol)) {
-      throw std::invalid_argument("first argument to Define must be a Symbol");
-    }
-    return Define{ std::any_cast<Symbol>(args[0]), args[1] };
-  }
-
-  List list{ Symbol(exp.token) };
-  list.insert(list.end(), args.begin(), args.end());
-  return std::make_shared<List>(list);
 }
 
 class Scheme {
@@ -330,11 +316,11 @@ public:
       { Symbol("car"), car },
       { Symbol("cdr"), cdr },
       { Symbol("list"), list },
-      { Symbol("length"), length }
+      { Symbol("length"), ::length }
     };
   }
 
-  std::any eval(std::string input) 
+  std::any eval(std::string input)
   {
     input = std::regex_replace(input, std::regex(R"([(])"), " ( ");
     input = std::regex_replace(input, std::regex(R"([)])"), " ) ");
@@ -342,10 +328,10 @@ public:
     std::istringstream iss(input);
     std::istream_iterator<std::string> tokens(iss);
 
-    const expression exp(tokens);
-    auto list = parse(exp);
+    std::any tree = parsetree(tokens);
+    auto exp = parse(tree);
 
-    return ::eval(list, this->env);
+    return ::eval(exp, this->env);
   }
 
   env_ptr env;

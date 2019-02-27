@@ -1,7 +1,6 @@
 
 #include <Viewer.h>
-#include <Innovator/Nodes.h>
-#include <Innovator/File.h>
+#include <Innovator/File2.h>
 #include <Innovator/Misc/Factory.h>
 
 #include <QApplication>
@@ -308,7 +307,7 @@ int main(int argc, char *argv[])
 
     File file;
     //auto scene = file.open("3DBenchy/3DBenchy.scene");
-    auto scene = file.open("crate.scene");
+    auto scene = file.open("crate2.scene");
     viewer->setSceneGraph(scene);
 
     window.resize(512, 512);

@@ -1,0 +1,4 @@
+(separator
+   (sampler)
+   (image "Textures/qt256.png")
+   (descriptorsetlayoutbinding))

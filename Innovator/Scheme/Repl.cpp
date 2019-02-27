@@ -28,7 +28,7 @@ int main(int, char **)
       auto result = scheme.eval(input);
       auto finish = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> elapsed = finish - start;
-      std::cout << to_string(result, scheme.env) << std::endl;
+      std::cout << to_string(result) << std::endl;
       std::cout << "Elapsed time: " << elapsed.count() << " seconds" << std::endl;
     }
     catch (std::exception & e) {
