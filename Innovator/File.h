@@ -9,16 +9,34 @@
 #include <fstream>
 #include <utility>
 
-template <typename NodeType, typename... Args, std::size_t... i>
-std::shared_ptr<Node> node_impl(const List & lst, std::index_sequence<i...>)
+template <typename BaseType, typename SubType, typename... Arg, std::size_t... i>
+std::shared_ptr<BaseType> make_shared_object_impl(const List & lst, std::index_sequence<i...>)
 {
-  return std::make_shared<NodeType>(std::any_cast<Args>(lst[i])...);
+  return std::make_shared<SubType>(std::any_cast<Arg>(lst[i])...);
 }
 
-template <typename NodeType, typename... Args>
+template <typename BaseType, typename SubType, typename... Arg>
+std::shared_ptr<BaseType> make_shared_object(const List & lst)
+{
+  return make_shared_object_impl<BaseType, SubType, Arg...>(lst, std::index_sequence_for<Arg...>{});
+}
+
+template <typename Type, typename... Arg, std::size_t... i>
+Type make_object_impl(const List & lst, std::index_sequence<i...>)
+{
+  return Type(std::any_cast<Arg>(lst[i])...);
+}
+
+template <typename Type, typename... Arg>
+Type make_object(const List & lst)
+{
+  return make_object_impl<Type, Arg...>(lst, std::index_sequence_for<Arg...>{});
+}
+
+template <typename NodeType, typename... Arg>
 std::shared_ptr<Node> node(const List & lst)
 {
-  return node_impl<NodeType, Args...>(lst, std::index_sequence_for<Args...>{});
+  return make_shared_object<Node, NodeType, Arg...>(lst);
 }
 
 std::shared_ptr<Separator> separator(const List & lst)
@@ -28,28 +46,25 @@ std::shared_ptr<Separator> separator(const List & lst)
 };
 
 template <typename T>
-T number_t(const List & lst)
-{
-  return static_cast<T>(std::any_cast<Number>(lst[0]));
-}
-
-template <typename T>
-std::any number_list_t(const List & lst)
-{
-  auto values = any_cast<Number>(lst);
-  std::vector<T> result(values.size());
-  std::transform(values.begin(), values.end(), result.begin(), [](double value) {
-    return static_cast<T>(value);
-  });
-  return result;
-}
-
 std::shared_ptr<Node> bufferdata(const List & lst)
 {
-  if (lst[0].type() == typeid(std::vector<uint32_t>)) {
-    return std::make_shared<InlineBufferData<uint32_t>>(std::any_cast<std::vector<uint32_t>>(lst[0]));
+  auto bufferdata = std::make_shared<InlineBufferData<T>>();
+  auto values = any_cast<Number>(lst);
+  bufferdata->values.resize(values.size());
+  std::transform(values.begin(), values.end(), bufferdata->values.begin(), [](double value) {
+    return static_cast<T>(value);
+  });
+  return bufferdata;
+}
+
+uint32_t count(const List & list)
+{
+  auto node = std::any_cast<std::shared_ptr<Node>>(list[0]);
+  auto bufferdata = std::dynamic_pointer_cast<BufferData>(node);
+  if (!bufferdata) {
+    throw std::invalid_argument("count only works on BufferData nodes!");
   }
-  return std::make_shared<InlineBufferData<float>>(std::any_cast<std::vector<float>>(lst[0]));
+  return static_cast<uint32_t>(bufferdata->size() / bufferdata->stride());
 }
 
 VkBufferUsageFlags bufferusageflags(const List & lst)
@@ -68,15 +83,15 @@ public:
   {
     this->scheme.env->outer = std::make_shared<Env>();
     this->scheme.env->outer->inner = {
-      { "int32", fun_ptr(number_t<int32_t>) },
-      { "uint32", fun_ptr(number_t<uint32_t>) },
-      { "list_f32", fun_ptr(number_list_t<float>) },
-      { "list_ui32", fun_ptr(number_list_t<uint32_t>) },
+      { "int32", fun_ptr(make_object<int32_t, Number>) },
+      { "uint32", fun_ptr(make_object<uint32_t, Number>) },
+      { "count", fun_ptr(count) },
       { "image", fun_ptr(node<Image, std::string>) },
       { "shader", fun_ptr(node<Shader, std::string, VkShaderStageFlagBits>) },
       { "sampler", fun_ptr(node<Sampler>) },
       { "separator", fun_ptr(separator) },
-      { "bufferdata", fun_ptr(bufferdata) },
+      { "bufferdata_float", fun_ptr(bufferdata<float>) },
+      { "bufferdata_uint32", fun_ptr(bufferdata<uint32_t>) },
       { "bufferusageflags", fun_ptr(bufferusageflags) },
       { "cpumemorybuffer", fun_ptr(node<CpuMemoryBuffer, VkBufferUsageFlags>) },
       { "gpumemorybuffer", fun_ptr(node<GpuMemoryBuffer, VkBufferUsageFlags>) },

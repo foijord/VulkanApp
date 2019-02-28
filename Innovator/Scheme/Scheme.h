@@ -181,8 +181,9 @@ std::any eval(std::any & exp, env_ptr & env)
       
       if (list[0].type() == typeid(Define)) {
         auto symbol = std::any_cast<Symbol>(list[1]);
-        env->inner[symbol] = eval(list[2], env);
-        return nullptr;
+        std::any value = eval(list[2], env);
+        env->inner[symbol] = value;
+        return value;
       }
       else if (list[0].type() == typeid(Lambda)) {
         return Function{ list[1], list[2], env };

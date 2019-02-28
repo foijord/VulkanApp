@@ -6,12 +6,12 @@
       VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 
       VK_SHADER_STAGE_FRAGMENT_BIT)
 
-   (bufferdata (list_ui32 0 1 3 3 2 0 4 6 7 7 5 4 0 4 5 5 1 0 6 2 3 3 7 6 0 2 6 6 4 0 1 5 7 7 3 1))
+   (define indices (bufferdata_uint32 0 1 3 3 2 0 4 6 7 7 5 4 0 4 5 5 1 0 6 2 3 3 7 6 0 2 6 6 4 0 1 5 7 7 3 1))
    (cpumemorybuffer (bufferusageflags VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
    (gpumemorybuffer (bufferusageflags VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_INDEX_BUFFER_BIT))
    (indexbufferdescription VK_INDEX_TYPE_UINT32)
    
-   (bufferdata (list_f32 0 0 0 0 0 1 0 1 0 0 1 1 1 0 0 1 0 1 1 1 0 1 1 1))
+   (bufferdata_float 0 0 0 0 0 1 0 1 0 0 1 1 1 0 0 1 0 1 1 1 0 1 1 1)
    (cpumemorybuffer (bufferusageflags VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
    (gpumemorybuffer (bufferusageflags VK_BUFFER_USAGE_TRANSFER_DST_BIT VK_BUFFER_USAGE_VERTEX_BUFFER_BIT))
    (vertexinputattributedescription
@@ -35,7 +35,7 @@
    (shader "Shaders/fragment.frag" VK_SHADER_STAGE_FRAGMENT_BIT)
 
    (indexeddrawcommand 
-      (uint32 36)
+      (count indices)
       (uint32 1)
       (uint32 0)
       (int32 0)

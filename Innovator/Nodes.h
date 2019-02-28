@@ -143,7 +143,7 @@ template <typename T>
 class InlineBufferData : public BufferData {
 public:
   NO_COPY_OR_ASSIGNMENT(InlineBufferData);
-  InlineBufferData() = delete;
+  InlineBufferData() = default;
   virtual ~InlineBufferData() = default;
 
   explicit InlineBufferData(std::vector<T> values) :
