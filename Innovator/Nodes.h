@@ -597,11 +597,200 @@ private:
   std::unique_ptr<VulkanSampler> sampler;
 };
 
-class Image : public Node {
+class Image: public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Image)
 
-  explicit Image(std::shared_ptr<VulkanTextureImage> texture) :
+  explicit Image(VkImageType image_type,
+                 VkFormat format,
+                 VkExtent3D extent,
+                 uint32_t mip_levels,
+                 uint32_t array_layers,
+                 VkSampleCountFlagBits samples,
+                 VkImageTiling tiling,
+                 VkImageUsageFlags usage,
+                 VkSharingMode sharing_mode,
+                 VkImageCreateFlags flags) :
+    image_type(image_type),
+    format(format),
+    extent(extent),
+    mip_levels(mip_levels),
+    array_layers(array_layers),
+    samples(samples),
+    tiling(tiling),
+    usage(usage),
+    sharing_mode(sharing_mode),
+    flags(flags)
+  {}
+
+  virtual ~Image() = default;
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    this->image = std::make_shared<VulkanImage>(allocator->device,
+                                                this->image_type,
+                                                this->format,
+                                                this->extent,
+                                                this->mip_levels,
+                                                this->array_layers,
+                                                this->samples,
+                                                this->tiling,
+                                                this->usage,
+                                                this->sharing_mode,
+                                                this->flags);
+  }
+
+  void doStage(MemoryStager * stager) override
+  {
+    stager->state.image = this->image->image;
+  }
+
+  std::shared_ptr<VulkanImage> image;
+
+  VkImageType image_type;
+  VkFormat format;
+  VkExtent3D extent;
+  uint32_t mip_levels;
+  uint32_t array_layers;
+  VkSampleCountFlagBits samples;
+  VkImageTiling tiling;
+  VkImageUsageFlags usage;
+  VkSharingMode sharing_mode;
+  VkImageCreateFlags flags;
+};
+
+class ImageMemoryAllocator : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ImageMemoryAllocator)
+  virtual ~ImageMemoryAllocator() = default;
+
+  explicit ImageMemoryAllocator(VkMemoryPropertyFlags memory_property_flags)
+    : memory_property_flags(memory_property_flags)
+  {}
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+
+  }
+
+  VkMemoryPropertyFlags memory_property_flags;
+};
+
+class ImageView : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ImageView)
+  virtual ~ImageView() = default;
+
+  explicit ImageView(VkFormat format,
+                     VkImageViewType view_type,
+                     VkComponentMapping components,
+                     VkImageSubresourceRange subresource_range) :
+    format(format),
+    view_type(view_type),
+    components(components),
+    subresource_range(subresource_range)
+  {}
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    this->imageview = std::make_shared<VulkanImageView>(allocator->device,
+                                                        allocator->state.image,
+                                                        this->format,
+                                                        this->view_type,
+                                                        this->components,
+                                                        this->subresource_range);
+  }
+
+  VkFormat format;
+  VkImageViewType view_type;
+  VkComponentMapping components;
+  VkImageSubresourceRange subresource_range;
+  std::shared_ptr<VulkanImageView> imageview;
+};
+
+
+class ImageMemoryBarrier : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ImageMemoryBarrier)
+  virtual ~ImageMemoryBarrier() = default;
+
+  explicit ImageMemoryBarrier(VkAccessFlags srcAccessMask,
+                              VkAccessFlags dstAccessMask,
+                              VkImageLayout oldLayout,
+                              VkImageLayout newLayout,
+                              VkImageSubresourceRange subresourceRange) :
+    srcAccessMask(srcAccessMask),
+    dstAccessMask(dstAccessMask),
+    oldLayout(oldLayout),
+    newLayout(newLayout),
+    subresourceRange(subresourceRange)
+  {}
+
+  void doStage(MemoryStager * stager) override
+  {
+    VkImageMemoryBarrier memory_barrier{
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
+      nullptr,                                // pNext
+      this->srcAccessMask,
+      this->dstAccessMask,
+      this->oldLayout,
+      this->newLayout,
+      stager->device->default_queue_index,    // srcQueueFamilyIndex
+      stager->device->default_queue_index,    // dstQueueFamilyIndex
+      stager->state.image,                    // image
+      this->subresourceRange
+    };
+
+    stager->state.image_memory_barriers.push_back(memory_barrier);
+  }
+
+  VkAccessFlags srcAccessMask;
+  VkAccessFlags dstAccessMask;
+  VkImageLayout oldLayout;
+  VkImageLayout newLayout;
+  VkImageSubresourceRange subresourceRange;
+};
+
+class PipelineBarrier : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(PipelineBarrier)
+  virtual ~PipelineBarrier() = default;
+
+  explicit PipelineBarrier(VkPipelineStageFlags srcstagemask,
+                           VkPipelineStageFlags dststagemask,
+                           VkDependencyFlags dependencyflags) :
+      srcstagemask(srcstagemask),
+      dststagemask(dststagemask),
+      dependencyflags(dependencyflags)
+  {}
+
+  void doStage(MemoryStager * stager) override
+  {
+    vkCmdPipelineBarrier(stager->command,
+                         this->srcstagemask,
+                         this->dststagemask,
+                         this->dependencyflags,
+                         static_cast<uint32_t>(stager->state.memory_barriers.size()),
+                         stager->state.memory_barriers.data(),
+                         static_cast<uint32_t>(stager->state.buffer_memory_barriers.size()),
+                         stager->state.buffer_memory_barriers.data(),
+                         static_cast<uint32_t>(stager->state.image_memory_barriers.size()),
+                         stager->state.image_memory_barriers.data());
+  }
+
+  VkPipelineStageFlags srcstagemask;
+  VkPipelineStageFlags dststagemask;
+  VkDependencyFlags dependencyflags;
+};
+
+class ImageNode : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ImageNode)
+
+  explicit ImageNode(std::shared_ptr<VulkanTextureImage> texture) :
     texture(std::move(texture)),
     sample_count(VK_SAMPLE_COUNT_1_BIT),
     sharing_mode(VK_SHARING_MODE_EXCLUSIVE),
@@ -621,11 +810,11 @@ public:
       this->texture->layers()})            // layerCount 
   {}
 
-  explicit Image(const std::string & filename) :
-    Image(VulkanImageFactory::Create(filename))
+  explicit ImageNode(const std::string & filename) :
+    ImageNode(VulkanImageFactory::Create(filename))
   {}
 
-  virtual ~Image() = default;
+  virtual ~ImageNode() = default;
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
@@ -674,7 +863,8 @@ private:
     this->buffer->memcpy(this->texture->data(), this->texture->size());
 
     this->view = std::make_unique<VulkanImageView>(
-      this->image->image,
+      stager->device,
+      this->image->image->image,
       this->texture->format(),
       this->texture->image_view_type(),
       this->component_mapping,

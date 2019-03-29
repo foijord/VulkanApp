@@ -986,33 +986,34 @@ public:
   NO_COPY_OR_ASSIGNMENT(VulkanImageView)
   VulkanImageView() = delete;
 
-  VulkanImageView(std::shared_ptr<VulkanImage> image,
+  VulkanImageView(std::shared_ptr<VulkanDevice> device,
+                  VkImage image,
                   VkFormat format,
                   VkImageViewType view_type, 
                   VkComponentMapping components,
                   VkImageSubresourceRange subresource_range)
-    : image(std::move(image))
+    : device(std::move(device))
   {
     VkImageViewCreateInfo create_info{
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, // sType 
       nullptr,                                  // pNext 
       0,                                        // flags (reserved for future use)
-      this->image->image,                       // image 
+      image,                                    // image 
       view_type,                                // viewType 
       format,                                   // format 
       components,                               // components 
       subresource_range,                        // subresourceRange 
     };
 
-    THROW_ON_ERROR(vkCreateImageView(this->image->device->device, &create_info, nullptr, &this->view));
+    THROW_ON_ERROR(vkCreateImageView(this->device->device, &create_info, nullptr, &this->view));
   }
 
   ~VulkanImageView()
   {
-    vkDestroyImageView(this->image->device->device, this->view, nullptr);
+    vkDestroyImageView(this->device->device, this->view, nullptr);
   }
 
-  std::shared_ptr<VulkanImage> image;
+  std::shared_ptr<VulkanDevice> device;
   VkImageView view{ nullptr };
 };
 
@@ -1207,7 +1208,7 @@ public:
 
   VulkanFramebuffer(std::shared_ptr<VulkanDevice> device,
                     std::shared_ptr<VulkanRenderpass> renderpass,
-                    const std::vector<VkImageView> & attachments,
+                    std::vector<VkImageView> attachments,
                     VkExtent2D extent,
                     uint32_t layers) : 
     device(std::move(device)),

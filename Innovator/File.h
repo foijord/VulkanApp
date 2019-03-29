@@ -86,7 +86,7 @@ public:
       { "int32", fun_ptr(make_object<int32_t, Number>) },
       { "uint32", fun_ptr(make_object<uint32_t, Number>) },
       { "count", fun_ptr(count) },
-      { "image", fun_ptr(node<Image, std::string>) },
+      { "image", fun_ptr(node<ImageNode, std::string>) },
       { "shader", fun_ptr(node<Shader, std::string, VkShaderStageFlagBits>) },
       { "sampler", fun_ptr(node<Sampler>) },
       { "separator", fun_ptr(separator) },
