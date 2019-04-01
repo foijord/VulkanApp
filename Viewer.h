@@ -472,7 +472,6 @@ public:
                                                                   this->surface_format.format,                                                                  
                                                                   this->depth_format,
                                                                   surface_capabilities.currentExtent);
-
     this->rendermanager->alloc(this->framebuffer.get());
     this->rendermanager->stage(this->framebuffer.get());
 

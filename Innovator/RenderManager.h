@@ -66,7 +66,6 @@ private:
     }
 
     for (auto & buffer_object : this->bufferobjects) {
-
       const auto memory = std::make_shared<VulkanMemory>(
         this->device,
         buffer_object->memory_requirements.size,

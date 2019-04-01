@@ -1,4 +1,4 @@
-(separator
+(define scene (separator
    (sampler)
    (image "Textures/qt256.png")
    (descriptorsetlayoutbinding 
@@ -40,4 +40,4 @@
       (uint32 0)
       (int32 0)
       (uint32 0)
-      VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST))
+      VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)))

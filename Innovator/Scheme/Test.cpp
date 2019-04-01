@@ -9,7 +9,6 @@ class Test : public QObject
   Q_OBJECT
 
 private:
-  Scheme scheme;
 
 private slots:
   void initTestCase()

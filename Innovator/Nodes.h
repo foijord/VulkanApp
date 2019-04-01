@@ -530,8 +530,8 @@ public:
   void readFile() 
   {
     std::ifstream input(this->filename, std::ios::binary);
-    this->code = std::vector<char>((std::istreambuf_iterator<char>(input)),
-                                   (std::istreambuf_iterator<char>()));
+    this->code = std::vector<char>(std::istreambuf_iterator<char>{input},
+                                   std::istreambuf_iterator<char>{});
   }
 
 private:
@@ -675,12 +675,14 @@ public:
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
-    allocator->imageobjects.push_back(std::make_shared<ImageObject>(
-      allocator->device,
-      allocator->state.image,
-      memory_property_flags));
+    this->image = std::make_shared<ImageObject>(allocator->device,
+                                                allocator->state.image,
+                                                memory_property_flags);
+                                                
+    allocator->imageobjects.push_back(this->image);
   }
 
+  std::shared_ptr<ImageObject> image;
   VkMemoryPropertyFlags memory_property_flags;
 };
 
