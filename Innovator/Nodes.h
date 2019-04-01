@@ -530,8 +530,8 @@ public:
   void readFile() 
   {
     std::ifstream input(this->filename, std::ios::binary);
-    this->code = std::vector<char>((std::istreambuf_iterator<char>(input)),
-                                   (std::istreambuf_iterator<char>()));
+    this->code = std::vector<char>(std::istreambuf_iterator<char>{input},
+                                   std::istreambuf_iterator<char>{});
   }
 
 private:

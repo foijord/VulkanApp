@@ -12,6 +12,8 @@
 #include <functional>
 #include <unordered_map>
 
+namespace scm {
+
 typedef std::vector<std::any> List;
 typedef std::shared_ptr<List> lst_ptr;
 typedef std::function<std::any(const List & args)> fun_ptr;
@@ -113,7 +115,9 @@ fun_ptr length = [](const List & lst)
 
 class Env {
 public:
-  Env() = default;
+  Env(std::unordered_map<std::string, std::any> inner)
+    : inner(inner)
+  {}
   ~Env() = default;
 
   explicit Env(const std::any & parm, const List & args, env_ptr outer)
@@ -146,34 +150,67 @@ public:
   env_ptr outer { nullptr };
 };
 
-std::string to_string(std::any exp) 
+std::shared_ptr<Env> global_env = std::make_shared<Env>(
+  std::unordered_map<std::string, std::any>{
+    { Symbol("pi"),  Number(3.14159265358979323846) },
+    { Symbol("+"), plus },
+    { Symbol("-"), minus },
+    { Symbol("/"), divides },
+    { Symbol("*"), multiplies },
+    { Symbol(">"), greater },
+    { Symbol("<"), less },
+    { Symbol("="), equal },
+    { Symbol("car"), car },
+    { Symbol("cdr"), cdr },
+    { Symbol("list"), list },
+    { Symbol("length"), length }
+});
+
+void print(std::any exp) 
 {
   if (exp.type() == typeid(Number)) {
-    return std::to_string(std::any_cast<Number>(exp));
+    std::cout << std::any_cast<Number>(exp);
+  } 
+  else if (exp.type() == typeid(Symbol)) {
+    std::cout << std::any_cast<Symbol>(exp);
   }
-  if (exp.type() == typeid(Symbol)) {
-    return std::any_cast<Symbol>(exp);
+  else if (exp.type() == typeid(String)) {
+    std::cout << std::any_cast<String>(exp);
   }
-  if (exp.type() == typeid(String)) {
-    return std::any_cast<String>(exp);
+  else if (exp.type() == typeid(Boolean)) {
+    std::string s = std::any_cast<Boolean>(exp) ? "#t" : "#f";
+    std::cout << s;
   }
-  if (exp.type() == typeid(Boolean)) {
-    return std::any_cast<Boolean>(exp) ? "#t" : "#f";
+  else if (exp.type() == typeid(Define)) {
+    std::cout << "define";
   }
-  if (exp.type() == typeid(lst_ptr)) {
-    auto list = std::any_cast<lst_ptr>(exp);
+  else if (exp.type() == typeid(Lambda)) {
+    std::cout << "lambda";
+  }
+  else if (exp.type() == typeid(If)) {
+    std::cout << "if";
+  }
+  else if (exp.type() == typeid(Quote)) {
+    std::cout << "quote";
+  }
+  else if (exp.type() == typeid(fun_ptr)) {
+    std::cout << "function";
+  }
+  else if (exp.type() == typeid(lst_ptr)) {
+    auto & list = *std::any_cast<lst_ptr>(exp);
 
-    std::string result("(");
-    for (auto s : *list) {
-      result += to_string(s) + " ";
+    std::cout << "(";
+    for (auto s : list) {
+      print(s);
+      std::cout << " ";
     }
-    result.pop_back();
-    return result + ")";
+    std::cout << ")";
+  } else {
+    std::cout << "()";
   }
-  return "()";
 }
 
-std::any eval(std::any & exp, env_ptr & env)
+std::any eval(std::any & exp, env_ptr & env = global_env)
 {
   while (true) {
     if (exp.type() == typeid(lst_ptr)) {
@@ -229,12 +266,12 @@ std::any eval(std::any & exp, env_ptr & env)
   }
 }
 
-std::any parsetree(std::istream_iterator<std::string> & it)
+std::any ast(std::istream_iterator<std::string> & it)
 {
   if (*it == "(") {
     List list;
     while (*(++it) != ")") {
-      list.push_back(parsetree(it));
+      list.push_back(ast(it));
     }
     return list;
   }
@@ -300,40 +337,14 @@ inline std::any parse(std::any exp)
   return Symbol(token);
 }
 
-class Scheme {
-public:
-  Scheme()
-    : env(std::make_shared<Env>())
-  {
-    env->inner = {
-      { Symbol("pi"),  Number(3.14159265358979323846) },
-      { Symbol("+"), plus },
-      { Symbol("-"), minus },
-      { Symbol("/"), divides },
-      { Symbol("*"), multiplies },
-      { Symbol(">"), greater },
-      { Symbol("<"), less },
-      { Symbol("="), equal },
-      { Symbol("car"), car },
-      { Symbol("cdr"), cdr },
-      { Symbol("list"), list },
-      { Symbol("length"), ::length }
-    };
-  }
+std::any read(std::string input)
+{
+  input = std::regex_replace(input, std::regex(R"([(])"), " ( ");
+  input = std::regex_replace(input, std::regex(R"([)])"), " ) ");
 
-  std::any eval(std::string input)
-  {
-    input = std::regex_replace(input, std::regex(R"([(])"), " ( ");
-    input = std::regex_replace(input, std::regex(R"([)])"), " ) ");
+  std::istringstream iss(input);
+  std::istream_iterator<std::string> tokens(iss);
 
-    std::istringstream iss(input);
-    std::istream_iterator<std::string> tokens(iss);
-
-    std::any tree = parsetree(tokens);
-    auto exp = parse(tree);
-
-    return ::eval(exp, this->env);
-  }
-
-  env_ptr env;
+  return parse(ast(tokens));
 };
+} // namespace scm
