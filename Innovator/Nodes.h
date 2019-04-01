@@ -625,6 +625,8 @@ public:
 
   virtual ~Image() = default;
 
+  std::shared_ptr<VulkanImage> image;
+
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
@@ -639,6 +641,8 @@ private:
                                                 this->usage,
                                                 this->sharing_mode,
                                                 this->flags);
+
+    allocator->state.image = this->image->image;
   }
 
   void doStage(MemoryStager * stager) override
@@ -646,7 +650,6 @@ private:
     stager->state.image = this->image->image;
   }
 
-  std::shared_ptr<VulkanImage> image;
 
   VkImageType image_type;
   VkFormat format;
@@ -672,7 +675,10 @@ public:
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
-
+    allocator->imageobjects.push_back(std::make_shared<ImageObject>(
+      allocator->device,
+      allocator->state.image,
+      memory_property_flags));
   }
 
   VkMemoryPropertyFlags memory_property_flags;
@@ -694,10 +700,10 @@ public:
   {}
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doStage(MemoryStager * stager) override
   {
-    this->imageview = std::make_shared<VulkanImageView>(allocator->device,
-                                                        allocator->state.image,
+    this->imageview = std::make_shared<VulkanImageView>(stager->device,
+                                                        stager->state.image,
                                                         this->format,
                                                         this->view_type,
                                                         this->components,
@@ -840,22 +846,25 @@ private:
 
     allocator->bufferobjects.push_back(this->buffer);
 
-    this->image = std::make_shared<ImageObject>(
-      std::make_shared<VulkanImage>(
-        allocator->device,
-        this->texture->image_type(),
-        this->texture->format(),
-        this->texture->extent(0),
-        this->texture->levels(),
-        this->texture->layers(),
-        this->sample_count,
-        this->tiling,
-        this->usage_flags,
-        this->sharing_mode,
-        this->create_flags),
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    this->image = std::make_shared<VulkanImage>(
+      allocator->device,
+      this->texture->image_type(),
+      this->texture->format(),
+      this->texture->extent(0),
+      this->texture->levels(),
+      this->texture->layers(),
+      this->sample_count,
+      this->tiling,
+      this->usage_flags,
+      this->sharing_mode,
+      this->create_flags);
 
-    allocator->imageobjects.push_back(this->image);
+    this->image_object = std::make_shared<ImageObject>(
+      allocator->device,
+      this->image->image,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    allocator->imageobjects.push_back(this->image_object);
   }
 
   void doStage(MemoryStager * stager) override
@@ -864,7 +873,7 @@ private:
 
     this->view = std::make_unique<VulkanImageView>(
       stager->device,
-      this->image->image->image,
+      this->image->image,
       this->texture->format(),
       this->texture->image_view_type(),
       this->component_mapping,
@@ -879,7 +888,7 @@ private:
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                  // newLayout
       stager->device->default_queue_index,                   // srcQueueFamilyIndex
       stager->device->default_queue_index,                   // dstQueueFamilyIndex
-      this->image->image->image,                             // image
+      this->image->image,                                    // image
       this->subresource_range,                               // subresourceRange
     };
 
@@ -915,7 +924,7 @@ private:
 
     vkCmdCopyBufferToImage(stager->command,
                            this->buffer->buffer->buffer,
-                           this->image->image->image,
+                           this->image->image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            static_cast<uint32_t>(regions.size()),
                            regions.data());
@@ -930,7 +939,8 @@ private:
   std::shared_ptr<VulkanTextureImage> texture;
 
   std::shared_ptr<BufferObject> buffer;
-  std::shared_ptr<ImageObject> image;
+  std::shared_ptr<VulkanImage> image;
+  std::shared_ptr<ImageObject> image_object;
   std::unique_ptr<VulkanImageView> view;
 
   VkSampleCountFlagBits sample_count;
