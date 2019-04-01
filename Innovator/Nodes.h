@@ -699,6 +699,8 @@ public:
     subresource_range(subresource_range)
   {}
 
+  std::shared_ptr<VulkanImageView> imageview;
+
 private:
   void doStage(MemoryStager * stager) override
   {
@@ -714,7 +716,6 @@ private:
   VkImageViewType view_type;
   VkComponentMapping components;
   VkImageSubresourceRange subresource_range;
-  std::shared_ptr<VulkanImageView> imageview;
 };
 
 
