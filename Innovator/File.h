@@ -88,7 +88,7 @@ public:
         { "int32", fun_ptr(make_object<int32_t, Number>) },
         { "uint32", fun_ptr(make_object<uint32_t, Number>) },
         { "count", fun_ptr(count) },
-        { "image", fun_ptr(node<Image, std::string>) },
+        { "image", fun_ptr(node<ImageNode, std::string>) },
         { "shader", fun_ptr(node<Shader, std::string, VkShaderStageFlagBits>) },
         { "sampler", fun_ptr(node<Sampler>) },
         { "separator", fun_ptr(separator) },
@@ -170,11 +170,10 @@ public:
   {
     std::ifstream input(filename, std::ios::in);
     
-    const std::string code{ 
+    const std::string code{
       std::istreambuf_iterator<char>(input), 
       std::istreambuf_iterator<char>() 
     };
-
     std::any exp = scm::read(code);
     std::any sep = scm::eval(exp);
 
