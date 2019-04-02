@@ -166,20 +166,6 @@ public:
       });
   }
 
-  void load(const std::string & filename, std::function<void(std::shared_ptr<Separator>)> callback)
-  {
-    std::ifstream input(filename, std::ios::in);
-    
-    const std::string code{
-      std::istreambuf_iterator<char>(input), 
-      std::istreambuf_iterator<char>() 
-    };
-    std::any exp = scm::read(code);
-    std::any sep = scm::eval(exp);
-
-    callback(std::any_cast<std::shared_ptr<Separator>>(sep));
-  }
-
   std::shared_ptr<Separator> open(const std::string & filename)
   {
     std::ifstream input(filename, std::ios::in);

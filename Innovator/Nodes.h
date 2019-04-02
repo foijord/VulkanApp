@@ -678,7 +678,6 @@ private:
     this->image = std::make_shared<ImageObject>(allocator->device,
                                                 allocator->state.image,
                                                 memory_property_flags);
-                                                
     allocator->imageobjects.push_back(this->image);
   }
 

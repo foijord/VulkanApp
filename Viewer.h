@@ -30,8 +30,10 @@ public:
                         VkImageLayout oldLayout,
                         VkImageLayout newLayout,
                         VkImageAspectFlags aspectMask,
-                        VkExtent3D extent)
+                        VkExtent2D extent)
   {
+    VkExtent3D extent3d = { extent.width, extent.height, 1 };
+
     VkImageSubresourceRange subresource_range{
       aspectMask, 0, 1, 0, 1
     };
@@ -39,7 +41,7 @@ public:
     this->image = std::make_shared<Image>(
       VK_IMAGE_TYPE_2D,
       format,
-      extent,
+      extent3d,
       subresource_range.levelCount,
       subresource_range.layerCount,
       VK_SAMPLE_COUNT_1_BIT,
@@ -71,11 +73,16 @@ public:
       newLayout,
       subresource_range);
 
+    auto pipeline_barrier = std::make_shared<PipelineBarrier>(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                                              0);
+
     this->children = {
       this->image,
       memory_allocator,
       this->image_view,
-      memory_barrier
+      memory_barrier,
+      pipeline_barrier
     };
   }
 
@@ -90,46 +97,11 @@ public:
   virtual ~VulkanFramebufferObject() = default;
 
   VulkanFramebufferObject(std::shared_ptr<VulkanRenderpass> renderpass,
-                          VkFormat color_format,
-                          VkFormat depth_format,
                           VkExtent2D extent2d) :
-    renderpass(std::move(renderpass)),
-    extent2d(extent2d)
-  {
-    VkExtent3D extent3d = { this->extent2d.width, this->extent2d.height, 1 };
+    extent2d(extent2d),
+    renderpass(std::move(renderpass))
+  {}
 
-    this->colorbuffer = std::make_unique<FramebufferAttachment>(color_format,
-                                                                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                                                0,
-                                                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                                                VK_IMAGE_LAYOUT_UNDEFINED,
-                                                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                                                VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                extent3d);
-
-    this->depthbuffer = std::make_unique<FramebufferAttachment>(depth_format,
-                                                                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                                0,
-                                                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                                                VK_IMAGE_LAYOUT_UNDEFINED,
-                                                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                                                                VK_IMAGE_ASPECT_DEPTH_BIT,
-                                                                extent3d);
-
-    auto pipeline_barrier = std::make_shared<PipelineBarrier>(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                                              0);
-
-    this->children = {
-      this->colorbuffer,
-      this->depthbuffer,
-      pipeline_barrier
-    };
-  }
-
-  std::shared_ptr<VulkanRenderpass> renderpass;
-  std::shared_ptr<FramebufferAttachment> colorbuffer;
-  std::shared_ptr<FramebufferAttachment> depthbuffer;
   std::unique_ptr<VulkanFramebuffer> framebuffer;
 
 private:
@@ -138,10 +110,14 @@ private:
     StateScope<MemoryStager, StageState> scope(stager);
     Group::doStage(stager);
 
-    std::vector<VkImageView> framebuffer_attachments = {
-      this->colorbuffer->image_view->imageview->view,
-      this->depthbuffer->image_view->imageview->view
-    };
+    std::vector<VkImageView> framebuffer_attachments;
+    for (const auto & child : this->children) {
+      auto attachment = std::dynamic_pointer_cast<FramebufferAttachment>(child);
+      if (!attachment) {
+        throw std::runtime_error("framebuffer child must be of type FramebufferAttachment");
+      }
+      framebuffer_attachments.push_back(attachment->image_view->imageview->view);
+    }
 
     this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
                                                             this->renderpass,
@@ -151,8 +127,8 @@ private:
   }
 
   VkExtent2D extent2d{ 0, 0 };
+  std::shared_ptr<VulkanRenderpass> renderpass;
 };
-
 
 class VulkanSwapchainObject {
 public:
@@ -162,19 +138,13 @@ public:
                         VkSurfaceKHR surface,
                         VkPresentModeKHR present_mode,
                         VkSurfaceFormatKHR surface_format,
+                        VkSurfaceCapabilitiesKHR surface_capabilities,
                         VkSwapchainKHR oldSwapchain) :
     vulkan(std::move(vulkan)),
     device(std::move(device))
   {
     this->semaphore = std::make_unique<VulkanSemaphore>(this->device);
-    
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-    THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
-                                                                        surface,
-                                                                        &surface_capabilities));
-
-    this->extent2d = surface_capabilities.currentExtent;
-    VkExtent3D extent3d = { this->extent2d.width, this->extent2d.height, 1 };
+    VkExtent3D extent3d = { surface_capabilities.currentExtent.width, surface_capabilities.currentExtent.height, 1 };
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
       this->device,
@@ -183,7 +153,7 @@ public:
       3,
       surface_format.format,
       surface_format.colorSpace,
-      this->extent2d,
+      surface_capabilities.currentExtent,
       1,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
@@ -340,8 +310,6 @@ public:
   std::shared_ptr<VulkanSemaphore> semaphore;
   std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
   std::unique_ptr<VulkanSwapchain> swapchain;
-
-  VkExtent2D extent2d{ 0, 0 };
 };
 
 class VulkanViewer {
@@ -419,24 +387,45 @@ public:
 
     this->rendermanager = std::make_unique<RenderManager>(this->device);
 
-    VkSurfaceCapabilitiesKHR surface_capabilities;
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
                                                                         this->surface->surface,
-                                                                        &surface_capabilities));
+                                                                        &this->surface_capabilities));
+
+    auto colorbuffer = std::make_shared<FramebufferAttachment>(this->surface_format.format,
+                                                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                               0,
+                                                               VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                               VK_IMAGE_LAYOUT_UNDEFINED,
+                                                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                                               VK_IMAGE_ASPECT_COLOR_BIT,
+                                                               this->surface_capabilities.currentExtent);
+
+    auto depthbuffer = std::make_shared<FramebufferAttachment>(this->depth_format,
+                                                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                               0,
+                                                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                                               VK_IMAGE_LAYOUT_UNDEFINED,
+                                                               VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                                               VK_IMAGE_ASPECT_DEPTH_BIT,
+                                                               this->surface_capabilities.currentExtent);
 
     this->framebuffer = std::make_unique<VulkanFramebufferObject>(this->renderpass,
-                                                                  this->surface_format.format,                                                                  
-                                                                  this->depth_format,
-                                                                  surface_capabilities.currentExtent);
+                                                                  this->surface_capabilities.currentExtent);
+    this->framebuffer->children = { 
+      colorbuffer,
+      depthbuffer 
+    };
+
     this->rendermanager->alloc(this->framebuffer.get());
     this->rendermanager->stage(this->framebuffer.get());
 
     this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
                                                               this->device,
-                                                              this->framebuffer->colorbuffer->image->image,
+                                                              colorbuffer->image->image,
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format,
+                                                              this->surface_capabilities,
                                                               nullptr);
 
   }
@@ -457,7 +446,7 @@ public:
                                 this->framebuffer->framebuffer->framebuffer,
                                 this->renderpass->renderpass,
                                 this->camera.get(),
-                                this->swapchain->extent2d);
+                                this->surface_capabilities.currentExtent);
 
     this->swapBuffers();
   }
@@ -475,7 +464,7 @@ public:
     this->rendermanager->record(this->root.get(), 
                                 this->framebuffer->framebuffer->framebuffer,
                                 this->renderpass->renderpass, 
-                                this->swapchain->extent2d);
+                                this->surface_capabilities.currentExtent);
   }
 
   void swapBuffers() const
@@ -495,34 +484,54 @@ public:
     // make sure all work submitted is done before we start recreating stuff
     THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
 
-    VkSurfaceCapabilitiesKHR surface_capabilities;
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
                                                                         this->surface->surface,
-                                                                        &surface_capabilities));
+                                                                        &this->surface_capabilities));
+
+    auto colorbuffer = std::make_shared<FramebufferAttachment>(this->surface_format.format,
+                                                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                               0,
+                                                               VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                               VK_IMAGE_LAYOUT_UNDEFINED,
+                                                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                                               VK_IMAGE_ASPECT_COLOR_BIT,
+                                                               this->surface_capabilities.currentExtent);
+
+    auto depthbuffer = std::make_shared<FramebufferAttachment>(this->depth_format,
+                                                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                               0,
+                                                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                                               VK_IMAGE_LAYOUT_UNDEFINED,
+                                                               VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                                               VK_IMAGE_ASPECT_DEPTH_BIT,
+                                                               this->surface_capabilities.currentExtent);
 
     this->framebuffer = std::make_unique<VulkanFramebufferObject>(this->renderpass,
-                                                                  this->surface_format.format,                                                                  
-                                                                  this->depth_format,
-                                                                  surface_capabilities.currentExtent);
+                                                                  this->surface_capabilities.currentExtent);
+    this->framebuffer->children = { 
+      colorbuffer,
+      depthbuffer 
+    };
 
     this->rendermanager->alloc(this->framebuffer.get());
     this->rendermanager->stage(this->framebuffer.get());
 
     this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
                                                               this->device,
-                                                              this->framebuffer->colorbuffer->image->image,
+                                                              colorbuffer->image->image,
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format,
+                                                              this->surface_capabilities,
                                                               this->swapchain->swapchain->swapchain);
 
-    this->camera->aspectratio = static_cast<float>(this->swapchain->extent2d.width) /
-                                static_cast<float>(this->swapchain->extent2d.height);
+    this->camera->aspectratio = static_cast<float>(this->surface_capabilities.currentExtent.width) /
+                                static_cast<float>(this->surface_capabilities.currentExtent.height);
 
     this->rendermanager->record(this->root.get(),
                                 this->framebuffer->framebuffer->framebuffer,
                                 this->renderpass->renderpass,
-                                this->swapchain->extent2d);
+                                this->surface_capabilities.currentExtent);
 
     this->redraw();
   }
@@ -532,6 +541,7 @@ public:
   std::shared_ptr<::VulkanSurface> surface;
   VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR }; // always present?
   VkSurfaceFormatKHR surface_format{};
+  VkSurfaceCapabilitiesKHR surface_capabilities{};
   std::shared_ptr<Camera> camera;
   std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFramebufferObject> framebuffer;
