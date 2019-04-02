@@ -18,19 +18,25 @@
 #include <vector>
 #include <iostream>
 
-class ColorBuffer : public Separator {
+class FramebufferAttachment : public Group {
 public:
-  NO_COPY_OR_ASSIGNMENT(ColorBuffer)
-  virtual ~ColorBuffer() = default;
+  NO_COPY_OR_ASSIGNMENT(FramebufferAttachment)
+  virtual ~FramebufferAttachment() = default;
 
-  ColorBuffer(VkFormat format,
-              VkExtent3D extent)
+  FramebufferAttachment(VkFormat format,
+                        VkImageUsageFlags usage,
+                        VkAccessFlags srcAccessMask,
+                        VkAccessFlags dstAccessMask,
+                        VkImageLayout oldLayout,
+                        VkImageLayout newLayout,
+                        VkImageAspectFlags aspectMask,
+                        VkExtent3D extent)
   {
     VkImageSubresourceRange subresource_range{
-      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+      aspectMask, 0, 1, 0, 1
     };
 
-    this->color_buffer = std::make_shared<Image>(
+    this->image = std::make_shared<Image>(
       VK_IMAGE_TYPE_2D,
       format,
       extent,
@@ -38,7 +44,7 @@ public:
       subresource_range.layerCount,
       VK_SAMPLE_COUNT_1_BIT,
       VK_IMAGE_TILING_OPTIMAL,
-      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+      usage,
       VK_SHARING_MODE_EXCLUSIVE,
       0);
 
@@ -52,100 +58,31 @@ public:
       VK_COMPONENT_SWIZZLE_A
     };
 
-    this->color_buffer_view = std::make_shared<ImageView>(
+    this->image_view = std::make_shared<ImageView>(
       format,
       VK_IMAGE_VIEW_TYPE_2D,
       component_mapping,
       subresource_range);
 
     auto memory_barrier = std::make_shared<ImageMemoryBarrier>(
-      0,
-      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      srcAccessMask,
+      dstAccessMask,
+      oldLayout,
+      newLayout,
       subresource_range);
 
-    auto pipeline_barrier = std::make_shared<PipelineBarrier>(
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      0);
-
     this->children = {
-      this->color_buffer,
+      this->image,
       memory_allocator,
-      this->color_buffer_view,
-      memory_barrier,
-      pipeline_barrier
+      this->image_view,
+      memory_barrier
     };
   }
 
-  std::shared_ptr<Image> color_buffer;
-  std::shared_ptr<ImageView> color_buffer_view;
+  std::shared_ptr<Image> image;
+  std::shared_ptr<ImageView> image_view;
 };
 
-class DepthBuffer : public Separator {
-public:
-  NO_COPY_OR_ASSIGNMENT(DepthBuffer)
-  virtual ~DepthBuffer() = default;
-
-  DepthBuffer(VkFormat format,
-              VkExtent3D extent)
-  {
-    VkImageSubresourceRange subresource_range{
-      VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1
-    };
-
-    auto depth_buffer = std::make_shared<Image>(
-      VK_IMAGE_TYPE_2D,
-      format,
-      extent,
-      subresource_range.levelCount,
-      subresource_range.layerCount,
-      VK_SAMPLE_COUNT_1_BIT,
-      VK_IMAGE_TILING_OPTIMAL,
-      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-      VK_SHARING_MODE_EXCLUSIVE,
-      0);
-
-    auto memory_allocator = std::make_shared<ImageMemoryAllocator>(
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    VkComponentMapping component_mapping{
-      VK_COMPONENT_SWIZZLE_R,
-      VK_COMPONENT_SWIZZLE_G,
-      VK_COMPONENT_SWIZZLE_B,
-      VK_COMPONENT_SWIZZLE_A
-    };
-
-    this->depth_buffer_view = std::make_shared<ImageView>(
-      format,
-      VK_IMAGE_VIEW_TYPE_2D,
-      component_mapping,
-      subresource_range);
-
-    auto memory_barrier = std::make_shared<ImageMemoryBarrier>(
-      0,
-      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-      subresource_range);
-
-    auto pipeline_barrier = std::make_shared<PipelineBarrier>(
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      0);
-
-    this->children = {
-      depth_buffer,
-      memory_allocator,
-      this->depth_buffer_view,
-      memory_barrier,
-      pipeline_barrier
-    };
-  }
-
-  std::shared_ptr<ImageView> depth_buffer_view;
-};
 
 class VulkanFramebufferObject : public Group {
 public:
@@ -161,30 +98,49 @@ public:
   {
     VkExtent3D extent3d = { this->extent2d.width, this->extent2d.height, 1 };
 
-    this->colorbuffer = std::make_unique<ColorBuffer>(color_format, extent3d);
-    this->depthbuffer = std::make_unique<DepthBuffer>(depth_format, extent3d);
+    this->colorbuffer = std::make_unique<FramebufferAttachment>(color_format,
+                                                                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                                0,
+                                                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                                                VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                extent3d);
+
+    this->depthbuffer = std::make_unique<FramebufferAttachment>(depth_format,
+                                                                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                                0,
+                                                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                                                VK_IMAGE_ASPECT_DEPTH_BIT,
+                                                                extent3d);
+
+    auto pipeline_barrier = std::make_shared<PipelineBarrier>(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                                              0);
 
     this->children = {
       this->colorbuffer,
-      this->depthbuffer
+      this->depthbuffer,
+      pipeline_barrier
     };
   }
 
   std::shared_ptr<VulkanRenderpass> renderpass;
-  std::shared_ptr<ColorBuffer> colorbuffer;
-  std::shared_ptr<DepthBuffer> depthbuffer;
+  std::shared_ptr<FramebufferAttachment> colorbuffer;
+  std::shared_ptr<FramebufferAttachment> depthbuffer;
   std::unique_ptr<VulkanFramebuffer> framebuffer;
 
 private:
   void doStage(MemoryStager * stager) override
   {
     StateScope<MemoryStager, StageState> scope(stager);
-
     Group::doStage(stager);
 
     std::vector<VkImageView> framebuffer_attachments = {
-      this->colorbuffer->color_buffer_view->imageview->view,
-      this->depthbuffer->depth_buffer_view->imageview->view
+      this->colorbuffer->image_view->imageview->view,
+      this->depthbuffer->image_view->imageview->view
     };
 
     this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
@@ -477,7 +433,7 @@ public:
 
     this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
                                                               this->device,
-                                                              this->framebuffer->colorbuffer->color_buffer->image,
+                                                              this->framebuffer->colorbuffer->image->image,
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format,
@@ -554,7 +510,7 @@ public:
 
     this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
                                                               this->device,
-                                                              this->framebuffer->colorbuffer->color_buffer->image,
+                                                              this->framebuffer->colorbuffer->image->image,
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format,
