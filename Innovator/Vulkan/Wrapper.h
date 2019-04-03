@@ -541,13 +541,13 @@ public:
     return images;
   }
 
-  uint32_t getNextImageIndex(const std::shared_ptr<VulkanSemaphore> & semaphore) const
+  uint32_t getNextImageIndex(const VkSemaphore semaphore) const
   {
     uint32_t index;
     THROW_ON_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, 
                                                     this->swapchain, 
                                                     UINT64_MAX, 
-                                                    semaphore->semaphore, 
+                                                    semaphore, 
                                                     nullptr, 
                                                     &index));
     return index;

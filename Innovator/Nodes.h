@@ -603,7 +603,6 @@ public:
 
   explicit Image(VkImageType image_type,
                  VkFormat format,
-                 VkExtent3D extent,
                  uint32_t mip_levels,
                  uint32_t array_layers,
                  VkSampleCountFlagBits samples,
@@ -613,7 +612,6 @@ public:
                  VkImageCreateFlags flags) :
     image_type(image_type),
     format(format),
-    extent(extent),
     mip_levels(mip_levels),
     array_layers(array_layers),
     samples(samples),
@@ -630,10 +628,11 @@ public:
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
+    VkExtent3D extent = { allocator->extent.width, allocator->extent.height, 1 };
     this->image = std::make_shared<VulkanImage>(allocator->device,
                                                 this->image_type,
                                                 this->format,
-                                                this->extent,
+                                                extent,
                                                 this->mip_levels,
                                                 this->array_layers,
                                                 this->samples,
@@ -653,7 +652,6 @@ private:
 
   VkImageType image_type;
   VkFormat format;
-  VkExtent3D extent;
   uint32_t mip_levels;
   uint32_t array_layers;
   VkSampleCountFlagBits samples;
@@ -1099,7 +1097,7 @@ private:
 
     this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
       creator->device,
-      creator->renderpass,
+      creator->renderpass->renderpass,
       creator->pipelinecache,
       this->pipeline_layout->layout,
       this->topology,
@@ -1113,7 +1111,7 @@ private:
   void doRecord(CommandRecorder * recorder) override
   {
     VulkanCommandBufferScope command_scope(this->command->buffer(),
-                                           recorder->renderpass,
+                                           recorder->renderpass->renderpass,
                                            0,
                                            recorder->framebuffer,
                                            VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);

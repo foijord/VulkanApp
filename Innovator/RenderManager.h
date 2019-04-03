@@ -33,8 +33,10 @@ public:
   NO_COPY_OR_ASSIGNMENT(MemoryAllocator)
   MemoryAllocator() = delete;
 
-  explicit MemoryAllocator(std::shared_ptr<VulkanDevice> device) :
-    device(std::move(device))
+  explicit MemoryAllocator(std::shared_ptr<VulkanDevice> device,
+                           VkExtent2D extent) :
+    device(std::move(device)),
+    extent(extent)
   {}
 
   ~MemoryAllocator()
@@ -49,6 +51,7 @@ public:
 
   MemoryState state{};
   std::shared_ptr<VulkanDevice> device;
+  VkExtent2D extent;
   std::vector<std::shared_ptr<ImageObject>> imageobjects;
   std::vector<std::shared_ptr<BufferObject>> bufferobjects;
 
@@ -84,15 +87,21 @@ public:
   ~MemoryStager() = default;
 
   explicit MemoryStager(std::shared_ptr<VulkanDevice> device,
-                        VkCommandBuffer command) :
+                        std::shared_ptr<VulkanRenderpass> renderpass,
+                        VkCommandBuffer command,
+                        VkExtent2D extent) :
     device(std::move(device)),
+    renderpass(std::move(renderpass)),
     command(command),
+    extent(extent),
     command_scope(std::make_unique<VulkanCommandBufferScope>(command))
   {}
 
   StageState state{};
   std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanRenderpass> renderpass;
   VkCommandBuffer command;
+  VkExtent2D extent;
   std::unique_ptr<VulkanCommandBufferScope> command_scope;
 };
 
@@ -103,16 +112,16 @@ public:
   ~PipelineCreator() = default;
 
   explicit PipelineCreator(std::shared_ptr<VulkanDevice> device, 
-                           VkRenderPass renderpass,
+                           std::shared_ptr<VulkanRenderpass> renderpass,
                            VkPipelineCache pipelinecache) :
     device(std::move(device)),
-    renderpass(renderpass),
+    renderpass(std::move(renderpass)),
     pipelinecache(pipelinecache)
   {}
 
   PipelineState state;
   std::shared_ptr<VulkanDevice> device;
-  VkRenderPass renderpass;
+  std::shared_ptr<VulkanRenderpass> renderpass;
   VkPipelineCache pipelinecache;
 };
 
@@ -123,13 +132,13 @@ public:
   ~CommandRecorder() = default;
 
   explicit CommandRecorder(std::shared_ptr<VulkanDevice> device,
-                           VkRenderPass renderpass,
+                           std::shared_ptr<VulkanRenderpass> renderpass,
                            VkFramebuffer framebuffer,
                            VkPipelineCache pipelinecache,
                            VkExtent2D extent,
                            VkCommandBuffer command) :
     device(std::move(device)),
-    renderpass(renderpass),
+    renderpass(std::move(renderpass)),
     framebuffer(framebuffer),
     pipelinecache(pipelinecache),
     extent(extent),
@@ -139,7 +148,7 @@ public:
   RecordState state;
 
   std::shared_ptr<VulkanDevice> device;
-  VkRenderPass renderpass;
+  std::shared_ptr<VulkanRenderpass> renderpass;
   VkFramebuffer framebuffer;
   VkPipelineCache pipelinecache;
   VkExtent2D extent;
@@ -168,8 +177,10 @@ public:
   NO_COPY_OR_ASSIGNMENT(RenderManager)
   RenderManager() = delete;
 
-  explicit RenderManager(std::shared_ptr<VulkanDevice> device)
+  explicit RenderManager(std::shared_ptr<VulkanDevice> device,
+                         std::shared_ptr<VulkanRenderpass> renderpass)
     : device(std::move(device)), 
+      renderpass(std::move(renderpass)),
       render_fence(std::make_unique<VulkanFence>(this->device)),
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device))
@@ -185,9 +196,14 @@ public:
     }
   }
 
+  void resize(VkExtent2D extent)
+  {
+    this->extent = extent;
+  }
+
   void alloc(Node * root) const
   {
-    MemoryAllocator allocator(this->device);
+    MemoryAllocator allocator(this->device, this->extent);
     root->alloc(&allocator);
   }
 
@@ -195,7 +211,7 @@ public:
   {
     VulkanCommandBuffers staging_command(this->device);
     {
-      MemoryStager stager(this->device, staging_command.buffer());
+      MemoryStager stager(this->device, this->renderpass, staging_command.buffer(), this->extent);
       root->stage(&stager);
     }
 
@@ -207,25 +223,22 @@ public:
                            fence.fence);
   }
 
-  void pipeline(Node * root, const VkRenderPass renderpass) const
+  void pipeline(Node * root) const
   {
     PipelineCreator creator(this->device,
-                            renderpass,
+                            this->renderpass,
                             this->pipelinecache->cache);
 
     root->pipeline(&creator);
   }
 
-  void record(Node * root, 
-              const VkFramebuffer framebuffer, 
-              const VkRenderPass renderpass,
-              const VkExtent2D extent) const
+  void record(Node * root, const VkFramebuffer framebuffer) const
   {
     CommandRecorder recorder(this->device,
-                             renderpass,
+                             this->renderpass,
                              framebuffer,
                              this->pipelinecache->cache,
-                             extent,
+                             this->extent,
                              this->render_command->buffer());
 
     root->record(&recorder);
@@ -233,13 +246,11 @@ public:
 
   void render(Node * root, 
               const VkFramebuffer framebuffer, 
-              const VkRenderPass renderpass, 
-              Camera * camera, 
-              const VkExtent2D extent) const
+              Camera * camera) const
   {
     const VkRect2D renderarea{
       { 0, 0 },             // offset
-      extent                // extent
+      this->extent          // extent
     };
 
     const std::vector<VkClearValue> clearvalues{
@@ -250,7 +261,7 @@ public:
     {
       VulkanCommandBufferScope commandbuffer(this->render_command->buffer());
 
-      VulkanRenderPassScope renderpass_scope(renderpass,
+      VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
                                              framebuffer,
                                              renderarea,
                                              clearvalues,
@@ -269,8 +280,10 @@ public:
   }
 
   std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<VulkanRenderpass> renderpass;
 
   std::shared_ptr<VulkanFence> render_fence;
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
+  VkExtent2D extent;
 };
