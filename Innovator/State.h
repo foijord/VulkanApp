@@ -66,6 +66,7 @@ struct PipelineState {
 struct RecordState {
   VkBuffer buffer{ nullptr };
   class BufferData * bufferdata { nullptr };
+  VkFramebuffer framebuffer;
 
   VulkanIndexBufferDescription index_buffer_description;
   std::vector<VkBuffer> vertex_attribute_buffers;
@@ -73,6 +74,8 @@ struct RecordState {
 };
 
 struct RenderState {
+  VkFramebuffer framebuffer;
+
   mat4d ModelMatrix{
     1, 0, 0, 0,
     0, 1, 0, 0,

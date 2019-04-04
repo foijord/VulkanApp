@@ -133,13 +133,11 @@ public:
 
   explicit CommandRecorder(std::shared_ptr<VulkanDevice> device,
                            std::shared_ptr<VulkanRenderpass> renderpass,
-                           VkFramebuffer framebuffer,
                            VkPipelineCache pipelinecache,
                            VkExtent2D extent,
                            VkCommandBuffer command) :
     device(std::move(device)),
     renderpass(std::move(renderpass)),
-    framebuffer(framebuffer),
     pipelinecache(pipelinecache),
     extent(extent),
     command(command)
@@ -149,7 +147,6 @@ public:
 
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanRenderpass> renderpass;
-  VkFramebuffer framebuffer;
   VkPipelineCache pipelinecache;
   VkExtent2D extent;
   VkCommandBuffer command;
@@ -232,11 +229,10 @@ public:
     root->pipeline(&creator);
   }
 
-  void record(Node * root, const VkFramebuffer framebuffer) const
+  void record(Node * root) const
   {
     CommandRecorder recorder(this->device,
                              this->renderpass,
-                             framebuffer,
                              this->pipelinecache->cache,
                              this->extent,
                              this->render_command->buffer());

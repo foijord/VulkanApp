@@ -1113,7 +1113,7 @@ private:
     VulkanCommandBufferScope command_scope(this->command->buffer(),
                                            recorder->renderpass->renderpass,
                                            0,
-                                           recorder->framebuffer,
+                                           recorder->state.framebuffer,
                                            VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
 
     vkCmdBindDescriptorSets(this->command->buffer(), 
