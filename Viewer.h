@@ -85,8 +85,7 @@ private:
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          0, 0, nullptr, 0, nullptr,
-                         1,
-                         &memory_barrier);
+                         1, &memory_barrier);
 
     stager->state.framebuffer_attachments.push_back(this->imageview->view);
   }
@@ -197,9 +196,9 @@ private:
                                                         &count, 
                                                         this->swapchain_images.data()));
 
-    std::vector<VkImageMemoryBarrier> image_barriers;
-    for (auto& swapchain_image : this->swapchain_images) {
-      image_barriers.push_back({
+    VkImageMemoryBarrier image_barriers[count];
+    for (uint32_t i = 0; i < count; i++) {
+      image_barriers[i] = {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
         nullptr,                                // pNext
         0,
@@ -208,24 +207,23 @@ private:
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         stager->device->default_queue_index,    // srcQueueFamilyIndex
         stager->device->default_queue_index,    // dstQueueFamilyIndex
-        swapchain_image,                        // image
+        swapchain_images[i],                    // image
         this->subresource_range
-      });
+      };
     }
 
     vkCmdPipelineBarrier(stager->command,
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          0, 0, nullptr, 0, nullptr,
-                         static_cast<uint32_t>(image_barriers.size()),
-                         image_barriers.data());
+                         count, image_barriers);
   }
 
   void doRecord(CommandRecorder * recorder) override
   {
     this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(recorder->device, this->swapchain_images.size());
 
-    for (uint32_t i = 0; i < this->swapchain_images.size(); i++) {
+    for (size_t i = 0; i < this->swapchain_images.size(); i++) {
       VkImageMemoryBarrier src_image_barriers[2] = { 
       {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
