@@ -18,7 +18,7 @@
 #include <vector>
 #include <iostream>
 
-class FramebufferAttachment : public Group {
+class FramebufferAttachment : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(FramebufferAttachment)
   virtual ~FramebufferAttachment() = default;
@@ -27,72 +27,91 @@ public:
                         VkImageUsageFlags usage,
                         VkAccessFlags dstAccessMask,
                         VkImageLayout newLayout,
-                        VkImageAspectFlags aspectMask)
-  {
-    VkAccessFlags srcAccessMask = 0;
-    VkImageLayout oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    VkImageSubresourceRange subresource_range{
-      aspectMask, 0, 1, 0, 1
-    };
-
-    this->image = std::make_shared<Image>(
-      VK_IMAGE_TYPE_2D,
-      format,
-      subresource_range.levelCount,
-      subresource_range.layerCount,
-      VK_SAMPLE_COUNT_1_BIT,
-      VK_IMAGE_TILING_OPTIMAL,
-      usage,
-      VK_SHARING_MODE_EXCLUSIVE,
-      0);
-
-    auto memory_allocator = std::make_shared<ImageMemoryAllocator>(
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    VkComponentMapping component_mapping{
-      VK_COMPONENT_SWIZZLE_R,
-      VK_COMPONENT_SWIZZLE_G,
-      VK_COMPONENT_SWIZZLE_B,
-      VK_COMPONENT_SWIZZLE_A
-    };
-
-    this->image_view = std::make_shared<ImageView>(
-      format,
-      VK_IMAGE_VIEW_TYPE_2D,
-      component_mapping,
-      subresource_range);
-
-    auto memory_barrier = std::make_shared<ImageMemoryBarrier>(
-      srcAccessMask,
-      dstAccessMask,
-      oldLayout,
-      newLayout,
-      subresource_range);
-
-    auto pipeline_barrier = std::make_shared<PipelineBarrier>(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                                              0);
-
-    this->children = {
-      this->image,
-      memory_allocator,
-      this->image_view,
-      memory_barrier,
-      pipeline_barrier
-    };
-  }
+                        VkImageAspectFlags aspectMask) :
+    format(format),
+    usage(usage),
+    dstAccessMask(dstAccessMask),
+    newLayout(newLayout),
+    aspectMask(aspectMask)
+  {}
 
 private:
-  void doStage(MemoryStager * stager) override
+  void doAlloc(MemoryAllocator * allocator) override
   {
-    Group::doStage(stager);
-    stager->state.framebuffer_attachments.push_back(this->image_view->imageview->view);
+    VkExtent3D extent = { allocator->extent.width, allocator->extent.height, 1 };
+    this->image = std::make_shared<VulkanImage>(allocator->device,
+                                                VK_IMAGE_TYPE_2D,
+                                                this->format,
+                                                extent,
+                                                this->subresource_range.levelCount,
+                                                this->subresource_range.layerCount,
+                                                VK_SAMPLE_COUNT_1_BIT,
+                                                VK_IMAGE_TILING_OPTIMAL,
+                                                this->usage,
+                                                VK_SHARING_MODE_EXCLUSIVE,
+                                                0);
+
+    this->imageobject = std::make_shared<ImageObject>(allocator->device,
+                                                      this->image->image,
+                                                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    allocator->imageobjects.push_back(this->imageobject);
   }
 
+  void doStage(MemoryStager * stager) override
+  {
+    this->imageview = std::make_shared<VulkanImageView>(stager->device,
+                                                        this->image->image,
+                                                        this->format,
+                                                        VK_IMAGE_VIEW_TYPE_2D,
+                                                        this->component_mapping,
+                                                        this->subresource_range);
+
+
+    VkImageMemoryBarrier memory_barrier{
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
+      nullptr,                                // pNext
+      0,
+      this->dstAccessMask,
+      VK_IMAGE_LAYOUT_UNDEFINED,
+      this->newLayout,
+      stager->device->default_queue_index,    // srcQueueFamilyIndex
+      stager->device->default_queue_index,    // dstQueueFamilyIndex
+      this->image->image,                     // image
+      this->subresource_range
+    };
+
+    vkCmdPipelineBarrier(stager->command,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         0, 0, nullptr, 0, nullptr,
+                         1,
+                         &memory_barrier);
+
+    stager->state.framebuffer_attachments.push_back(this->imageview->view);
+  }
+
+  VkFormat format;
+  VkImageUsageFlags usage;
+  VkAccessFlags dstAccessMask;
+  VkImageLayout newLayout;
+  VkImageAspectFlags aspectMask;
+ 
+  VkImageSubresourceRange subresource_range{
+    aspectMask, 0, 1, 0, 1
+  };
+
+  VkComponentMapping component_mapping{
+    VK_COMPONENT_SWIZZLE_R,
+    VK_COMPONENT_SWIZZLE_G,
+    VK_COMPONENT_SWIZZLE_B,
+    VK_COMPONENT_SWIZZLE_A
+  };
+
 public:
-  std::shared_ptr<Image> image;
-  std::shared_ptr<ImageView> image_view;
+  std::shared_ptr<VulkanImage> image;
+  std::shared_ptr<ImageObject> imageobject;
+  std::shared_ptr<VulkanImageView> imageview;
 };
 
 class VulkanFramebufferObject : public Group {
@@ -106,9 +125,7 @@ public:
 private:
   void doStage(MemoryStager * stager) override
   {
-    StateScope<MemoryStager, StageState> scope(stager);
     Group::doStage(stager);
-
     this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
                                                             stager->renderpass,
                                                             stager->state.framebuffer_attachments,
@@ -118,13 +135,17 @@ private:
 
   void doRecord(CommandRecorder * recorder) override
   {
+    Group::doRecord(recorder);
     recorder->state.framebuffer = this->framebuffer->framebuffer;
   }
 
   void doRender(SceneRenderer * renderer) override
   {
+    Group::doRender(renderer);
     renderer->state.framebuffer = this->framebuffer->framebuffer;
   }
+
+  std::vector<std::shared_ptr<FramebufferAttachment>> attachments;
 };
 
 class VulkanSwapchainObject : public Node {
@@ -132,11 +153,11 @@ public:
   NO_COPY_OR_ASSIGNMENT(VulkanSwapchainObject)
   virtual ~VulkanSwapchainObject() = default;
 
-  VulkanSwapchainObject(std::shared_ptr<Image> src_image,
+  VulkanSwapchainObject(std::shared_ptr<FramebufferAttachment> color_attachment,
                         VkSurfaceKHR surface,
                         VkPresentModeKHR present_mode,
                         VkSurfaceFormatKHR surface_format) :
-      src_image(std::move(src_image)),
+      color_attachment(std::move(color_attachment)),
       surface(surface),
       present_mode(present_mode),
       surface_format(surface_format)
@@ -166,43 +187,47 @@ private:
       prevswapchain);
 
     uint32_t count;
-    THROW_ON_ERROR(stager->vulkan->vkGetSwapchainImages(stager->device->device, this->swapchain->swapchain, &count, nullptr));
+    THROW_ON_ERROR(stager->vulkan->vkGetSwapchainImages(stager->device->device, 
+                                                        this->swapchain->swapchain, 
+                                                        &count, 
+                                                        nullptr));
     this->swapchain_images.resize(count);
-    THROW_ON_ERROR(stager->vulkan->vkGetSwapchainImages(stager->device->device, this->swapchain->swapchain, &count, this->swapchain_images.data()));
+    THROW_ON_ERROR(stager->vulkan->vkGetSwapchainImages(stager->device->device, 
+                                                        this->swapchain->swapchain, 
+                                                        &count, 
+                                                        this->swapchain_images.data()));
 
-    const VkImageSubresourceRange subresource_range{
-      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
-    };
-
-    {
-      StateScope<MemoryStager, StageState> scope(stager);
-      for (auto& swapchain_image : swapchain_images) {
-        stager->state.image = swapchain_image;
-        auto image_memory_barrier = std::make_shared<ImageMemoryBarrier>(
-          0,
-          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-          VK_IMAGE_LAYOUT_UNDEFINED,
-          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-          subresource_range);
-
-        image_memory_barrier->stage(stager);
-      }
-      auto pipeline_barrier = std::make_shared<PipelineBarrier>(
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0);
-
-      pipeline_barrier->stage(stager);
+    std::vector<VkImageMemoryBarrier> image_barriers;
+    for (auto& swapchain_image : this->swapchain_images) {
+      image_barriers.push_back({
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
+        nullptr,                                // pNext
+        0,
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        stager->device->default_queue_index,    // srcQueueFamilyIndex
+        stager->device->default_queue_index,    // dstQueueFamilyIndex
+        swapchain_image,                        // image
+        this->subresource_range
+      });
     }
+
+    vkCmdPipelineBarrier(stager->command,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         0, 0, nullptr, 0, nullptr,
+                         static_cast<uint32_t>(image_barriers.size()),
+                         image_barriers.data());
   }
 
   void doRecord(CommandRecorder * recorder) override
   {
-    const VkImageSubresourceRange subresource_range{
-      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
-    };
+    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(recorder->device, this->swapchain_images.size());
 
-    std::vector<VkImageMemoryBarrier> src_image_barriers{ {
+    for (uint32_t i = 0; i < this->swapchain_images.size(); i++) {
+      VkImageMemoryBarrier src_image_barriers[2] = { 
+      {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
         nullptr,                                                       // pNext
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
@@ -211,8 +236,8 @@ private:
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
         recorder->device->default_queue_index,                         // srcQueueFamilyIndex
         recorder->device->default_queue_index,                         // dstQueueFamilyIndex
-        nullptr,                                                       // image
-        subresource_range,                                             // subresourceRange
+        this->swapchain_images[i],                                     // image
+        this->subresource_range,                                       // subresourceRange
       },{
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
         nullptr,                                                       // pNext
@@ -222,23 +247,9 @@ private:
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
         recorder->device->default_queue_index,                         // srcQueueFamilyIndex
         recorder->device->default_queue_index,                         // dstQueueFamilyIndex
-        nullptr,                                                       // image
-        subresource_range,                                             // subresourceRange
+        color_attachment->image->image,                                // image
+        this->subresource_range,                                       // subresourceRange
       } };
-
-    auto dst_image_barriers = src_image_barriers;
-    std::swap(dst_image_barriers[0].oldLayout, dst_image_barriers[0].newLayout);
-    std::swap(dst_image_barriers[1].oldLayout, dst_image_barriers[1].newLayout);
-    std::swap(dst_image_barriers[0].srcAccessMask, dst_image_barriers[0].dstAccessMask);
-    std::swap(dst_image_barriers[1].srcAccessMask, dst_image_barriers[1].dstAccessMask);
-
-    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(recorder->device, this->swapchain_images.size());
-
-    for (uint32_t i = 0; i < this->swapchain_images.size(); i++) {
-      src_image_barriers[1].image = src_image->image->image;
-      dst_image_barriers[1].image = src_image->image->image;
-      src_image_barriers[0].image = this->swapchain_images[i];
-      dst_image_barriers[0].image = this->swapchain_images[i];
 
       VulkanCommandBufferScope command_scope(this->swap_buffers_command->buffer(i));
 
@@ -246,14 +257,13 @@ private:
                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                            0, 0, nullptr, 0, nullptr,
-                           static_cast<uint32_t>(src_image_barriers.size()),
-                           src_image_barriers.data());
+                           2, src_image_barriers);
 
       const VkImageSubresourceLayers subresource_layers{
-        subresource_range.aspectMask,     // aspectMask
-        subresource_range.baseMipLevel,   // mipLevel
-        subresource_range.baseArrayLayer, // baseArrayLayer
-        subresource_range.layerCount      // layerCount;
+        this->subresource_range.aspectMask,     // aspectMask
+        this->subresource_range.baseMipLevel,   // mipLevel
+        this->subresource_range.baseArrayLayer, // baseArrayLayer
+        this->subresource_range.layerCount      // layerCount;
       };
 
       const VkOffset3D offset = {
@@ -271,18 +281,42 @@ private:
       };
 
       vkCmdCopyImage(this->swap_buffers_command->buffer(i),
-        src_image->image->image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        this->swapchain_images[i],
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &image_copy);
+                     color_attachment->image->image,
+                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                     this->swapchain_images[i],
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                     1, &image_copy);
+
+      VkImageMemoryBarrier dst_image_barriers[2] = { 
+      {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_TRANSFER_WRITE_BIT,                                  // srcAccessMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // oldLayout
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        this->swapchain_images[i],                                     // image
+        this->subresource_range,                                       // subresourceRange
+      },{
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_TRANSFER_READ_BIT,                                   // srcAccessMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // oldLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        color_attachment->image->image,                                // image
+        this->subresource_range,                                       // subresourceRange
+      } };
 
       vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(dst_image_barriers.size()),
-        dst_image_barriers.data());
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr,
+                           2, dst_image_barriers);
     }
   }
 
@@ -303,6 +337,9 @@ private:
                                        image_index,
                                        { semaphore.semaphore });
 
+    // TODO: need to synchronize properly; missing semaphore for rendering finished
+    // and image available before presenting...
+
     VkPresentInfoKHR present_info{
       VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
       nullptr,                            // pNext
@@ -317,7 +354,7 @@ private:
     THROW_ON_ERROR(renderer->vulkan->vkQueuePresent(renderer->device->default_queue, &present_info));
   }
 
-  std::shared_ptr<Image> src_image;
+  std::shared_ptr<FramebufferAttachment> color_attachment;
   VkSurfaceKHR surface;
   VkPresentModeKHR present_mode;
   VkSurfaceFormatKHR surface_format;
@@ -325,6 +362,10 @@ private:
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::vector<VkImage> swapchain_images;
   std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
+
+  const VkImageSubresourceRange subresource_range{
+    VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+  };
 };
 
 class VulkanViewer {
@@ -421,12 +462,12 @@ public:
 
     this->framebuffer = std::make_unique<VulkanFramebufferObject>();
 
-    this->framebuffer->children = { 
+    this->framebuffer->children = {
       colorbuffer,
       depthbuffer 
     };
 
-    this->swapchain = std::make_unique<VulkanSwapchainObject>(colorbuffer->image,
+    this->swapchain = std::make_unique<VulkanSwapchainObject>(colorbuffer,
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format);

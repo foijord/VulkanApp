@@ -17,18 +17,13 @@ struct MemoryState {
     nullptr, 0, 0
   };
   class BufferData * bufferdata{ nullptr };
-  VkImage image{ nullptr };
   VkExtent2D extent;
 };
 
 struct StageState {
   VkBuffer buffer{ nullptr };
-  VkImage image{ nullptr };
   class BufferData * bufferdata{ nullptr };
   std::vector<VkImageView> framebuffer_attachments;
-  std::vector<VkMemoryBarrier> memory_barriers;
-  std::vector<VkBufferMemoryBarrier> buffer_memory_barriers;
-  std::vector<VkImageMemoryBarrier> image_memory_barriers;
 };
 
 struct PipelineState {
