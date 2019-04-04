@@ -532,27 +532,6 @@ public:
     this->vulkan->vkDestroySwapchain(this->device->device, this->swapchain, nullptr);
   }
 
-  std::vector<VkImage> getSwapchainImages() const
-  {
-    uint32_t count;
-    THROW_ON_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, nullptr));
-    std::vector<VkImage> images(count);
-    THROW_ON_ERROR(vulkan->vkGetSwapchainImages(this->device->device, this->swapchain, &count, images.data()));
-    return images;
-  }
-
-  uint32_t getNextImageIndex(const VkSemaphore semaphore) const
-  {
-    uint32_t index;
-    THROW_ON_ERROR(this->vulkan->vkAcquireNextImage(this->device->device, 
-                                                    this->swapchain, 
-                                                    UINT64_MAX, 
-                                                    semaphore, 
-                                                    nullptr, 
-                                                    &index));
-    return index;
-  };
-
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   VkSwapchainKHR swapchain { nullptr };

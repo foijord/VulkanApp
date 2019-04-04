@@ -145,9 +145,7 @@ public:
 private:
   void doStage(MemoryStager * stager) override
   {
-    VkExtent3D extent3d = { stager->extent.width, stager->extent.height, 1 };
-
-    VkSwapchainKHR oldSwapchain = (this->swapchain) ? this->swapchain->swapchain : nullptr;
+    VkSwapchainKHR prevswapchain = (this->swapchain) ? this->swapchain->swapchain : nullptr;
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
       stager->device,
@@ -165,41 +163,41 @@ private:
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       present_mode,
       VK_FALSE,
-      oldSwapchain);
+      prevswapchain);
 
-    auto swapchain_images = this->swapchain->getSwapchainImages();
-    
-    std::vector<VkImageMemoryBarrier> memory_barriers;
-    for (auto& swapchain_image : swapchain_images) {
-      memory_barriers.push_back({
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
-        nullptr,                                                       // pNext
-        0,                                                             // srcAccessMask
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
-        VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
-        stager->device->default_queue_index,                           // srcQueueFamilyIndex
-        stager->device->default_queue_index,                           // dstQueueFamilyIndex
-        swapchain_image,                                               // image
-        { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }                      // subresourceRange
-        });
-    }
+    uint32_t count;
+    THROW_ON_ERROR(stager->vulkan->vkGetSwapchainImages(stager->device->device, this->swapchain->swapchain, &count, nullptr));
+    this->swapchain_images.resize(count);
+    THROW_ON_ERROR(stager->vulkan->vkGetSwapchainImages(stager->device->device, this->swapchain->swapchain, &count, this->swapchain_images.data()));
 
-    VulkanCommandBuffers command(stager->device);
+    const VkImageSubresourceRange subresource_range{
+      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+    };
+
     {
-      VulkanCommandBufferScope command_scope(command.buffer());
+      StateScope<MemoryStager, StageState> scope(stager);
+      for (auto& swapchain_image : swapchain_images) {
+        stager->state.image = swapchain_image;
+        auto image_memory_barrier = std::make_shared<ImageMemoryBarrier>(
+          0,
+          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+          VK_IMAGE_LAYOUT_UNDEFINED,
+          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+          subresource_range);
 
-      vkCmdPipelineBarrier(command.buffer(),
+        image_memory_barrier->stage(stager);
+      }
+      auto pipeline_barrier = std::make_shared<PipelineBarrier>(
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(memory_barriers.size()),
-        memory_barriers.data());
+        0);
+
+      pipeline_barrier->stage(stager);
     }
+  }
 
-    command.submit(stager->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ON_ERROR(vkQueueWaitIdle(stager->device->default_queue));
-
+  void doRecord(CommandRecorder * recorder) override
+  {
     const VkImageSubresourceRange subresource_range{
       VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
     };
@@ -211,8 +209,8 @@ private:
         VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // oldLayout
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
-        stager->device->default_queue_index,                           // srcQueueFamilyIndex
-        stager->device->default_queue_index,                           // dstQueueFamilyIndex
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
         nullptr,                                                       // image
         subresource_range,                                             // subresourceRange
       },{
@@ -222,8 +220,8 @@ private:
         VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
-        stager->device->default_queue_index,                           // srcQueueFamilyIndex
-        stager->device->default_queue_index,                           // dstQueueFamilyIndex
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
         nullptr,                                                       // image
         subresource_range,                                             // subresourceRange
       } };
@@ -234,21 +232,22 @@ private:
     std::swap(dst_image_barriers[0].srcAccessMask, dst_image_barriers[0].dstAccessMask);
     std::swap(dst_image_barriers[1].srcAccessMask, dst_image_barriers[1].dstAccessMask);
 
-    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(stager->device, swapchain_images.size());
+    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(recorder->device, this->swapchain_images.size());
 
-    for (uint32_t i = 0; i < swapchain_images.size(); i++) {
+    for (uint32_t i = 0; i < this->swapchain_images.size(); i++) {
       src_image_barriers[1].image = src_image->image->image;
       dst_image_barriers[1].image = src_image->image->image;
-      src_image_barriers[0].image = swapchain_images[i];
-      dst_image_barriers[0].image = swapchain_images[i];
+      src_image_barriers[0].image = this->swapchain_images[i];
+      dst_image_barriers[0].image = this->swapchain_images[i];
 
       VulkanCommandBufferScope command_scope(this->swap_buffers_command->buffer(i));
 
       vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(src_image_barriers.size()),
-        src_image_barriers.data());
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr,
+                           static_cast<uint32_t>(src_image_barriers.size()),
+                           src_image_barriers.data());
 
       const VkImageSubresourceLayers subresource_layers{
         subresource_range.aspectMask,     // aspectMask
@@ -261,6 +260,8 @@ private:
         0, 0, 0
       };
 
+      VkExtent3D extent3d = { recorder->extent.width, recorder->extent.height, 1 };
+
       VkImageCopy image_copy{
         subresource_layers,             // srcSubresource
         offset,                         // srcOffset
@@ -272,7 +273,7 @@ private:
       vkCmdCopyImage(this->swap_buffers_command->buffer(i),
         src_image->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        swapchain_images[i],
+        this->swapchain_images[i],
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
         &image_copy);
@@ -288,12 +289,19 @@ private:
   void doRender(SceneRenderer * renderer) override
   {
     VulkanSemaphore semaphore(renderer->device);
-    auto image_index = this->swapchain->getNextImageIndex(semaphore.semaphore);
+
+    uint32_t image_index;
+    THROW_ON_ERROR(renderer->vulkan->vkAcquireNextImage(renderer->device->device,
+                                                        this->swapchain->swapchain,
+                                                        UINT64_MAX,
+                                                        semaphore.semaphore,
+                                                        nullptr,
+                                                        &image_index));
 
     this->swap_buffers_command->submit(renderer->device->default_queue,
-      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      image_index,
-      { semaphore.semaphore });
+                                       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                       image_index,
+                                       { semaphore.semaphore });
 
     VkPresentInfoKHR present_info{
       VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
@@ -314,8 +322,9 @@ private:
   VkPresentModeKHR present_mode;
   VkSurfaceFormatKHR surface_format;
 
-  std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
   std::unique_ptr<VulkanSwapchain> swapchain;
+  std::vector<VkImage> swapchain_images;
+  std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
 };
 
 class VulkanViewer {
@@ -472,6 +481,7 @@ public:
 
     this->rendermanager->alloc(this->swapchain.get());
     this->rendermanager->stage(this->swapchain.get());
+    this->rendermanager->record(this->swapchain.get());
     
     this->rendermanager->record(this->root.get());
 
