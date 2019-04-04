@@ -132,14 +132,10 @@ public:
   NO_COPY_OR_ASSIGNMENT(VulkanSwapchainObject)
   virtual ~VulkanSwapchainObject() = default;
 
-  VulkanSwapchainObject(std::shared_ptr<VulkanInstance> vulkan,
-    std::shared_ptr<VulkanDevice> device,
-    std::shared_ptr<Image> src_image,
-    VkSurfaceKHR surface,
-    VkPresentModeKHR present_mode,
-    VkSurfaceFormatKHR surface_format) :
-      vulkan(std::move(vulkan)),
-      device(std::move(device)),
+  VulkanSwapchainObject(std::shared_ptr<Image> src_image,
+                        VkSurfaceKHR surface,
+                        VkPresentModeKHR present_mode,
+                        VkSurfaceFormatKHR surface_format) :
       src_image(std::move(src_image)),
       surface(surface),
       present_mode(present_mode),
@@ -154,8 +150,8 @@ private:
     VkSwapchainKHR oldSwapchain = (this->swapchain) ? this->swapchain->swapchain : nullptr;
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
-      this->device,
-      this->vulkan,
+      stager->device,
+      stager->vulkan,
       surface,
       3,
       surface_format.format,
@@ -164,7 +160,7 @@ private:
       1,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
-      std::vector<uint32_t>{ this->device->default_queue_index },
+      std::vector<uint32_t>{ stager->device->default_queue_index, },
       VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       present_mode,
@@ -182,14 +178,14 @@ private:
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
         VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
-        this->device->default_queue_index,                             // srcQueueFamilyIndex
-        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        stager->device->default_queue_index,                           // srcQueueFamilyIndex
+        stager->device->default_queue_index,                           // dstQueueFamilyIndex
         swapchain_image,                                               // image
         { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }                      // subresourceRange
         });
     }
 
-    VulkanCommandBuffers command(this->device);
+    VulkanCommandBuffers command(stager->device);
     {
       VulkanCommandBufferScope command_scope(command.buffer());
 
@@ -201,8 +197,8 @@ private:
         memory_barriers.data());
     }
 
-    command.submit(this->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    THROW_ON_ERROR(vkQueueWaitIdle(this->device->default_queue));
+    command.submit(stager->device->default_queue, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    THROW_ON_ERROR(vkQueueWaitIdle(stager->device->default_queue));
 
     const VkImageSubresourceRange subresource_range{
       VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
@@ -215,8 +211,8 @@ private:
         VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // oldLayout
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
-        this->device->default_queue_index,                             // srcQueueFamilyIndex
-        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        stager->device->default_queue_index,                           // srcQueueFamilyIndex
+        stager->device->default_queue_index,                           // dstQueueFamilyIndex
         nullptr,                                                       // image
         subresource_range,                                             // subresourceRange
       },{
@@ -226,8 +222,8 @@ private:
         VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
-        this->device->default_queue_index,                             // srcQueueFamilyIndex
-        this->device->default_queue_index,                             // dstQueueFamilyIndex
+        stager->device->default_queue_index,                           // srcQueueFamilyIndex
+        stager->device->default_queue_index,                           // dstQueueFamilyIndex
         nullptr,                                                       // image
         subresource_range,                                             // subresourceRange
       } };
@@ -238,7 +234,7 @@ private:
     std::swap(dst_image_barriers[0].srcAccessMask, dst_image_barriers[0].dstAccessMask);
     std::swap(dst_image_barriers[1].srcAccessMask, dst_image_barriers[1].dstAccessMask);
 
-    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(this->device, swapchain_images.size());
+    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(stager->device, swapchain_images.size());
 
     for (uint32_t i = 0; i < swapchain_images.size(); i++) {
       src_image_barriers[1].image = src_image->image->image;
@@ -289,12 +285,12 @@ private:
     }
   }
 
-  void doRender(SceneRenderer *) override
+  void doRender(SceneRenderer * renderer) override
   {
-    VulkanSemaphore semaphore(this->device);
+    VulkanSemaphore semaphore(renderer->device);
     auto image_index = this->swapchain->getNextImageIndex(semaphore.semaphore);
 
-    this->swap_buffers_command->submit(this->device->default_queue,
+    this->swap_buffers_command->submit(renderer->device->default_queue,
       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
       image_index,
       { semaphore.semaphore });
@@ -310,11 +306,9 @@ private:
       nullptr                             // pResults
     };
 
-    THROW_ON_ERROR(this->vulkan->vkQueuePresent(this->device->default_queue, &present_info));
+    THROW_ON_ERROR(renderer->vulkan->vkQueuePresent(renderer->device->default_queue, &present_info));
   }
 
-  std::shared_ptr<VulkanInstance> vulkan;
-  std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<Image> src_image;
   VkSurfaceKHR surface;
   VkPresentModeKHR present_mode;
@@ -401,7 +395,7 @@ public:
                                                                         this->surface->surface,
                                                                         &this->surface_capabilities));
 
-    this->rendermanager = std::make_unique<RenderManager>(this->device, this->renderpass);
+    this->rendermanager = std::make_unique<RenderManager>(this->vulkan, this->device, this->renderpass);
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
 
     auto colorbuffer = std::make_shared<FramebufferAttachment>(this->surface_format.format,
@@ -423,9 +417,7 @@ public:
       depthbuffer 
     };
 
-    this->swapchain = std::make_unique<VulkanSwapchainObject>(this->vulkan,
-                                                              this->device,
-                                                              colorbuffer->image,
+    this->swapchain = std::make_unique<VulkanSwapchainObject>(colorbuffer->image,
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format);

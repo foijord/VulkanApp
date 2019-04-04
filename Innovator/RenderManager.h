@@ -86,10 +86,12 @@ public:
   MemoryStager() = delete;
   ~MemoryStager() = default;
 
-  explicit MemoryStager(std::shared_ptr<VulkanDevice> device,
+  explicit MemoryStager(std::shared_ptr<VulkanInstance> vulkan, 
+                        std::shared_ptr<VulkanDevice> device,
                         std::shared_ptr<VulkanRenderpass> renderpass,
                         VkCommandBuffer command,
                         VkExtent2D extent) :
+    vulkan(std::move(vulkan)),
     device(std::move(device)),
     renderpass(std::move(renderpass)),
     command(command),
@@ -98,6 +100,7 @@ public:
   {}
 
   StageState state{};
+  std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanRenderpass> renderpass;
   VkCommandBuffer command;
@@ -158,12 +161,18 @@ public:
   SceneRenderer() = delete;
   ~SceneRenderer() = default;
 
-  explicit SceneRenderer(VulkanCommandBuffers * command,
+  explicit SceneRenderer(std::shared_ptr<VulkanInstance> vulkan,
+                         std::shared_ptr<VulkanDevice> device,
+                         VulkanCommandBuffers * command,
                          Camera * camera) :
+    vulkan(std::move(vulkan)),
+    device(std::move(device)),
     command(command),
     camera(camera)
   {}
 
+  std::shared_ptr<VulkanInstance> vulkan;
+  std::shared_ptr<VulkanDevice> device;
   RenderState state;
   VulkanCommandBuffers * command;
   Camera * camera;
@@ -174,9 +183,11 @@ public:
   NO_COPY_OR_ASSIGNMENT(RenderManager)
   RenderManager() = delete;
 
-  explicit RenderManager(std::shared_ptr<VulkanDevice> device,
-                         std::shared_ptr<VulkanRenderpass> renderpass)
-    : device(std::move(device)), 
+  explicit RenderManager(std::shared_ptr<VulkanInstance> vulkan,
+                         std::shared_ptr<VulkanDevice> device,
+                         std::shared_ptr<VulkanRenderpass> renderpass) :
+      vulkan(vulkan),
+      device(std::move(device)), 
       renderpass(std::move(renderpass)),
       render_fence(std::make_unique<VulkanFence>(this->device)),
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
@@ -208,7 +219,12 @@ public:
   {
     VulkanCommandBuffers staging_command(this->device);
     {
-      MemoryStager stager(this->device, this->renderpass, staging_command.buffer(), this->extent);
+      MemoryStager stager(this->vulkan, 
+                          this->device, 
+                          this->renderpass, 
+                          staging_command.buffer(), 
+                          this->extent);
+
       root->stage(&stager);
     }
 
@@ -263,7 +279,11 @@ public:
                                              clearvalues,
                                              this->render_command->buffer());
 
-      SceneRenderer renderer(this->render_command.get(), camera);
+      SceneRenderer renderer(this->vulkan, 
+                             this->device, 
+                             this->render_command.get(), 
+                             camera);
+
       root->render(&renderer);
     }
     {
@@ -275,6 +295,7 @@ public:
     }
   }
 
+  std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanRenderpass> renderpass;
 
