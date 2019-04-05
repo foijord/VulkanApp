@@ -289,9 +289,16 @@ public:
     {
       FenceScope fence(this->device->device, this->render_fence->fence);
 
+      VulkanSemaphore rendering_finished(this->device);
+
+      std::vector<VkSemaphore> wait_semaphores;
+      std::vector<VkSemaphore> signal_semaphores = { rendering_finished.semaphore };
+
       this->render_command->submit(this->device->default_queue,
                                    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                   this->render_fence->fence);
+                                   this->render_fence->fence,
+                                   wait_semaphores,
+                                   signal_semaphores);
     }
   }
 

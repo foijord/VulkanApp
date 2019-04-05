@@ -58,13 +58,13 @@ public:
   ~ImageObject() = default;
 
   ImageObject(std::shared_ptr<VulkanDevice> device,
-              VkImage image,
+              std::shared_ptr<VulkanImage> image,
               VkMemoryPropertyFlags memory_property_flags) :
     device(std::move(device)),
-    image(image)
+    image(std::move(image))
   {
     vkGetImageMemoryRequirements(this->device->device,
-                                 this->image,
+                                 this->image->image,
                                  &this->memory_requirements);
 
     this->memory_type_index = this->device->physical_device.getMemoryTypeIndex(
@@ -78,13 +78,13 @@ public:
     this->offset = offset;
 
     THROW_ON_ERROR(vkBindImageMemory(this->device->device,
-                                     this->image,
+                                     this->image->image,
                                      this->memory->memory,
                                      this->offset));
   }
 
   std::shared_ptr<VulkanDevice> device;
-  VkImage image;
+  std::shared_ptr<VulkanImage> image;
   VkDeviceSize offset{ 0 };
   VkMemoryRequirements memory_requirements;
   uint32_t memory_type_index;

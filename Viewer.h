@@ -52,7 +52,7 @@ private:
                                                 0);
 
     this->imageobject = std::make_shared<ImageObject>(allocator->device,
-                                                      this->image->image,
+                                                      this->image,
                                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     allocator->imageobjects.push_back(this->imageobject);
@@ -196,7 +196,7 @@ private:
                                                         &count, 
                                                         this->swapchain_images.data()));
 
-    VkImageMemoryBarrier image_barriers[count];
+    std::vector<VkImageMemoryBarrier> image_barriers(count);
     for (uint32_t i = 0; i < count; i++) {
       image_barriers[i] = {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
@@ -216,12 +216,14 @@ private:
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          0, 0, nullptr, 0, nullptr,
-                         count, image_barriers);
+                         count, image_barriers.data());
   }
 
   void doRecord(CommandRecorder * recorder) override
   {
-    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(recorder->device, this->swapchain_images.size());
+    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(recorder->device, 
+                                                                        this->swapchain_images.size(),
+                                                                        VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
     for (size_t i = 0; i < this->swapchain_images.size(); i++) {
       VkImageMemoryBarrier src_image_barriers[2] = { 
@@ -320,23 +322,22 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    VulkanSemaphore semaphore(renderer->device);
+    VulkanSemaphore image_ready_semaphore(renderer->device);
 
     uint32_t image_index;
     THROW_ON_ERROR(renderer->vulkan->vkAcquireNextImage(renderer->device->device,
                                                         this->swapchain->swapchain,
                                                         UINT64_MAX,
-                                                        semaphore.semaphore,
+                                                        image_ready_semaphore.semaphore,
                                                         nullptr,
                                                         &image_index));
 
-    this->swap_buffers_command->submit(renderer->device->default_queue,
-                                       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                       image_index,
-                                       { semaphore.semaphore });
+    std::vector<VkSemaphore> wait_semaphores = { image_ready_semaphore.semaphore };
 
-    // TODO: need to synchronize properly; missing semaphore for rendering finished
-    // and image available before presenting...
+    this->swap_buffers_command->submit(renderer->device->default_queue,
+                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                       image_index,
+                                       wait_semaphores);
 
     VkPresentInfoKHR present_info{
       VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
@@ -360,6 +361,7 @@ private:
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::vector<VkImage> swapchain_images;
   std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
+  std::unique_ptr<VulkanSemaphore> semaphore;
 
   const VkImageSubresourceRange subresource_range{
     VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
@@ -443,9 +445,6 @@ public:
                                                                         this->surface->surface,
                                                                         &this->surface_capabilities));
 
-    this->rendermanager = std::make_unique<RenderManager>(this->vulkan, this->device, this->renderpass);
-    this->rendermanager->resize(this->surface_capabilities.currentExtent);
-
     auto colorbuffer = std::make_shared<FramebufferAttachment>(this->surface_format.format,
                                                                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -458,7 +457,7 @@ public:
                                                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                                                                VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    this->framebuffer = std::make_unique<VulkanFramebufferObject>();
+    this->framebuffer = std::make_shared<VulkanFramebufferObject>();
 
     this->framebuffer->children = {
       colorbuffer,
@@ -469,6 +468,12 @@ public:
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format);
+
+    this->rendermanager = std::make_unique<RenderManager>(this->vulkan, 
+                                                          this->device, 
+                                                          this->renderpass);
+
+    this->rendermanager->resize(this->surface_capabilities.currentExtent);
   }
 
   ~VulkanViewer()
@@ -486,6 +491,10 @@ public:
     this->rendermanager->render(this->root.get(),
                                 this->framebuffer->framebuffer->framebuffer,
                                 this->camera.get());
+
+    this->rendermanager->render(this->swapchain.get(),
+                                this->framebuffer->framebuffer->framebuffer,
+                                this->camera.get());
   }
 
   void setSceneGraph(std::shared_ptr<Separator> scene)
@@ -494,14 +503,17 @@ public:
 
     this->root->children = {
       this->framebuffer,
-      std::move(scene),
-      this->swapchain
+      std::move(scene)
     };
 
     this->rendermanager->alloc(this->root.get());
     this->rendermanager->stage(this->root.get());
     this->rendermanager->pipeline(this->root.get());
     this->rendermanager->record(this->root.get());
+
+    this->rendermanager->alloc(this->swapchain.get());
+    this->rendermanager->stage(this->swapchain.get());
+    this->rendermanager->record(this->swapchain.get());
   }
 
   void resize()

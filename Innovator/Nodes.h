@@ -666,7 +666,7 @@ private:
 
     this->image_object = std::make_shared<ImageObject>(
       allocator->device,
-      this->image->image,
+      this->image,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     allocator->imageobjects.push_back(this->image_object);
