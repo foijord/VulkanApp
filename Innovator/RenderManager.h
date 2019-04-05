@@ -291,7 +291,7 @@ public:
 
       VulkanSemaphore rendering_finished(this->device);
 
-      std::vector<VkSemaphore> wait_semaphores;
+      std::vector<VkSemaphore> wait_semaphores{};
       std::vector<VkSemaphore> signal_semaphores = { rendering_finished.semaphore };
 
       this->render_command->submit(this->device->default_queue,

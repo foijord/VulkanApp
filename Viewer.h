@@ -322,32 +322,36 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    VulkanSemaphore image_ready_semaphore(renderer->device);
+    VulkanSemaphore swapchain_image_ready(renderer->device);
+    VulkanSemaphore swap_buffers_finished(renderer->device);
 
     uint32_t image_index;
     THROW_ON_ERROR(renderer->vulkan->vkAcquireNextImage(renderer->device->device,
                                                         this->swapchain->swapchain,
                                                         UINT64_MAX,
-                                                        image_ready_semaphore.semaphore,
+                                                        swapchain_image_ready.semaphore,
                                                         nullptr,
                                                         &image_index));
 
-    std::vector<VkSemaphore> wait_semaphores = { image_ready_semaphore.semaphore };
+
+    std::vector<VkSemaphore> wait_semaphores = { swapchain_image_ready.semaphore };
+    std::vector<VkSemaphore> signal_semaphores = { swap_buffers_finished.semaphore };
 
     this->swap_buffers_command->submit(renderer->device->default_queue,
                                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                        image_index,
-                                       wait_semaphores);
+                                       wait_semaphores,
+                                       signal_semaphores);
 
     VkPresentInfoKHR present_info{
-      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // sType
-      nullptr,                            // pNext
-      0,                                  // waitSemaphoreCount
-      nullptr,                            // pWaitSemaphores
-      1,                                  // swapchainCount
-      &this->swapchain->swapchain,        // pSwapchains
-      &image_index,                       // pImageIndices
-      nullptr                             // pResults
+      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,              // sType
+      nullptr,                                         // pNext
+      static_cast<uint32_t>(signal_semaphores.size()), // waitSemaphoreCount
+      signal_semaphores.data(),                        // pWaitSemaphores
+      1,                                               // swapchainCount
+      &this->swapchain->swapchain,                     // pSwapchains
+      &image_index,                                    // pImageIndices
+      nullptr                                          // pResults
     };
 
     THROW_ON_ERROR(renderer->vulkan->vkQueuePresent(renderer->device->default_queue, &present_info));
@@ -436,10 +440,9 @@ public:
         nullptr                                                 // pPreserveAttachments
     } };
 
-    this->renderpass = std::make_unique<VulkanRenderpass>(
-      this->device,
-      attachment_descriptions,
-      subpass_descriptions);
+    this->renderpass = std::make_unique<VulkanRenderpass>(this->device,
+                                                          attachment_descriptions,
+                                                          subpass_descriptions);
 
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
                                                                         this->surface->surface,
