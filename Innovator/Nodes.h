@@ -902,7 +902,7 @@ private:
 
     this->pipeline = std::make_unique<VulkanGraphicsPipeline>(
       creator->device,
-      creator->renderpass->renderpass,
+      creator->state.renderpass->renderpass,
       creator->pipelinecache,
       this->pipeline_layout->layout,
       this->topology,
@@ -916,7 +916,7 @@ private:
   void doRecord(CommandRecorder * recorder) override
   {
     VulkanCommandBufferScope command_scope(this->command->buffer(),
-                                           recorder->renderpass->renderpass,
+                                           recorder->state.renderpass->renderpass,
                                            0,
                                            recorder->state.framebuffer,
                                            VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);

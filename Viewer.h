@@ -67,7 +67,6 @@ private:
                                                         this->component_mapping,
                                                         this->subresource_range);
 
-
     VkImageMemoryBarrier memory_barrier{
       VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
       nullptr,                                // pNext
@@ -126,7 +125,7 @@ private:
   {
     Group::doStage(stager);
     this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
-                                                            stager->renderpass,
+                                                            stager->state.renderpass,
                                                             stager->state.framebuffer_attachments,
                                                             stager->extent,
                                                             1);
@@ -134,17 +133,128 @@ private:
 
   void doRecord(CommandRecorder * recorder) override
   {
-    Group::doRecord(recorder);
     recorder->state.framebuffer = this->framebuffer->framebuffer;
+    Group::doRecord(recorder);
   }
 
   void doRender(SceneRenderer * renderer) override
   {
-    Group::doRender(renderer);
     renderer->state.framebuffer = this->framebuffer->framebuffer;
+    Group::doRender(renderer);
+  }
+};
+
+class VulkanRenderpassObject : public Group {
+public:
+  NO_COPY_OR_ASSIGNMENT(VulkanRenderpassObject)
+  virtual ~VulkanRenderpassObject() = default;
+
+  explicit VulkanRenderpassObject(std::shared_ptr<VulkanFramebufferObject> framebuffer,
+                                  VkFormat color_format,
+                                  VkFormat depth_format) :
+    framebuffer(std::move(framebuffer)),
+    color_format(color_format),
+    depth_format(depth_format)
+  {}
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    std::vector<VkAttachmentDescription> attachment_descriptions{ {
+        0,                                                    // flags
+        this->color_format,                                   // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,             // initialLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
+      },{
+        0,                                                    // flags
+        this->depth_format,                                   // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,     // initialLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
+    } };
+
+    VkAttachmentReference depth_stencil_attachment{
+      1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
+
+    std::vector<VkAttachmentReference> color_attachments{
+      { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }
+    };
+
+    std::vector<VkSubpassDescription> subpass_descriptions{ {
+        0,                                                      // flags
+        VK_PIPELINE_BIND_POINT_GRAPHICS,                        // pipelineBindPoint
+        0,                                                      // inputAttachmentCount
+        nullptr,                                                // pInputAttachments
+        static_cast<uint32_t>(color_attachments.size()),        // colorAttachmentCount
+        color_attachments.data(),                               // pColorAttachments
+        nullptr,                                                // pResolveAttachments
+        &depth_stencil_attachment,                              // pDepthStencilAttachment
+        0,                                                      // preserveAttachmentCount
+        nullptr                                                 // pPreserveAttachments
+    } };
+
+    this->renderpass = std::make_shared<VulkanRenderpass>(allocator->device,
+                                                          attachment_descriptions,
+                                                          subpass_descriptions);
+
+    Group::doAlloc(allocator);
   }
 
-  std::vector<std::shared_ptr<FramebufferAttachment>> attachments;
+  void doStage(MemoryStager * stager) override
+  {
+    stager->state.renderpass = this->renderpass;
+    Group::doStage(stager);
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.renderpass = this->renderpass;
+    Group::doRecord(recorder);
+  }
+
+  void doPipeline(PipelineCreator * creator) override
+  {
+    creator->state.renderpass = this->renderpass;
+    Group::doPipeline(creator);
+  }
+
+  void doRender(SceneRenderer * renderer) override
+  {
+    const VkRect2D renderarea{
+      { 0, 0 },                 // offset
+      renderer->state.extent    // extent
+    };
+
+    const std::vector<VkClearValue> clearvalues{
+      { { { 0.0f, 0.0f, 0.0f, 0.0f } } },
+      { { { 1.0f, 0 } } }
+    };
+
+    VulkanCommandBufferScope commandbuffer(renderer->command->buffer());
+
+    VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
+                                           this->framebuffer->framebuffer->framebuffer,
+                                           renderarea,
+                                           clearvalues,
+                                           renderer->command->buffer());
+
+    Group::doRender(renderer);
+  }
+
+  std::shared_ptr<VulkanFramebufferObject> framebuffer;
+  VkFormat color_format;
+  VkFormat depth_format;
+  std::shared_ptr<VulkanRenderpass> renderpass;
 };
 
 class VulkanSwapchainObject : public Node {
@@ -250,7 +360,7 @@ private:
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
         recorder->device->default_queue_index,                         // srcQueueFamilyIndex
         recorder->device->default_queue_index,                         // dstQueueFamilyIndex
-        color_attachment->image->image,                                // image
+        this->color_attachment->image->image,                          // image
         this->subresource_range,                                       // subresourceRange
       } };
 
@@ -311,7 +421,7 @@ private:
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
         recorder->device->default_queue_index,                         // srcQueueFamilyIndex
         recorder->device->default_queue_index,                         // dstQueueFamilyIndex
-        color_attachment->image->image,                                // image
+        this->color_attachment->image->image,                          // image
         this->subresource_range,                                       // subresourceRange
       } };
 
@@ -398,52 +508,6 @@ public:
       throw std::runtime_error("surface does not support VK_PRESENT_MODE_FIFO_KHR");
     }
 
-    std::vector<VkAttachmentDescription> attachment_descriptions{ {
-        0,                                                    // flags
-        this->surface_format.format,                          // format
-        VK_SAMPLE_COUNT_1_BIT,                                // samples
-        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
-        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
-        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,             // initialLayout
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
-      },{
-        0,                                                    // flags
-        this->depth_format,                                   // format
-        VK_SAMPLE_COUNT_1_BIT,                                // samples
-        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
-        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
-        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,     // initialLayout
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
-    } };
-
-    VkAttachmentReference depth_stencil_attachment{
-      1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-    };
-
-    std::vector<VkAttachmentReference> color_attachments{
-      { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }
-    };
-
-    std::vector<VkSubpassDescription> subpass_descriptions{ {
-        0,                                                      // flags
-        VK_PIPELINE_BIND_POINT_GRAPHICS,                        // pipelineBindPoint
-        0,                                                      // inputAttachmentCount
-        nullptr,                                                // pInputAttachments
-        static_cast<uint32_t>(color_attachments.size()),        // colorAttachmentCount
-        color_attachments.data(),                               // pColorAttachments
-        nullptr,                                                // pResolveAttachments
-        &depth_stencil_attachment,                              // pDepthStencilAttachment
-        0,                                                      // preserveAttachmentCount
-        nullptr                                                 // pPreserveAttachments
-    } };
-
-    this->renderpass = std::make_unique<VulkanRenderpass>(this->device,
-                                                          attachment_descriptions,
-                                                          subpass_descriptions);
 
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
                                                                         this->surface->surface,
@@ -468,14 +532,17 @@ public:
       depthbuffer 
     };
 
+    this->renderpass = std::make_unique<VulkanRenderpassObject>(this->framebuffer,
+                                                                this->surface_format.format,
+                                                                this->depth_format);
+
     this->swapchain = std::make_unique<VulkanSwapchainObject>(colorbuffer,
                                                               this->surface->surface,
                                                               this->present_mode,
                                                               this->surface_format);
 
     this->rendermanager = std::make_unique<RenderManager>(this->vulkan, 
-                                                          this->device, 
-                                                          this->renderpass);
+                                                          this->device);
 
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
   }
@@ -492,28 +559,24 @@ public:
 
   void redraw() const
   {
-    this->rendermanager->render(this->root.get(),
-                                this->framebuffer->framebuffer->framebuffer,
+    this->rendermanager->render(this->renderpass.get(),
                                 this->camera.get());
 
     this->rendermanager->render(this->swapchain.get(),
-                                this->framebuffer->framebuffer->framebuffer,
                                 this->camera.get());
   }
 
   void setSceneGraph(std::shared_ptr<Separator> scene)
   {
-    this->root = std::make_shared<Separator>();
-
-    this->root->children = {
+    this->renderpass->children = {
       this->framebuffer,
       std::move(scene)
     };
 
-    this->rendermanager->alloc(this->root.get());
-    this->rendermanager->stage(this->root.get());
-    this->rendermanager->pipeline(this->root.get());
-    this->rendermanager->record(this->root.get());
+    this->rendermanager->alloc(this->renderpass.get());
+    this->rendermanager->stage(this->renderpass.get());
+    this->rendermanager->pipeline(this->renderpass.get());
+    this->rendermanager->record(this->renderpass.get());
 
     this->rendermanager->alloc(this->swapchain.get());
     this->rendermanager->stage(this->swapchain.get());
@@ -533,12 +596,12 @@ public:
 
     this->rendermanager->alloc(this->framebuffer.get());
     this->rendermanager->stage(this->framebuffer.get());
+    this->rendermanager->record(this->framebuffer.get());
 
     this->rendermanager->alloc(this->swapchain.get());
     this->rendermanager->stage(this->swapchain.get());
     this->rendermanager->record(this->swapchain.get());
     
-    this->rendermanager->record(this->root.get());
 
     this->camera->aspectratio = static_cast<float>(this->surface_capabilities.currentExtent.width) /
                                 static_cast<float>(this->surface_capabilities.currentExtent.height);
@@ -553,11 +616,10 @@ public:
   VkSurfaceFormatKHR surface_format{};
   VkSurfaceCapabilitiesKHR surface_capabilities{};
   std::shared_ptr<Camera> camera;
-  std::shared_ptr<VulkanRenderpass> renderpass;
+  std::shared_ptr<VulkanRenderpassObject> renderpass;
   std::shared_ptr<VulkanFramebufferObject> framebuffer;
   std::unique_ptr<RenderManager> rendermanager;
   std::shared_ptr<VulkanSwapchainObject> swapchain;
-  std::shared_ptr<Separator> root;
 
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
 };

@@ -88,12 +88,10 @@ public:
 
   explicit MemoryStager(std::shared_ptr<VulkanInstance> vulkan, 
                         std::shared_ptr<VulkanDevice> device,
-                        std::shared_ptr<VulkanRenderpass> renderpass,
                         VkCommandBuffer command,
                         VkExtent2D extent) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
-    renderpass(std::move(renderpass)),
     command(command),
     extent(extent),
     command_scope(std::make_unique<VulkanCommandBufferScope>(command))
@@ -102,7 +100,6 @@ public:
   StageState state{};
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanRenderpass> renderpass;
   VkCommandBuffer command;
   VkExtent2D extent;
   std::unique_ptr<VulkanCommandBufferScope> command_scope;
@@ -115,16 +112,13 @@ public:
   ~PipelineCreator() = default;
 
   explicit PipelineCreator(std::shared_ptr<VulkanDevice> device, 
-                           std::shared_ptr<VulkanRenderpass> renderpass,
                            VkPipelineCache pipelinecache) :
     device(std::move(device)),
-    renderpass(std::move(renderpass)),
     pipelinecache(pipelinecache)
   {}
 
   PipelineState state;
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanRenderpass> renderpass;
   VkPipelineCache pipelinecache;
 };
 
@@ -135,12 +129,10 @@ public:
   ~CommandRecorder() = default;
 
   explicit CommandRecorder(std::shared_ptr<VulkanDevice> device,
-                           std::shared_ptr<VulkanRenderpass> renderpass,
                            VkPipelineCache pipelinecache,
                            VkExtent2D extent,
                            VkCommandBuffer command) :
     device(std::move(device)),
-    renderpass(std::move(renderpass)),
     pipelinecache(pipelinecache),
     extent(extent),
     command(command)
@@ -149,7 +141,6 @@ public:
   RecordState state;
 
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanRenderpass> renderpass;
   VkPipelineCache pipelinecache;
   VkExtent2D extent;
   VkCommandBuffer command;
@@ -164,12 +155,15 @@ public:
   explicit SceneRenderer(std::shared_ptr<VulkanInstance> vulkan,
                          std::shared_ptr<VulkanDevice> device,
                          VulkanCommandBuffers * command,
+                         VkExtent2D extent,
                          Camera * camera) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
     command(command),
     camera(camera)
-  {}
+  {
+    state.extent = extent;
+  }
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
@@ -184,11 +178,9 @@ public:
   RenderManager() = delete;
 
   explicit RenderManager(std::shared_ptr<VulkanInstance> vulkan,
-                         std::shared_ptr<VulkanDevice> device,
-                         std::shared_ptr<VulkanRenderpass> renderpass) :
+                         std::shared_ptr<VulkanDevice> device) :
       vulkan(vulkan),
       device(std::move(device)), 
-      renderpass(std::move(renderpass)),
       render_fence(std::make_unique<VulkanFence>(this->device)),
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device)),
@@ -222,7 +214,6 @@ public:
     {
       MemoryStager stager(this->vulkan, 
                           this->device, 
-                          this->renderpass, 
                           staging_command.buffer(), 
                           this->extent);
 
@@ -240,7 +231,6 @@ public:
   void pipeline(Node * root) const
   {
     PipelineCreator creator(this->device,
-                            this->renderpass,
                             this->pipelinecache->cache);
 
     root->pipeline(&creator);
@@ -249,7 +239,6 @@ public:
   void record(Node * root) const
   {
     CommandRecorder recorder(this->device,
-                             this->renderpass,
                              this->pipelinecache->cache,
                              this->extent,
                              this->render_command->buffer());
@@ -257,53 +246,30 @@ public:
     root->record(&recorder);
   }
 
-  void render(Node * root, 
-              const VkFramebuffer framebuffer, 
-              Camera * camera) const
+  void render(Node * root, Camera * camera) const
   {
-    const VkRect2D renderarea{
-      { 0, 0 },             // offset
-      this->extent          // extent
-    };
+    SceneRenderer renderer(this->vulkan, 
+                           this->device, 
+                           this->render_command.get(), 
+                           this->extent,
+                           camera);
 
-    const std::vector<VkClearValue> clearvalues{
-      { { { 0.0f, 0.0f, 0.0f, 0.0f } } },
-      { { { 1.0f, 0 } } }
-    };
+    root->render(&renderer);
 
-    {
-      VulkanCommandBufferScope commandbuffer(this->render_command->buffer());
+    FenceScope fence(this->device->device, this->render_fence->fence);
 
-      VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
-                                             framebuffer,
-                                             renderarea,
-                                             clearvalues,
-                                             this->render_command->buffer());
+    std::vector<VkSemaphore> wait_semaphores{};
+    std::vector<VkSemaphore> signal_semaphores = { this->rendering_finished->semaphore };
 
-      SceneRenderer renderer(this->vulkan, 
-                             this->device, 
-                             this->render_command.get(), 
-                             camera);
-
-      root->render(&renderer);
-    }
-    {
-      FenceScope fence(this->device->device, this->render_fence->fence);
-
-      std::vector<VkSemaphore> wait_semaphores{};
-      std::vector<VkSemaphore> signal_semaphores = { this->rendering_finished->semaphore };
-
-      this->render_command->submit(this->device->default_queue,
-                                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                   this->render_fence->fence,
-                                   wait_semaphores,
-                                   signal_semaphores);
-    }
+    this->render_command->submit(this->device->default_queue,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                 this->render_fence->fence,
+                                 wait_semaphores,
+                                 signal_semaphores);
   }
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
-  std::shared_ptr<VulkanRenderpass> renderpass;
   std::shared_ptr<VulkanFence> render_fence;
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;

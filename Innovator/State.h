@@ -23,6 +23,7 @@ struct MemoryState {
 struct StageState {
   VkBuffer buffer{ nullptr };
   class BufferData * bufferdata{ nullptr };
+  std::shared_ptr<VulkanRenderpass> renderpass;
   std::vector<VkImageView> framebuffer_attachments;
 };
 
@@ -47,6 +48,7 @@ struct PipelineState {
   VkImageView imageView { nullptr };
   VkImageLayout imageLayout { VK_IMAGE_LAYOUT_UNDEFINED };
   VkSampler sampler{ nullptr };
+  std::shared_ptr<VulkanRenderpass> renderpass;
 
   class BufferData * bufferdata { nullptr };
 
@@ -62,6 +64,7 @@ struct RecordState {
   VkBuffer buffer{ nullptr };
   class BufferData * bufferdata { nullptr };
   VkFramebuffer framebuffer;
+  std::shared_ptr<VulkanRenderpass> renderpass;
 
   VulkanIndexBufferDescription index_buffer_description;
   std::vector<VkBuffer> vertex_attribute_buffers;
@@ -70,6 +73,7 @@ struct RecordState {
 
 struct RenderState {
   VkFramebuffer framebuffer;
+  VkExtent2D extent;
 
   mat4d ModelMatrix{
     1, 0, 0, 0,
