@@ -191,7 +191,8 @@ public:
       renderpass(std::move(renderpass)),
       render_fence(std::make_unique<VulkanFence>(this->device)),
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
-      pipelinecache(std::make_shared<VulkanPipelineCache>(this->device))
+      pipelinecache(std::make_shared<VulkanPipelineCache>(this->device)),
+      rendering_finished(std::make_unique<VulkanSemaphore>(this->device))
   {}
 
   virtual ~RenderManager() 
@@ -289,10 +290,8 @@ public:
     {
       FenceScope fence(this->device->device, this->render_fence->fence);
 
-      VulkanSemaphore rendering_finished(this->device);
-
       std::vector<VkSemaphore> wait_semaphores{};
-      std::vector<VkSemaphore> signal_semaphores = { rendering_finished.semaphore };
+      std::vector<VkSemaphore> signal_semaphores = { this->rendering_finished->semaphore };
 
       this->render_command->submit(this->device->default_queue,
                                    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
@@ -305,9 +304,10 @@ public:
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanRenderpass> renderpass;
-
   std::shared_ptr<VulkanFence> render_fence;
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
+  std::unique_ptr<VulkanSemaphore> rendering_finished;
+
   VkExtent2D extent;
 };

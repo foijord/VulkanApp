@@ -165,6 +165,9 @@ public:
 private:
   void doStage(MemoryStager * stager) override
   {
+    this->swapchain_image_ready = std::make_unique<VulkanSemaphore>(stager->device);
+    this->swap_buffers_finished = std::make_unique<VulkanSemaphore>(stager->device);
+
     VkSwapchainKHR prevswapchain = (this->swapchain) ? this->swapchain->swapchain : nullptr;
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
@@ -322,20 +325,17 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    VulkanSemaphore swapchain_image_ready(renderer->device);
-    VulkanSemaphore swap_buffers_finished(renderer->device);
-
     uint32_t image_index;
     THROW_ON_ERROR(renderer->vulkan->vkAcquireNextImage(renderer->device->device,
                                                         this->swapchain->swapchain,
                                                         UINT64_MAX,
-                                                        swapchain_image_ready.semaphore,
+                                                        this->swapchain_image_ready->semaphore,
                                                         nullptr,
                                                         &image_index));
 
 
-    std::vector<VkSemaphore> wait_semaphores = { swapchain_image_ready.semaphore };
-    std::vector<VkSemaphore> signal_semaphores = { swap_buffers_finished.semaphore };
+    std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
+    std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
 
     this->swap_buffers_command->submit(renderer->device->default_queue,
                                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -365,7 +365,8 @@ private:
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::vector<VkImage> swapchain_images;
   std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
-  std::unique_ptr<VulkanSemaphore> semaphore;
+  std::unique_ptr<VulkanSemaphore> swapchain_image_ready;
+  std::unique_ptr<VulkanSemaphore> swap_buffers_finished;
 
   const VkImageSubresourceRange subresource_range{
     VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
