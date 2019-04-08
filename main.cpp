@@ -133,33 +133,10 @@ public:
     }
   }
 
-  void reloadShaders() const
-  {
-    // try {
-    //   std::vector<std::shared_ptr<Shader>> shaders;
-    //   SearchAction(this->scene, shaders);
-
-    //   MemoryAllocator allocator(this->viewer->device);
-
-    //   for (auto & shader : shaders) {
-    //     shader->readFile();
-    //     shader->alloc(&allocator);
-    //   }
-
-    //   this->viewer->pipeline();
-    //   this->viewer->record();
-    //   this->viewer->redraw();
-    // }
-    // catch (std::exception & e) {
-    //   std::cerr << e.what() << std::endl;
-    // }
-  }
-
   void keyPressEvent(QKeyEvent * e) override
   {
     switch (e->key()) {
     case Qt::Key_R:
-      this->reloadShaders();
       break;
     default:
       break;

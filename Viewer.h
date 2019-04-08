@@ -3,7 +3,6 @@
 #include <Innovator/Misc/Defines.h>
 #include <Innovator/VulkanObjects.h>
 #include <Innovator/Nodes.h>
-#include <Innovator/Camera.h>
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 #include <Innovator/Win32Surface.h>
@@ -559,11 +558,8 @@ public:
 
   void redraw() const
   {
-    this->rendermanager->render(this->renderpass.get(),
-                                this->camera.get());
-
-    this->rendermanager->render(this->swapchain.get(),
-                                this->camera.get());
+    this->rendermanager->render(this->renderpass.get());
+    this->rendermanager->render(this->swapchain.get());
   }
 
   void setSceneGraph(std::shared_ptr<Separator> scene)
@@ -572,6 +568,7 @@ public:
 
     this->renderpass->children = {
       this->framebuffer,
+      this->camera,
       this->scene,
     };
 
@@ -605,6 +602,7 @@ public:
 
     this->renderpass->children = {
       this->framebuffer,
+      this->camera,
       this->scene,
     };
     this->rendermanager->record(this->renderpass.get());
@@ -612,9 +610,6 @@ public:
     this->rendermanager->alloc(this->swapchain.get());
     this->rendermanager->stage(this->swapchain.get());
     this->rendermanager->record(this->swapchain.get());
-
-    this->camera->aspectratio = static_cast<float>(this->surface_capabilities.currentExtent.width) /
-                                static_cast<float>(this->surface_capabilities.currentExtent.height);
 
     this->redraw();
   }

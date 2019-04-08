@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Innovator/Camera.h>
-
 #include <Innovator/Misc/Defines.h>
 #include <Innovator/Node.h>
 #include <Innovator/State.h>
@@ -155,12 +153,10 @@ public:
   explicit SceneRenderer(std::shared_ptr<VulkanInstance> vulkan,
                          std::shared_ptr<VulkanDevice> device,
                          VulkanCommandBuffers * command,
-                         VkExtent2D extent,
-                         Camera * camera) :
+                         VkExtent2D extent) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
-    command(command),
-    camera(camera)
+    command(command)
   {
     state.extent = extent;
   }
@@ -169,7 +165,6 @@ public:
   std::shared_ptr<VulkanDevice> device;
   RenderState state;
   VulkanCommandBuffers * command;
-  Camera * camera;
 };
 
 class RenderManager {
@@ -246,13 +241,12 @@ public:
     root->record(&recorder);
   }
 
-  void render(Node * root, Camera * camera) const
+  void render(Node * root) const
   {
     SceneRenderer renderer(this->vulkan, 
                            this->device, 
                            this->render_command.get(), 
-                           this->extent,
-                           camera);
+                           this->extent);
 
     root->render(&renderer);
 
