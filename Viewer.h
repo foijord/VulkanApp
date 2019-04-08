@@ -216,16 +216,16 @@ private:
     Group::doStage(stager);
   }
 
-  void doRecord(CommandRecorder * recorder) override
-  {
-    recorder->state.renderpass = this->renderpass;
-    Group::doRecord(recorder);
-  }
-
   void doPipeline(PipelineCreator * creator) override
   {
     creator->state.renderpass = this->renderpass;
     Group::doPipeline(creator);
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.renderpass = this->renderpass;
+    Group::doRecord(recorder);
   }
 
   void doRender(SceneRenderer * renderer) override
@@ -568,9 +568,11 @@ public:
 
   void setSceneGraph(std::shared_ptr<Separator> scene)
   {
+    this->scene = std::move(scene);
+
     this->renderpass->children = {
       this->framebuffer,
-      std::move(scene)
+      this->scene,
     };
 
     this->rendermanager->alloc(this->renderpass.get());
@@ -595,13 +597,21 @@ public:
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
 
     this->rendermanager->alloc(this->framebuffer.get());
-    this->rendermanager->stage(this->framebuffer.get());
-    this->rendermanager->record(this->framebuffer.get());
+
+    this->renderpass->children = {
+      this->framebuffer,
+    };
+    this->rendermanager->stage(this->renderpass.get());
+
+    this->renderpass->children = {
+      this->framebuffer,
+      this->scene,
+    };
+    this->rendermanager->record(this->renderpass.get());
 
     this->rendermanager->alloc(this->swapchain.get());
     this->rendermanager->stage(this->swapchain.get());
     this->rendermanager->record(this->swapchain.get());
-    
 
     this->camera->aspectratio = static_cast<float>(this->surface_capabilities.currentExtent.width) /
                                 static_cast<float>(this->surface_capabilities.currentExtent.height);
@@ -620,6 +630,7 @@ public:
   std::shared_ptr<VulkanFramebufferObject> framebuffer;
   std::unique_ptr<RenderManager> rendermanager;
   std::shared_ptr<VulkanSwapchainObject> swapchain;
+  std::shared_ptr<Separator> scene;
 
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
 };
