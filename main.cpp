@@ -2,6 +2,7 @@
 #include <Viewer.h>
 #include <Innovator/File.h>
 #include <Innovator/Misc/Factory.h>
+#include <Innovator/Misc/Defines.h>
 
 #include <QApplication>
 #include <QWindow>
@@ -180,6 +181,29 @@ public:
   vec2d mouse_pos{};
 };
 
+class VulkanApplication : public QApplication {
+public:
+  VulkanApplication(int& argc, char** argv) :
+    QApplication(argc, argv) 
+  {}
+
+  bool notify(QObject* receiver, QEvent* event)
+  {
+    bool done = true;
+    try {
+      done = QApplication::notify(receiver, event);
+    } 
+    catch (VkException & e) {
+      std::cerr << std::string("caught exception in VulkanApplication::notify(): ") + typeid(e).name() << std::endl;
+    }
+    catch (std::exception & e) {
+      std::cerr << std::string("caught exception in VulkanApplication::notify(): ") + typeid(e).name() << std::endl;
+    }
+
+    return done;
+  }
+};
+
 int main(int argc, char *argv[])
 {
   try {
@@ -225,7 +249,7 @@ int main(int argc, char *argv[])
       DebugCallback);
 #endif
 
-    QApplication app(argc, argv);
+    VulkanApplication app(argc, argv);
     VulkanWindow window;
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
@@ -289,10 +313,10 @@ int main(int argc, char *argv[])
     window.resize(512, 512);
     window.show();
 
-    return QApplication::exec();
+    return VulkanApplication::exec();
   }
   catch (std::exception & e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << std::string("caught exception in main(): ") + typeid(e).name() << std::endl;
   }
   return 1;
 }

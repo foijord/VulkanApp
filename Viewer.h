@@ -111,18 +111,31 @@ public:
   std::shared_ptr<VulkanImageView> imageview;
 };
 
-class VulkanFramebufferObject : public Group {
+class FramebufferObject : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanFramebufferObject)
-  virtual ~VulkanFramebufferObject() = default;
-  VulkanFramebufferObject() = default;
+  NO_COPY_OR_ASSIGNMENT(FramebufferObject)
+  virtual ~FramebufferObject() = default;
+  FramebufferObject() = default;
 
   std::unique_ptr<VulkanFramebuffer> framebuffer;
+  std::vector<std::shared_ptr<FramebufferAttachment>> attachments;
 
 private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    for (const auto& node : this->attachments) {
+      node->alloc(allocator);
+    }
+  }
+
   void doStage(MemoryStager * stager) override
   {
-    Group::doStage(stager);
+    StateScope<MemoryStager, StageState> scope(stager);
+
+    for (const auto& node : this->attachments) {
+      node->stage(stager);
+    }
+
     this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
                                                             stager->state.renderpass,
                                                             stager->state.framebuffer_attachments,
@@ -133,22 +146,20 @@ private:
   void doRecord(CommandRecorder * recorder) override
   {
     recorder->state.framebuffer = this->framebuffer->framebuffer;
-    Group::doRecord(recorder);
   }
 
   void doRender(SceneRenderer * renderer) override
   {
     renderer->state.framebuffer = this->framebuffer->framebuffer;
-    Group::doRender(renderer);
   }
 };
 
-class VulkanRenderpassObject : public Group {
+class RenderpassObject : public Group {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanRenderpassObject)
-  virtual ~VulkanRenderpassObject() = default;
+  NO_COPY_OR_ASSIGNMENT(RenderpassObject)
+  virtual ~RenderpassObject() = default;
 
-  explicit VulkanRenderpassObject(std::shared_ptr<VulkanFramebufferObject> framebuffer,
+  explicit RenderpassObject(std::shared_ptr<FramebufferObject> framebuffer,
                                   VkFormat color_format,
                                   VkFormat depth_format) :
     framebuffer(std::move(framebuffer)),
@@ -250,18 +261,18 @@ private:
     Group::doRender(renderer);
   }
 
-  std::shared_ptr<VulkanFramebufferObject> framebuffer;
+  std::shared_ptr<FramebufferObject> framebuffer;
   VkFormat color_format;
   VkFormat depth_format;
   std::shared_ptr<VulkanRenderpass> renderpass;
 };
 
-class VulkanSwapchainObject : public Node {
+class SwapchainObject : public Node {
 public:
-  NO_COPY_OR_ASSIGNMENT(VulkanSwapchainObject)
-  virtual ~VulkanSwapchainObject() = default;
+  NO_COPY_OR_ASSIGNMENT(SwapchainObject)
+  virtual ~SwapchainObject() = default;
 
-  VulkanSwapchainObject(std::shared_ptr<FramebufferAttachment> color_attachment,
+  SwapchainObject(std::shared_ptr<FramebufferAttachment> color_attachment,
                         VkSurfaceKHR surface,
                         VkPresentModeKHR present_mode,
                         VkSurfaceFormatKHR surface_format) :
@@ -432,7 +443,7 @@ private:
     }
   }
 
-  void doRender(SceneRenderer * renderer) override
+  void doPresent(SceneRenderer * renderer) override
   {
     uint32_t image_index;
     THROW_ON_ERROR(renderer->vulkan->vkAcquireNextImage(renderer->device->device,
@@ -441,16 +452,14 @@ private:
                                                         this->swapchain_image_ready->semaphore,
                                                         nullptr,
                                                         &image_index));
-
-
     std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
     std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
 
     this->swap_buffers_command->submit(renderer->device->default_queue,
-                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                       image_index,
-                                       wait_semaphores,
-                                       signal_semaphores);
+                                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                      image_index,
+                                      wait_semaphores,
+                                      signal_semaphores);
 
     VkPresentInfoKHR present_info{
       VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,              // sType
@@ -524,21 +533,21 @@ public:
                                                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                                                                VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    this->framebuffer = std::make_shared<VulkanFramebufferObject>();
+    this->framebuffer = std::make_shared<FramebufferObject>();
 
-    this->framebuffer->children = {
+    this->framebuffer->attachments = {
       colorbuffer,
       depthbuffer 
     };
 
-    this->renderpass = std::make_unique<VulkanRenderpassObject>(this->framebuffer,
-                                                                this->surface_format.format,
-                                                                this->depth_format);
+    this->renderpass = std::make_unique<RenderpassObject>(this->framebuffer,
+                                                          this->surface_format.format,
+                                                          this->depth_format);
 
-    this->swapchain = std::make_unique<VulkanSwapchainObject>(colorbuffer,
-                                                              this->surface->surface,
-                                                              this->present_mode,
-                                                              this->surface_format);
+    this->swapchain = std::make_unique<SwapchainObject>(colorbuffer,
+                                                        this->surface->surface,
+                                                        this->present_mode,
+                                                        this->surface_format);
 
     this->rendermanager = std::make_unique<RenderManager>(this->vulkan, 
                                                           this->device);
@@ -556,10 +565,16 @@ public:
     }
   }
 
-  void redraw() const
+  void redraw()
   {
     this->rendermanager->render(this->renderpass.get());
-    this->rendermanager->render(this->swapchain.get());
+    try {
+      this->rendermanager->present(this->renderpass.get());
+    }
+    catch (VkException & e) {
+      // recreate swapchain, try again next frame
+      this->resize();
+    }
   }
 
   void setSceneGraph(std::shared_ptr<Separator> scene)
@@ -570,16 +585,13 @@ public:
       this->framebuffer,
       this->camera,
       this->scene,
+      this->swapchain
     };
 
     this->rendermanager->alloc(this->renderpass.get());
     this->rendermanager->stage(this->renderpass.get());
     this->rendermanager->pipeline(this->renderpass.get());
     this->rendermanager->record(this->renderpass.get());
-
-    this->rendermanager->alloc(this->swapchain.get());
-    this->rendermanager->stage(this->swapchain.get());
-    this->rendermanager->record(this->swapchain.get());
   }
 
   void resize()
@@ -594,9 +606,11 @@ public:
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
 
     this->rendermanager->alloc(this->framebuffer.get());
+    this->rendermanager->alloc(this->swapchain.get());
 
     this->renderpass->children = {
       this->framebuffer,
+      this->swapchain
     };
     this->rendermanager->stage(this->renderpass.get());
 
@@ -604,12 +618,9 @@ public:
       this->framebuffer,
       this->camera,
       this->scene,
+      this->swapchain
     };
     this->rendermanager->record(this->renderpass.get());
-
-    this->rendermanager->alloc(this->swapchain.get());
-    this->rendermanager->stage(this->swapchain.get());
-    this->rendermanager->record(this->swapchain.get());
 
     this->redraw();
   }
@@ -621,10 +632,10 @@ public:
   VkSurfaceFormatKHR surface_format{};
   VkSurfaceCapabilitiesKHR surface_capabilities{};
   std::shared_ptr<Camera> camera;
-  std::shared_ptr<VulkanRenderpassObject> renderpass;
-  std::shared_ptr<VulkanFramebufferObject> framebuffer;
+  std::shared_ptr<RenderpassObject> renderpass;
+  std::shared_ptr<FramebufferObject> framebuffer;
   std::unique_ptr<RenderManager> rendermanager;
-  std::shared_ptr<VulkanSwapchainObject> swapchain;
+  std::shared_ptr<SwapchainObject> swapchain;
   std::shared_ptr<Separator> scene;
 
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
