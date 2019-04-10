@@ -12,14 +12,14 @@
 #include <iostream>
 
 template <typename NodeType> void
-SearchAction(const std::shared_ptr<Node> & root, std::vector<std::shared_ptr<NodeType>> & results) {
-  auto group = std::dynamic_pointer_cast<Group>(root);
+FindAll(Node * root, std::vector<NodeType*> & results) {
+  auto group = dynamic_cast<Group*>(root);
   if (group) {
     for (auto & node : group->children) {
-      SearchAction<NodeType>(node, results);
+      FindAll<NodeType>(node.get(), results);
     }
   } else {
-    auto result = std::dynamic_pointer_cast<NodeType>(root);
+    auto result = dynamic_cast<NodeType*>(root);
     if (result) {
       results.push_back(result);
     }

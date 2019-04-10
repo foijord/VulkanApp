@@ -17,6 +17,7 @@ struct MemoryState {
     nullptr, 0, 0
   };
   class BufferData * bufferdata{ nullptr };
+  std::vector<VkSubpassDescription> subpasses;
   VkExtent2D extent;
 };
 

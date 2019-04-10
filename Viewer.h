@@ -115,10 +115,12 @@ class FramebufferObject : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(FramebufferObject)
   virtual ~FramebufferObject() = default;
-  FramebufferObject() = default;
+
+  explicit FramebufferObject(std::vector<std::shared_ptr<FramebufferAttachment>> attachments) :
+    attachments(std::move(attachments))
+  {}
 
   std::unique_ptr<VulkanFramebuffer> framebuffer;
-  std::vector<std::shared_ptr<FramebufferAttachment>> attachments;
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
@@ -152,6 +154,54 @@ private:
   {
     renderer->state.framebuffer = this->framebuffer->framebuffer;
   }
+
+  std::vector<std::shared_ptr<FramebufferAttachment>> attachments;
+};
+
+class SubpassObject : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(SubpassObject)
+  virtual ~SubpassObject() = default;
+
+  SubpassObject(VkSubpassDescriptionFlags flags,
+                VkPipelineBindPoint bind_point,
+                std::vector<VkAttachmentReference> input_attachments,
+                std::vector<VkAttachmentReference> color_attachments,
+                std::vector<VkAttachmentReference> resolve_attachments,
+                VkAttachmentReference depth_stencil_attachment,
+                std::vector<uint32_t> preserve_attachments) :
+    input_attachments(std::move(input_attachments)),
+    color_attachments(std::move(color_attachments)),
+    resolve_attachments(std::move(resolve_attachments)),
+    depth_stencil_attachment(std::move(depth_stencil_attachment)),
+    preserve_attachments(std::move(preserve_attachments))
+  {
+    this->description = {
+      flags,                                                    // flags
+      bind_point,                                               // pipelineBindPoint
+      static_cast<uint32_t>(this->input_attachments.size()),    // inputAttachmentCount
+      this->input_attachments.data(),                           // pInputAttachments
+      static_cast<uint32_t>(this->color_attachments.size()),    // colorAttachmentCount
+      this->color_attachments.data(),                           // pColorAttachments
+      this->resolve_attachments.data(),                         // pResolveAttachments
+      &this->depth_stencil_attachment,                          // pDepthStencilAttachment
+      static_cast<uint32_t>(this->preserve_attachments.size()), // preserveAttachmentCount
+      this->preserve_attachments.data()                         // pPreserveAttachments
+    };
+  }
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    allocator->state.subpasses.push_back(this->description);
+  }
+
+  std::vector<VkAttachmentReference> input_attachments;
+  std::vector<VkAttachmentReference> color_attachments;
+  std::vector<VkAttachmentReference> resolve_attachments;
+  VkAttachmentReference depth_stencil_attachment;
+  std::vector<uint32_t> preserve_attachments;
+  VkSubpassDescription description;
 };
 
 class RenderpassObject : public Group {
@@ -159,65 +209,18 @@ public:
   NO_COPY_OR_ASSIGNMENT(RenderpassObject)
   virtual ~RenderpassObject() = default;
 
-  explicit RenderpassObject(std::shared_ptr<FramebufferObject> framebuffer,
-                                  VkFormat color_format,
-                                  VkFormat depth_format) :
-    framebuffer(std::move(framebuffer)),
-    color_format(color_format),
-    depth_format(depth_format)
+  RenderpassObject(std::vector<VkAttachmentDescription> attachments) :
+    attachments(std::move(attachments))
   {}
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
-    std::vector<VkAttachmentDescription> attachment_descriptions{ {
-        0,                                                    // flags
-        this->color_format,                                   // format
-        VK_SAMPLE_COUNT_1_BIT,                                // samples
-        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
-        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
-        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,             // initialLayout
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
-      },{
-        0,                                                    // flags
-        this->depth_format,                                   // format
-        VK_SAMPLE_COUNT_1_BIT,                                // samples
-        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
-        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
-        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,     // initialLayout
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
-    } };
-
-    VkAttachmentReference depth_stencil_attachment{
-      1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-    };
-
-    std::vector<VkAttachmentReference> color_attachments{
-      { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }
-    };
-
-    std::vector<VkSubpassDescription> subpass_descriptions{ {
-        0,                                                      // flags
-        VK_PIPELINE_BIND_POINT_GRAPHICS,                        // pipelineBindPoint
-        0,                                                      // inputAttachmentCount
-        nullptr,                                                // pInputAttachments
-        static_cast<uint32_t>(color_attachments.size()),        // colorAttachmentCount
-        color_attachments.data(),                               // pColorAttachments
-        nullptr,                                                // pResolveAttachments
-        &depth_stencil_attachment,                              // pDepthStencilAttachment
-        0,                                                      // preserveAttachmentCount
-        nullptr                                                 // pPreserveAttachments
-    } };
-
-    this->renderpass = std::make_shared<VulkanRenderpass>(allocator->device,
-                                                          attachment_descriptions,
-                                                          subpass_descriptions);
-
     Group::doAlloc(allocator);
+    this->renderpass = std::make_shared<VulkanRenderpass>(allocator->device,
+                                                          this->attachments,
+                                                          allocator->state.subpasses);
+
   }
 
   void doStage(MemoryStager * stager) override
@@ -250,10 +253,17 @@ private:
       { { { 1.0f, 0 } } }
     };
 
+    std::vector<FramebufferObject*> framebuffers;
+    FindAll<FramebufferObject>(this, framebuffers);
+
+    if (framebuffers.empty()) {
+      throw std::runtime_error("no framebuffers found in renderpass");
+    }
+
     VulkanCommandBufferScope commandbuffer(renderer->command->buffer());
 
     VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
-                                           this->framebuffer->framebuffer->framebuffer,
+                                           framebuffers[0]->framebuffer->framebuffer,
                                            renderarea,
                                            clearvalues,
                                            renderer->command->buffer());
@@ -261,9 +271,7 @@ private:
     Group::doRender(renderer);
   }
 
-  std::shared_ptr<FramebufferObject> framebuffer;
-  VkFormat color_format;
-  VkFormat depth_format;
+  std::vector<VkAttachmentDescription> attachments;
   std::shared_ptr<VulkanRenderpass> renderpass;
 };
 
@@ -452,6 +460,7 @@ private:
                                                         this->swapchain_image_ready->semaphore,
                                                         nullptr,
                                                         &image_index));
+
     std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
     std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
 
@@ -533,16 +542,43 @@ public:
                                                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                                                                VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    this->framebuffer = std::make_shared<FramebufferObject>();
+    this->framebuffer = std::make_shared<FramebufferObject>(
+      std::vector<std::shared_ptr<FramebufferAttachment>>{
+        colorbuffer,
+        depthbuffer 
+    });
 
-    this->framebuffer->attachments = {
-      colorbuffer,
-      depthbuffer 
-    };
+    this->renderpass = std::make_shared<RenderpassObject>(std::vector<VkAttachmentDescription>{ 
+      {
+        0,                                                    // flags
+        this->surface_format.format,                          // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_UNDEFINED,                            // initialLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
+      },{
+        0,                                                    // flags
+        this->depth_format,                                   // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_UNDEFINED,                            // initialLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
+      } });
 
-    this->renderpass = std::make_unique<RenderpassObject>(this->framebuffer,
-                                                          this->surface_format.format,
-                                                          this->depth_format);
+    this->subpass = std::make_shared<SubpassObject>(
+      0, 
+      VK_PIPELINE_BIND_POINT_GRAPHICS,
+      std::vector<VkAttachmentReference>{},
+      std::vector<VkAttachmentReference>{{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }},
+      std::vector<VkAttachmentReference>{},
+      VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
+      std::vector<uint32_t>{});
 
     this->swapchain = std::make_unique<SwapchainObject>(colorbuffer,
                                                         this->surface->surface,
@@ -571,7 +607,7 @@ public:
     try {
       this->rendermanager->present(this->renderpass.get());
     }
-    catch (VkException &) {
+    catch (VkException & e) {
       // recreate swapchain, try again next frame
       this->resize();
     }
@@ -583,6 +619,7 @@ public:
 
     this->renderpass->children = {
       this->framebuffer,
+      this->subpass,
       this->camera,
       this->scene,
       this->swapchain
@@ -616,6 +653,7 @@ public:
 
     this->renderpass->children = {
       this->framebuffer,
+      this->subpass,
       this->camera,
       this->scene,
       this->swapchain
@@ -633,6 +671,7 @@ public:
   VkSurfaceCapabilitiesKHR surface_capabilities{};
   std::shared_ptr<Camera> camera;
   std::shared_ptr<RenderpassObject> renderpass;
+  std::shared_ptr<SubpassObject> subpass;
   std::shared_ptr<FramebufferObject> framebuffer;
   std::unique_ptr<RenderManager> rendermanager;
   std::shared_ptr<SwapchainObject> swapchain;

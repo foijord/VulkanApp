@@ -5,27 +5,21 @@
 #include <chrono>
 #include <iostream>
 
+using namespace scm;
+
 int main(int, char **)
 {
   std::cout << "Innovator Scheme REPL" << std::endl;
-
-  try {
-    std::any exp = scm::read("(define sum2 (lambda (n acc) (if (= n 0) acc (sum2 (- n 1) (+ n acc)))))");
-    scm::eval(exp);
-  }
-  catch (std::exception & e) {
-    std::cerr << e.what() << std::endl;
-  }
+  env_ptr env = scm::global_env();
 
   while (true) {
-
     try {
       std::cout << "> ";
       std::string input;
       std::getline(std::cin, input);
       auto start = std::chrono::high_resolution_clock::now();
       std::any exp = scm::read(input);
-      auto result = scm::eval(exp);
+      auto result = scm::eval(exp, env);
       auto finish = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> elapsed = finish - start;
       scm::print(result);

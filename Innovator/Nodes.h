@@ -46,7 +46,7 @@ public:
     Group(std::move(children)) 
   {}
 
-private:
+protected:
   void doAlloc(MemoryAllocator * allocator) override
   {
     StateScope<MemoryAllocator, MemoryState> scope(allocator);
