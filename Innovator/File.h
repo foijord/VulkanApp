@@ -79,104 +79,100 @@ VkBufferUsageFlags bufferusageflags(const List & lst)
   return flags;
 }
 
-class File {
-public:
-  File() 
-  {
-    global_env->outer = std::make_shared<Env>(
-      std::unordered_map<std::string, std::any>{
-        { "int32", fun_ptr(make_object<int32_t, Number>) },
-        { "uint32", fun_ptr(make_object<uint32_t, Number>) },
-        { "count", fun_ptr(count) },
-        { "image", fun_ptr(node<ImageNode, std::string>) },
-        { "shader", fun_ptr(node<Shader, std::string, VkShaderStageFlagBits>) },
-        { "sampler", fun_ptr(node<Sampler>) },
-        { "separator", fun_ptr(separator) },
-        { "bufferdata_float", fun_ptr(bufferdata<float>) },
-        { "bufferdata_uint32", fun_ptr(bufferdata<uint32_t>) },
-        { "bufferusageflags", fun_ptr(bufferusageflags) },
-        { "cpumemorybuffer", fun_ptr(node<CpuMemoryBuffer, VkBufferUsageFlags>) },
-        { "gpumemorybuffer", fun_ptr(node<GpuMemoryBuffer, VkBufferUsageFlags>) },
-        { "transformbuffer", fun_ptr(node<TransformBuffer>) },
-        { "indexeddrawcommand", fun_ptr(node<IndexedDrawCommand, uint32_t, uint32_t, uint32_t, int32_t, uint32_t, VkPrimitiveTopology>) },
-        { "indexbufferdescription", fun_ptr(node<IndexBufferDescription, VkIndexType>) },
-        { "descriptorsetlayoutbinding", fun_ptr(node<DescriptorSetLayoutBinding, uint32_t, VkDescriptorType, VkShaderStageFlagBits>) },
-        { "vertexinputbindingdescription", fun_ptr(node<VertexInputBindingDescription, uint32_t, uint32_t, VkVertexInputRate>) },
-        { "vertexinputattributedescription", fun_ptr(node<VertexInputAttributeDescription, uint32_t, uint32_t, VkFormat, uint32_t>) },
+std::shared_ptr<Separator> eval_file(const std::string & filename)
+{
+  env_ptr env = scm::global_env();
 
-        { "VK_SHADER_STAGE_VERTEX_BIT", VK_SHADER_STAGE_VERTEX_BIT },
-        { "VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT },
-        { "VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT },
-        { "VK_SHADER_STAGE_GEOMETRY_BIT", VK_SHADER_STAGE_GEOMETRY_BIT },
-        { "VK_SHADER_STAGE_FRAGMENT_BIT", VK_SHADER_STAGE_FRAGMENT_BIT },
-        { "VK_SHADER_STAGE_COMPUTE_BIT", VK_SHADER_STAGE_COMPUTE_BIT },
+  env->outer = std::make_shared<Env>(
+    std::unordered_map<std::string, std::any>{
+    { "int32", fun_ptr(make_object<int32_t, Number>) },
+    { "uint32", fun_ptr(make_object<uint32_t, Number>) },
+    { "count", fun_ptr(count) },
+    { "image", fun_ptr(node<ImageNode, std::string>) },
+    { "shader", fun_ptr(node<Shader, std::string, VkShaderStageFlagBits>) },
+    { "sampler", fun_ptr(node<Sampler>) },
+    { "separator", fun_ptr(separator) },
+    { "bufferdata_float", fun_ptr(bufferdata<float>) },
+    { "bufferdata_uint32", fun_ptr(bufferdata<uint32_t>) },
+    { "bufferusageflags", fun_ptr(bufferusageflags) },
+    { "cpumemorybuffer", fun_ptr(node<CpuMemoryBuffer, VkBufferUsageFlags>) },
+    { "gpumemorybuffer", fun_ptr(node<GpuMemoryBuffer, VkBufferUsageFlags>) },
+    { "transformbuffer", fun_ptr(node<TransformBuffer>) },
+    { "indexeddrawcommand", fun_ptr(node<IndexedDrawCommand, uint32_t, uint32_t, uint32_t, int32_t, uint32_t, VkPrimitiveTopology>) },
+    { "indexbufferdescription", fun_ptr(node<IndexBufferDescription, VkIndexType>) },
+    { "descriptorsetlayoutbinding", fun_ptr(node<DescriptorSetLayoutBinding, uint32_t, VkDescriptorType, VkShaderStageFlagBits>) },
+    { "vertexinputbindingdescription", fun_ptr(node<VertexInputBindingDescription, uint32_t, uint32_t, VkVertexInputRate>) },
+    { "vertexinputattributedescription", fun_ptr(node<VertexInputAttributeDescription, uint32_t, uint32_t, VkFormat, uint32_t>) },
 
-        { "VK_BUFFER_USAGE_TRANSFER_SRC_BIT", VK_BUFFER_USAGE_TRANSFER_SRC_BIT },
-        { "VK_BUFFER_USAGE_TRANSFER_DST_BIT", VK_BUFFER_USAGE_TRANSFER_DST_BIT },
-        { "VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT", VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT },
-        { "VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT", VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT },
-        { "VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT", VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT },
-        { "VK_BUFFER_USAGE_STORAGE_BUFFER_BIT", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT },
-        { "VK_BUFFER_USAGE_INDEX_BUFFER_BIT", VK_BUFFER_USAGE_INDEX_BUFFER_BIT },
-        { "VK_BUFFER_USAGE_VERTEX_BUFFER_BIT", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT },
-        { "VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT", VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT },
+    { "VK_SHADER_STAGE_VERTEX_BIT", VK_SHADER_STAGE_VERTEX_BIT },
+    { "VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT },
+    { "VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT },
+    { "VK_SHADER_STAGE_GEOMETRY_BIT", VK_SHADER_STAGE_GEOMETRY_BIT },
+    { "VK_SHADER_STAGE_FRAGMENT_BIT", VK_SHADER_STAGE_FRAGMENT_BIT },
+    { "VK_SHADER_STAGE_COMPUTE_BIT", VK_SHADER_STAGE_COMPUTE_BIT },
 
-        { "VK_DESCRIPTOR_TYPE_SAMPLER", VK_DESCRIPTOR_TYPE_SAMPLER },
-        { "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER", VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
-        { "VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE", VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE },
-        { "VK_DESCRIPTOR_TYPE_STORAGE_IMAGE", VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
-        { "VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER", VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER },
-        { "VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER", VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER },
-        { "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER", VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
-        { "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER", VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
-        { "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC", VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC },
-        { "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC", VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC },
-        { "VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT", VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT },
+    { "VK_BUFFER_USAGE_TRANSFER_SRC_BIT", VK_BUFFER_USAGE_TRANSFER_SRC_BIT },
+    { "VK_BUFFER_USAGE_TRANSFER_DST_BIT", VK_BUFFER_USAGE_TRANSFER_DST_BIT },
+    { "VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT", VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT },
+    { "VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT", VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT },
+    { "VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT", VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT },
+    { "VK_BUFFER_USAGE_STORAGE_BUFFER_BIT", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT },
+    { "VK_BUFFER_USAGE_INDEX_BUFFER_BIT", VK_BUFFER_USAGE_INDEX_BUFFER_BIT },
+    { "VK_BUFFER_USAGE_VERTEX_BUFFER_BIT", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT },
+    { "VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT", VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT },
 
-        { "VK_PRIMITIVE_TOPOLOGY_POINT_LIST", VK_PRIMITIVE_TOPOLOGY_POINT_LIST },
-        { "VK_PRIMITIVE_TOPOLOGY_LINE_LIST", VK_PRIMITIVE_TOPOLOGY_LINE_LIST },
-        { "VK_PRIMITIVE_TOPOLOGY_LINE_STRIP", VK_PRIMITIVE_TOPOLOGY_LINE_STRIP },
-        { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST },
-        { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP },
-        { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN },
-        { "VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY },
-        { "VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY },
-        { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY },
-        { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY },
-        { "VK_PRIMITIVE_TOPOLOGY_PATCH_LIST", VK_PRIMITIVE_TOPOLOGY_PATCH_LIST },
+    { "VK_DESCRIPTOR_TYPE_SAMPLER", VK_DESCRIPTOR_TYPE_SAMPLER },
+    { "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER", VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
+    { "VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE", VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE },
+    { "VK_DESCRIPTOR_TYPE_STORAGE_IMAGE", VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
+    { "VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER", VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER },
+    { "VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER", VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER },
+    { "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER", VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
+    { "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER", VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
+    { "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC", VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC },
+    { "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC", VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC },
+    { "VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT", VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT },
 
-        { "VK_INDEX_TYPE_UINT16", VK_INDEX_TYPE_UINT16 },
-        { "VK_INDEX_TYPE_UINT32", VK_INDEX_TYPE_UINT32 },
+    { "VK_PRIMITIVE_TOPOLOGY_POINT_LIST", VK_PRIMITIVE_TOPOLOGY_POINT_LIST },
+    { "VK_PRIMITIVE_TOPOLOGY_LINE_LIST", VK_PRIMITIVE_TOPOLOGY_LINE_LIST },
+    { "VK_PRIMITIVE_TOPOLOGY_LINE_STRIP", VK_PRIMITIVE_TOPOLOGY_LINE_STRIP },
+    { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST },
+    { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP },
+    { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN },
+    { "VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY },
+    { "VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY },
+    { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY },
+    { "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY },
+    { "VK_PRIMITIVE_TOPOLOGY_PATCH_LIST", VK_PRIMITIVE_TOPOLOGY_PATCH_LIST },
 
-        { "VK_VERTEX_INPUT_RATE_VERTEX", VK_VERTEX_INPUT_RATE_VERTEX },
-        { "VK_VERTEX_INPUT_RATE_INSTANCE", VK_VERTEX_INPUT_RATE_INSTANCE },
+    { "VK_INDEX_TYPE_UINT16", VK_INDEX_TYPE_UINT16 },
+    { "VK_INDEX_TYPE_UINT32", VK_INDEX_TYPE_UINT32 },
 
-        { "VK_FORMAT_R32_UINT", VK_FORMAT_R32_UINT },
-        { "VK_FORMAT_R32_SINT", VK_FORMAT_R32_SINT },
-        { "VK_FORMAT_R32_SFLOAT", VK_FORMAT_R32_SFLOAT },
-        { "VK_FORMAT_R32G32_UINT", VK_FORMAT_R32G32_UINT },
-        { "VK_FORMAT_R32G32_SINT", VK_FORMAT_R32G32_SINT },
-        { "VK_FORMAT_R32G32_SFLOAT", VK_FORMAT_R32G32_SFLOAT },
-        { "VK_FORMAT_R32G32B32_UINT", VK_FORMAT_R32G32B32_UINT },
-        { "VK_FORMAT_R32G32B32_SINT", VK_FORMAT_R32G32B32_SINT },
-        { "VK_FORMAT_R32G32B32_SFLOAT", VK_FORMAT_R32G32B32_SFLOAT },
-        { "VK_FORMAT_R32G32B32A32_UINT", VK_FORMAT_R32G32B32A32_UINT },
-        { "VK_FORMAT_R32G32B32A32_SINT", VK_FORMAT_R32G32B32A32_SINT },
-        { "VK_FORMAT_R32G32B32A32_SFLOAT", VK_FORMAT_R32G32B32A32_SFLOAT }
-      });
-  }
+    { "VK_VERTEX_INPUT_RATE_VERTEX", VK_VERTEX_INPUT_RATE_VERTEX },
+    { "VK_VERTEX_INPUT_RATE_INSTANCE", VK_VERTEX_INPUT_RATE_INSTANCE },
 
-  std::shared_ptr<Separator> open(const std::string & filename)
-  {
-    std::ifstream input(filename, std::ios::in);
-    
-    const std::string code{ 
-      std::istreambuf_iterator<char>(input), 
-      std::istreambuf_iterator<char>() 
-    };
+    { "VK_FORMAT_R32_UINT", VK_FORMAT_R32_UINT },
+    { "VK_FORMAT_R32_SINT", VK_FORMAT_R32_SINT },
+    { "VK_FORMAT_R32_SFLOAT", VK_FORMAT_R32_SFLOAT },
+    { "VK_FORMAT_R32G32_UINT", VK_FORMAT_R32G32_UINT },
+    { "VK_FORMAT_R32G32_SINT", VK_FORMAT_R32G32_SINT },
+    { "VK_FORMAT_R32G32_SFLOAT", VK_FORMAT_R32G32_SFLOAT },
+    { "VK_FORMAT_R32G32B32_UINT", VK_FORMAT_R32G32B32_UINT },
+    { "VK_FORMAT_R32G32B32_SINT", VK_FORMAT_R32G32B32_SINT },
+    { "VK_FORMAT_R32G32B32_SFLOAT", VK_FORMAT_R32G32B32_SFLOAT },
+    { "VK_FORMAT_R32G32B32A32_UINT", VK_FORMAT_R32G32B32A32_UINT },
+    { "VK_FORMAT_R32G32B32A32_SINT", VK_FORMAT_R32G32B32A32_SINT },
+    { "VK_FORMAT_R32G32B32A32_SFLOAT", VK_FORMAT_R32G32B32A32_SFLOAT }
+  });
 
-    std::any exp = scm::read(code);
-    std::any sep = scm::eval(exp);
-    return std::any_cast<std::shared_ptr<Separator>>(sep);
-  }
-};
+  std::ifstream input(filename, std::ios::in);
+  
+  const std::string code{ 
+    std::istreambuf_iterator<char>(input), 
+    std::istreambuf_iterator<char>() 
+  };
+
+  std::any exp = scm::read(code);
+  std::any sep = scm::eval(exp, env);
+  return std::any_cast<std::shared_ptr<Separator>>(sep);
+}

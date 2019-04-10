@@ -571,7 +571,7 @@ public:
     try {
       this->rendermanager->present(this->renderpass.get());
     }
-    catch (VkException & e) {
+    catch (VkException &) {
       // recreate swapchain, try again next frame
       this->resize();
     }

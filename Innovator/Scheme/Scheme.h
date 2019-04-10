@@ -14,157 +14,161 @@
 
 namespace scm {
 
-typedef std::vector<std::any> List;
-typedef std::shared_ptr<List> lst_ptr;
-typedef std::function<std::any(const List & args)> fun_ptr;
+  typedef std::vector<std::any> List;
+  typedef std::shared_ptr<List> lst_ptr;
+  typedef std::function<std::any(const List & args)> fun_ptr;
 
-typedef bool Boolean;
-typedef double Number;
-typedef std::string String;
+  typedef bool Boolean;
+  typedef double Number;
+  typedef std::string String;
 
-struct Symbol : public std::string {
-  explicit Symbol(const String & s) : std::string(s) {}
-};
+  struct Symbol : public std::string {
+    explicit Symbol(const String & s) : std::string(s) {}
+  };
 
-class Env;
-typedef std::shared_ptr<Env> env_ptr;
+  class Env;
+  typedef std::shared_ptr<Env> env_ptr;
 
-struct If {};
-struct Quote {};
-struct Define {};
-struct Lambda {};
+  struct If {};
+  struct Quote {};
+  struct Define {};
+  struct Lambda {};
 
-struct Function {
-  std::any parms, exp;
-  env_ptr env;
-};
+  struct Function {
+    std::any parms, exp;
+    env_ptr env;
+  };
 
-template <typename T>
-std::vector<T> any_cast(const List & lst)
-{
-  std::vector<T> args(lst.size());
-  std::transform(lst.begin(), lst.end(), args.begin(),
-    [](std::any exp) { return std::any_cast<T>(exp); });
-  return args;
-}
-
-fun_ptr plus = [](const List & lst)
-{
-  std::vector<Number> args = any_cast<Number>(lst);
-  return std::accumulate(next(args.begin()), args.end(), args.front(), std::plus<Number>());
-};
-
-fun_ptr minus = [](const List & lst)
-{
-  std::vector<Number> args = any_cast<Number>(lst);
-  return std::accumulate(next(args.begin()), args.end(), args.front(), std::minus<Number>());
-};
-
-fun_ptr divides = [](const List & lst)
-{
-  std::vector<Number> args = any_cast<Number>(lst);
-  return std::accumulate(next(args.begin()), args.end(), args.front(), std::divides<Number>());
-};
-
-fun_ptr multiplies = [](const List & lst)
-{
-  std::vector<Number> args = any_cast<Number>(lst);
-  return std::accumulate(next(args.begin()), args.end(), args.front(), std::multiplies<Number>());
-};
-
-fun_ptr greater = [](const List & lst)
-{
-  std::vector<Number> args = any_cast<Number>(lst);
-  return Boolean(args[0] > args[1]);
-};
-
-fun_ptr less = [](const List & lst)
-{
-  std::vector<Number> args = any_cast<Number>(lst);
-  return Boolean(args[0] < args[1]);
-};
-
-fun_ptr equal = [](const List & lst)
-{
-  std::vector<Number> args = any_cast<Number>(lst);
-  return Boolean(args[0] == args[1]);
-};
-
-fun_ptr car = [](const List & lst)
-{
-  auto l = std::any_cast<lst_ptr>(lst.front());
-  return l->front();
-};
-
-fun_ptr cdr = [](const List & lst)
-{
-  auto l = std::any_cast<lst_ptr>(lst.front());
-  return std::make_shared<List>(next(l->begin()), l->end());
-};
-
-fun_ptr list = [](const List & lst)
-{
-  return std::make_shared<List>(lst.begin(), lst.end());
-};
-
-fun_ptr length = [](const List & lst)
-{
-  auto l = std::any_cast<lst_ptr>(lst.front());
-  return static_cast<Number>(l->size());
-};
-
-class Env {
-public:
-  Env(std::unordered_map<std::string, std::any> inner)
-    : inner(inner)
-  {}
-  ~Env() = default;
-
-  explicit Env(const std::any & parm, const List & args, env_ptr outer)
-    : outer(std::move(outer))
+  template <typename T>
+  std::vector<T> any_cast(const List & lst)
   {
-    if (parm.type() == typeid(lst_ptr)) {
-      auto parms = std::any_cast<lst_ptr>(parm);
-      for (size_t i = 0; i < parms->size(); i++) {
-        auto sym = std::any_cast<Symbol>((*parms)[i]);
-        this->inner[sym] = args[i];
+    std::vector<T> args(lst.size());
+    std::transform(lst.begin(), lst.end(), args.begin(),
+      [](std::any exp) { return std::any_cast<T>(exp); });
+    return args;
+  }
+
+  fun_ptr plus = [](const List & lst)
+  {
+    std::vector<Number> args = any_cast<Number>(lst);
+    return std::accumulate(next(args.begin()), args.end(), args.front(), std::plus<Number>());
+  };
+
+  fun_ptr minus = [](const List & lst)
+  {
+    std::vector<Number> args = any_cast<Number>(lst);
+    return std::accumulate(next(args.begin()), args.end(), args.front(), std::minus<Number>());
+  };
+
+  fun_ptr divides = [](const List & lst)
+  {
+    std::vector<Number> args = any_cast<Number>(lst);
+    return std::accumulate(next(args.begin()), args.end(), args.front(), std::divides<Number>());
+  };
+
+  fun_ptr multiplies = [](const List & lst)
+  {
+    std::vector<Number> args = any_cast<Number>(lst);
+    return std::accumulate(next(args.begin()), args.end(), args.front(), std::multiplies<Number>());
+  };
+
+  fun_ptr greater = [](const List & lst)
+  {
+    std::vector<Number> args = any_cast<Number>(lst);
+    return Boolean(args[0] > args[1]);
+  };
+
+  fun_ptr less = [](const List & lst)
+  {
+    std::vector<Number> args = any_cast<Number>(lst);
+    return Boolean(args[0] < args[1]);
+  };
+
+  fun_ptr equal = [](const List & lst)
+  {
+    std::vector<Number> args = any_cast<Number>(lst);
+    return Boolean(args[0] == args[1]);
+  };
+
+  fun_ptr car = [](const List & lst)
+  {
+    auto l = std::any_cast<lst_ptr>(lst.front());
+    return l->front();
+  };
+
+  fun_ptr cdr = [](const List & lst)
+  {
+    auto l = std::any_cast<lst_ptr>(lst.front());
+    return std::make_shared<List>(next(l->begin()), l->end());
+  };
+
+  fun_ptr list = [](const List & lst)
+  {
+    return std::make_shared<List>(lst.begin(), lst.end());
+  };
+
+  fun_ptr length = [](const List & lst)
+  {
+    auto l = std::any_cast<lst_ptr>(lst.front());
+    return static_cast<Number>(l->size());
+  };
+
+  class Env {
+  public:
+    Env(std::unordered_map<std::string, std::any> inner)
+      : inner(inner)
+    {}
+    ~Env() = default;
+
+    explicit Env(const std::any & parm, const List & args, env_ptr outer)
+      : outer(std::move(outer))
+    {
+      if (parm.type() == typeid(lst_ptr)) {
+        auto parms = std::any_cast<lst_ptr>(parm);
+        for (size_t i = 0; i < parms->size(); i++) {
+          auto sym = std::any_cast<Symbol>((*parms)[i]);
+          this->inner[sym] = args[i];
+        }
       }
-    } else {
-      auto sym = std::any_cast<Symbol>(parm);
-      this->inner[sym] = args;
+      else {
+        auto sym = std::any_cast<Symbol>(parm);
+        this->inner[sym] = args;
+      }
     }
-  }
 
-  std::any get(Symbol sym)
+    std::any get(Symbol sym)
+    {
+      if (this->inner.find(sym) != this->inner.end()) {
+        return this->inner.at(sym);
+      }
+      if (this->outer) {
+        return this->outer->get(sym);
+      }
+      throw std::runtime_error("undefined symbol: " + sym);
+    }
+
+    std::unordered_map<std::string, std::any> inner;
+    env_ptr outer{ nullptr };
+  };
+
+  env_ptr global_env()
   {
-    if (this->inner.find(sym) != this->inner.end()) {
-      return this->inner.at(sym);
-    }
-    if (this->outer) {
-      return this->outer->get(sym);
-    }
-    throw std::runtime_error("undefined symbol: " + sym);
+    return std::make_shared<Env>(
+      std::unordered_map<std::string, std::any>{
+        { Symbol("pi"), Number(3.14159265358979323846) },
+        { Symbol("+"), plus },
+        { Symbol("-"), minus },
+        { Symbol("/"), divides },
+        { Symbol("*"), multiplies },
+        { Symbol(">"), greater },
+        { Symbol("<"), less },
+        { Symbol("="), equal },
+        { Symbol("car"), car },
+        { Symbol("cdr"), cdr },
+        { Symbol("list"), list },
+        { Symbol("length"), length }
+    });
   }
-    
-  std::unordered_map<std::string, std::any> inner;
-  env_ptr outer { nullptr };
-};
-
-std::shared_ptr<Env> global_env = std::make_shared<Env>(
-  std::unordered_map<std::string, std::any>{
-    { Symbol("pi"),  Number(3.14159265358979323846) },
-    { Symbol("+"), plus },
-    { Symbol("-"), minus },
-    { Symbol("/"), divides },
-    { Symbol("*"), multiplies },
-    { Symbol(">"), greater },
-    { Symbol("<"), less },
-    { Symbol("="), equal },
-    { Symbol("car"), car },
-    { Symbol("cdr"), cdr },
-    { Symbol("list"), list },
-    { Symbol("length"), length }
-});
 
 void print(std::any exp) 
 {
@@ -210,7 +214,7 @@ void print(std::any exp)
   }
 }
 
-std::any eval(std::any & exp, env_ptr & env = global_env)
+std::any eval(std::any & exp, env_ptr & env)
 {
   while (true) {
     if (exp.type() == typeid(lst_ptr)) {
