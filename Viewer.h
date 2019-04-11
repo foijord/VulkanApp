@@ -24,13 +24,9 @@ public:
 
   FramebufferAttachment(VkFormat format,
                         VkImageUsageFlags usage,
-                        VkAccessFlags dstAccessMask,
-                        VkImageLayout newLayout,
                         VkImageAspectFlags aspectMask) :
     format(format),
     usage(usage),
-    dstAccessMask(dstAccessMask),
-    newLayout(newLayout),
     aspectMask(aspectMask)
   {}
 
@@ -66,32 +62,11 @@ private:
                                                         this->component_mapping,
                                                         this->subresource_range);
 
-    VkImageMemoryBarrier memory_barrier{
-      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
-      nullptr,                                // pNext
-      0,
-      this->dstAccessMask,
-      VK_IMAGE_LAYOUT_UNDEFINED,
-      this->newLayout,
-      stager->device->default_queue_index,    // srcQueueFamilyIndex
-      stager->device->default_queue_index,    // dstQueueFamilyIndex
-      this->image->image,                     // image
-      this->subresource_range
-    };
-
-    vkCmdPipelineBarrier(stager->command,
-                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                         0, 0, nullptr, 0, nullptr,
-                         1, &memory_barrier);
-
     stager->state.framebuffer_attachments.push_back(this->imageview->view);
   }
 
   VkFormat format;
   VkImageUsageFlags usage;
-  VkAccessFlags dstAccessMask;
-  VkImageLayout newLayout;
   VkImageAspectFlags aspectMask;
  
   VkImageSubresourceRange subresource_range{
@@ -114,30 +89,14 @@ public:
 class FramebufferObject : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(FramebufferObject)
+  FramebufferObject() = default;
   virtual ~FramebufferObject() = default;
-
-  explicit FramebufferObject(std::vector<std::shared_ptr<FramebufferAttachment>> attachments) :
-    attachments(std::move(attachments))
-  {}
 
   std::unique_ptr<VulkanFramebuffer> framebuffer;
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
-  {
-    for (const auto& node : this->attachments) {
-      node->alloc(allocator);
-    }
-  }
-
   void doStage(MemoryStager * stager) override
   {
-    StateScope<MemoryStager, StageState> scope(stager);
-
-    for (const auto& node : this->attachments) {
-      node->stage(stager);
-    }
-
     this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
                                                             stager->state.renderpass,
                                                             stager->state.framebuffer_attachments,
@@ -281,9 +240,9 @@ public:
   virtual ~SwapchainObject() = default;
 
   SwapchainObject(std::shared_ptr<FramebufferAttachment> color_attachment,
-                        VkSurfaceKHR surface,
-                        VkPresentModeKHR present_mode,
-                        VkSurfaceFormatKHR surface_format) :
+                  VkSurfaceKHR surface,
+                  VkPresentModeKHR present_mode,
+                  VkSurfaceFormatKHR surface_format) :
       color_attachment(std::move(color_attachment)),
       surface(surface),
       present_mode(present_mode),
@@ -451,22 +410,24 @@ private:
     }
   }
 
-  void doPresent(SceneRenderer * renderer) override
+  void doRender(SceneRenderer * renderer) override
   {
-    uint32_t image_index;
     THROW_ON_ERROR(renderer->vulkan->vkAcquireNextImage(renderer->device->device,
                                                         this->swapchain->swapchain,
                                                         UINT64_MAX,
                                                         this->swapchain_image_ready->semaphore,
                                                         nullptr,
-                                                        &image_index));
+                                                        &this->image_index));
+  }
 
+  void doPresent(SceneRenderer * renderer) override
+  {
     std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
     std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
 
     this->swap_buffers_command->submit(renderer->device->default_queue,
                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                      image_index,
+                                      this->image_index,
                                       wait_semaphores,
                                       signal_semaphores);
 
@@ -477,7 +438,7 @@ private:
       signal_semaphores.data(),                        // pWaitSemaphores
       1,                                               // swapchainCount
       &this->swapchain->swapchain,                     // pSwapchains
-      &image_index,                                    // pImageIndices
+      &this->image_index,                              // pImageIndices
       nullptr                                          // pResults
     };
 
@@ -498,6 +459,8 @@ private:
   const VkImageSubresourceRange subresource_range{
     VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
   };
+
+  uint32_t image_index;
 };
 
 class VulkanViewer {
@@ -530,23 +493,15 @@ public:
                                                                         this->surface->surface,
                                                                         &this->surface_capabilities));
 
-    auto colorbuffer = std::make_shared<FramebufferAttachment>(this->surface_format.format,
-                                                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                                               VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                                               VK_IMAGE_ASPECT_COLOR_BIT);
+    this->color_attachment = std::make_shared<FramebufferAttachment>(this->surface_format.format,
+                                                                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                                     VK_IMAGE_ASPECT_COLOR_BIT);
 
-    auto depthbuffer = std::make_shared<FramebufferAttachment>(this->depth_format,
-                                                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                                               VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                                                               VK_IMAGE_ASPECT_DEPTH_BIT);
+    this->depth_attachment = std::make_shared<FramebufferAttachment>(this->depth_format,
+                                                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                                     VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    this->framebuffer = std::make_shared<FramebufferObject>(
-      std::vector<std::shared_ptr<FramebufferAttachment>>{
-        colorbuffer,
-        depthbuffer 
-    });
+    this->framebuffer = std::make_shared<FramebufferObject>();
 
     this->renderpass = std::make_shared<RenderpassObject>(std::vector<VkAttachmentDescription>{ 
       {
@@ -580,7 +535,7 @@ public:
       VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
       std::vector<uint32_t>{});
 
-    this->swapchain = std::make_unique<SwapchainObject>(colorbuffer,
+    this->swapchain = std::make_unique<SwapchainObject>(this->color_attachment,
                                                         this->surface->surface,
                                                         this->present_mode,
                                                         this->surface_format);
@@ -603,8 +558,8 @@ public:
 
   void redraw()
   {
-    this->rendermanager->render(this->renderpass.get());
     try {
+      this->rendermanager->render(this->renderpass.get());
       this->rendermanager->present(this->renderpass.get());
     }
     catch (VkException & e) {
@@ -618,6 +573,8 @@ public:
     this->scene = std::move(scene);
 
     this->renderpass->children = {
+      this->color_attachment,
+      this->depth_attachment,
       this->framebuffer,
       this->subpass,
       this->camera,
@@ -642,16 +599,22 @@ public:
 
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
 
+    this->rendermanager->alloc(this->color_attachment.get());
+    this->rendermanager->alloc(this->depth_attachment.get());
     this->rendermanager->alloc(this->framebuffer.get());
     this->rendermanager->alloc(this->swapchain.get());
 
     this->renderpass->children = {
+      this->color_attachment,
+      this->depth_attachment,
       this->framebuffer,
       this->swapchain
     };
     this->rendermanager->stage(this->renderpass.get());
 
     this->renderpass->children = {
+      this->color_attachment,
+      this->depth_attachment,
       this->framebuffer,
       this->subpass,
       this->camera,
@@ -672,6 +635,8 @@ public:
   std::shared_ptr<Camera> camera;
   std::shared_ptr<RenderpassObject> renderpass;
   std::shared_ptr<SubpassObject> subpass;
+  std::shared_ptr<FramebufferAttachment> color_attachment;
+  std::shared_ptr<FramebufferAttachment> depth_attachment;
   std::shared_ptr<FramebufferObject> framebuffer;
   std::unique_ptr<RenderManager> rendermanager;
   std::shared_ptr<SwapchainObject> swapchain;
