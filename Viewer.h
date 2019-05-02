@@ -86,7 +86,7 @@ public:
   std::shared_ptr<VulkanImageView> imageview;
 };
 
-class FramebufferObject : public Node {
+class FramebufferObject : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(FramebufferObject)
   FramebufferObject() = default;
@@ -95,8 +95,14 @@ public:
   std::unique_ptr<VulkanFramebuffer> framebuffer;
 
 private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    Group::doAlloc(allocator);
+  }
+
   void doStage(MemoryStager * stager) override
   {
+    Group::doStage(stager);
     this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
                                                             stager->state.renderpass,
                                                             stager->state.framebuffer_attachments,
@@ -113,8 +119,6 @@ private:
   {
     renderer->state.framebuffer = this->framebuffer->framebuffer;
   }
-
-  std::vector<std::shared_ptr<FramebufferAttachment>> attachments;
 };
 
 class SubpassObject : public Node {
@@ -168,35 +172,40 @@ public:
   NO_COPY_OR_ASSIGNMENT(RenderpassObject)
   virtual ~RenderpassObject() = default;
 
-  RenderpassObject(std::vector<VkAttachmentDescription> attachments) :
+  RenderpassObject(std::shared_ptr<FramebufferObject> framebuffer,
+                   std::vector<VkAttachmentDescription> attachments) :
+    framebuffer(framebuffer),
     attachments(std::move(attachments))
   {}
 
 private:
   void doAlloc(MemoryAllocator * allocator) override
   {
+    this->framebuffer->alloc(allocator);
     Group::doAlloc(allocator);
     this->renderpass = std::make_shared<VulkanRenderpass>(allocator->device,
                                                           this->attachments,
                                                           allocator->state.subpasses);
-
   }
 
   void doStage(MemoryStager * stager) override
   {
     stager->state.renderpass = this->renderpass;
+    this->framebuffer->stage(stager);
     Group::doStage(stager);
   }
 
   void doPipeline(PipelineCreator * creator) override
   {
     creator->state.renderpass = this->renderpass;
+    this->framebuffer->pipeline(creator);
     Group::doPipeline(creator);
   }
 
   void doRecord(CommandRecorder * recorder) override
   {
     recorder->state.renderpass = this->renderpass;
+    this->framebuffer->record(recorder);
     Group::doRecord(recorder);
   }
 
@@ -212,17 +221,10 @@ private:
       { { { 1.0f, 0 } } }
     };
 
-    std::vector<FramebufferObject*> framebuffers;
-    FindAll<FramebufferObject>(this, framebuffers);
-
-    if (framebuffers.empty()) {
-      throw std::runtime_error("no framebuffers found in renderpass");
-    }
-
     VulkanCommandBufferScope commandbuffer(renderer->command->buffer());
 
     VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
-                                           framebuffers[0]->framebuffer->framebuffer,
+                                           this->framebuffer->framebuffer->framebuffer,
                                            renderarea,
                                            clearvalues,
                                            renderer->command->buffer());
@@ -230,6 +232,7 @@ private:
     Group::doRender(renderer);
   }
 
+  std::shared_ptr<FramebufferObject> framebuffer;
   std::vector<VkAttachmentDescription> attachments;
   std::shared_ptr<VulkanRenderpass> renderpass;
 };
@@ -493,17 +496,23 @@ public:
                                                                         this->surface->surface,
                                                                         &this->surface_capabilities));
 
-    this->color_attachment = std::make_shared<FramebufferAttachment>(this->surface_format.format,
-                                                                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                                                     VK_IMAGE_ASPECT_COLOR_BIT);
+    auto color_attachment = std::make_shared<FramebufferAttachment>(this->surface_format.format,
+                                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                                    VK_IMAGE_ASPECT_COLOR_BIT);
 
-    this->depth_attachment = std::make_shared<FramebufferAttachment>(this->depth_format,
-                                                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                                     VK_IMAGE_ASPECT_DEPTH_BIT);
+    auto depth_attachment = std::make_shared<FramebufferAttachment>(this->depth_format,
+                                                                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                                    VK_IMAGE_ASPECT_DEPTH_BIT);
 
     this->framebuffer = std::make_shared<FramebufferObject>();
+    this->framebuffer->children = {
+      color_attachment,
+      depth_attachment
+    };
 
-    this->renderpass = std::make_shared<RenderpassObject>(std::vector<VkAttachmentDescription>{ 
+    this->renderpass = std::make_shared<RenderpassObject>(
+      this->framebuffer,
+      std::vector<VkAttachmentDescription>{ 
       {
         0,                                                    // flags
         this->surface_format.format,                          // format
@@ -535,7 +544,7 @@ public:
       VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
       std::vector<uint32_t>{});
 
-    this->swapchain = std::make_unique<SwapchainObject>(this->color_attachment,
+    this->swapchain = std::make_unique<SwapchainObject>(color_attachment,
                                                         this->surface->surface,
                                                         this->present_mode,
                                                         this->surface_format);
@@ -573,9 +582,6 @@ public:
     this->scene = std::move(scene);
 
     this->renderpass->children = {
-      this->color_attachment,
-      this->depth_attachment,
-      this->framebuffer,
       this->subpass,
       this->camera,
       this->scene,
@@ -599,23 +605,15 @@ public:
 
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
 
-    this->rendermanager->alloc(this->color_attachment.get());
-    this->rendermanager->alloc(this->depth_attachment.get());
     this->rendermanager->alloc(this->framebuffer.get());
     this->rendermanager->alloc(this->swapchain.get());
 
     this->renderpass->children = {
-      this->color_attachment,
-      this->depth_attachment,
-      this->framebuffer,
       this->swapchain
     };
     this->rendermanager->stage(this->renderpass.get());
 
     this->renderpass->children = {
-      this->color_attachment,
-      this->depth_attachment,
-      this->framebuffer,
       this->subpass,
       this->camera,
       this->scene,
@@ -635,8 +633,6 @@ public:
   std::shared_ptr<Camera> camera;
   std::shared_ptr<RenderpassObject> renderpass;
   std::shared_ptr<SubpassObject> subpass;
-  std::shared_ptr<FramebufferAttachment> color_attachment;
-  std::shared_ptr<FramebufferAttachment> depth_attachment;
   std::shared_ptr<FramebufferObject> framebuffer;
   std::unique_ptr<RenderManager> rendermanager;
   std::shared_ptr<SwapchainObject> swapchain;
