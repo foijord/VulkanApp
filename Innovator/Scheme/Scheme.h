@@ -33,6 +33,7 @@ namespace scm {
   struct Quote {};
   struct Define {};
   struct Lambda {};
+  struct Begin{};
 
   struct Function {
     std::any parms, exp;
@@ -185,6 +186,9 @@ void print(std::any exp)
     std::string s = std::any_cast<Boolean>(exp) ? "#t" : "#f";
     std::cout << s;
   }
+  else if (exp.type() == typeid(Begin)) {
+    std::cout << "begin";
+  }
   else if (exp.type() == typeid(Define)) {
     std::cout << "define";
   }
@@ -235,6 +239,13 @@ std::any eval(std::any & exp, env_ptr & env)
       }
       else if (list[0].type() == typeid(Quote)) {
         return list[1];
+      }
+      else if (list[0].type() == typeid(Begin)) {
+        for (size_t i = 1; i < list.size(); i++) {
+          eval(list[i], env);
+        }
+        exp = list[list.size() - 1];
+        continue;
       }
 
       auto car = eval(list[0], env);
@@ -310,6 +321,12 @@ inline std::any parse(std::any exp)
           throw std::invalid_argument("wrong Number of arguments to lambda");
         }
         list[0] = Lambda{};
+      }
+      if (token == Symbol("begin")) {
+        if (list.size() < 2) {
+          throw std::invalid_argument("wrong Number of arguments to begin");
+        }
+        list[0] = Begin{};
       }
       if (token == Symbol("define")) {
         if (list.size() != 3) {
