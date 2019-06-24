@@ -510,6 +510,15 @@ public:
       depth_attachment
     };
 
+    this->subpass = std::make_shared<SubpassObject>(
+      0, 
+      VK_PIPELINE_BIND_POINT_GRAPHICS,
+      std::vector<VkAttachmentReference>{},
+      std::vector<VkAttachmentReference>{{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }},
+      std::vector<VkAttachmentReference>{},
+      VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
+      std::vector<uint32_t>{});
+
     this->renderpass = std::make_shared<RenderpassObject>(
       this->framebuffer,
       std::vector<VkAttachmentDescription>{ 
@@ -534,15 +543,6 @@ public:
         VK_IMAGE_LAYOUT_UNDEFINED,                            // initialLayout
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
       } });
-
-    this->subpass = std::make_shared<SubpassObject>(
-      0, 
-      VK_PIPELINE_BIND_POINT_GRAPHICS,
-      std::vector<VkAttachmentReference>{},
-      std::vector<VkAttachmentReference>{{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }},
-      std::vector<VkAttachmentReference>{},
-      VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
-      std::vector<uint32_t>{});
 
     this->swapchain = std::make_unique<SwapchainObject>(color_attachment,
                                                         this->surface->surface,
@@ -606,7 +606,6 @@ public:
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
 
     this->rendermanager->alloc(this->framebuffer.get());
-    this->rendermanager->alloc(this->swapchain.get());
 
     this->renderpass->children = {
       this->swapchain
