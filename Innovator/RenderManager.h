@@ -179,6 +179,7 @@ public:
       render_fence(std::make_unique<VulkanFence>(this->device)),
       stage_fence(std::make_unique<VulkanFence>(this->device)),
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
+      staging_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device)),
       rendering_finished(std::make_unique<VulkanSemaphore>(this->device))
   {}
@@ -206,21 +207,19 @@ public:
 
   void stage(Node * root) const
   {
-    VulkanCommandBuffers staging_command(this->device);
     {
-      MemoryStager stager(this->vulkan, 
-                          this->device, 
-                          staging_command.buffer(), 
+      MemoryStager stager(this->vulkan,
+                          this->device,
+                          this->staging_command->buffer(),
                           this->extent);
 
       root->stage(&stager);
     }
-
     FenceScope fence_scope(this->device->device, this->stage_fence->fence);
     
-    staging_command.submit(this->device->default_queue,
-                           VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                           this->stage_fence->fence);
+    this->staging_command->submit(this->device->default_queue,
+                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                  this->stage_fence->fence);
   }
 
   void pipeline(Node * root) const
@@ -274,6 +273,7 @@ public:
   std::shared_ptr<VulkanDevice> device;
   std::shared_ptr<VulkanFence> render_fence;
   std::shared_ptr<VulkanFence> stage_fence;
+  std::unique_ptr<VulkanCommandBuffers> staging_command;
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
   std::unique_ptr<VulkanSemaphore> rendering_finished;

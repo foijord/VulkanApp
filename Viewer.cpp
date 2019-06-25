@@ -297,16 +297,20 @@ int main(int argc, char *argv[])
                                                  device_extensions,
                                                  queue_create_infos);
 
+
+    auto scene = std::make_shared<Separator>();
+    scene->children = {
+      camera,
+      eval_file("crate.scene")
+    };
+
     auto viewer = std::make_shared<VulkanViewer>(vulkan, 
                                                  device, 
                                                  surface, 
-                                                 camera);
+                                                 scene);
 
     window.camera = camera;
     window.viewer = viewer;
-
-    auto scene = eval_file("crate.scene");
-    viewer->setSceneGraph(scene);
 
     window.resize(512, 512);
     window.show();

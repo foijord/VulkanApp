@@ -17,7 +17,6 @@ struct MemoryState {
     nullptr, 0, 0
   };
   class BufferData * bufferdata{ nullptr };
-  std::vector<VkSubpassDescription> subpasses;
   VkExtent2D extent;
 };
 
@@ -25,7 +24,6 @@ struct StageState {
   VkBuffer buffer{ nullptr };
   class BufferData * bufferdata{ nullptr };
   std::shared_ptr<VulkanRenderpass> renderpass;
-  std::vector<VkImageView> framebuffer_attachments;
 };
 
 struct PipelineState {
