@@ -10,6 +10,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <functional>
 
 template <typename NodeType> void
 FindAll(Node * root, std::vector<NodeType*> & results) {
@@ -28,6 +29,7 @@ FindAll(Node * root, std::vector<NodeType*> & results) {
 
 class MemoryAllocator {
 public:
+  typedef std::function<void(MemoryAllocator *)> alloc_callback;
   NO_COPY_OR_ASSIGNMENT(MemoryAllocator)
   MemoryAllocator() = delete;
 
@@ -41,6 +43,9 @@ public:
   {
     try {
       this->allocate();
+      for (auto & alloc_callback : this->alloc_callbacks) {
+        alloc_callback(this);
+      }
     }
     catch (std::exception & e) {
       std::cerr << e.what() << std::endl;
@@ -52,6 +57,7 @@ public:
   VkExtent2D extent;
   std::vector<std::shared_ptr<ImageObject>> imageobjects;
   std::vector<std::shared_ptr<BufferObject>> bufferobjects;
+  std::vector<alloc_callback> alloc_callbacks;
 
 private:
   void allocate()
@@ -174,12 +180,12 @@ public:
 
   explicit RenderManager(std::shared_ptr<VulkanInstance> vulkan,
                          std::shared_ptr<VulkanDevice> device) :
-      vulkan(vulkan),
+      vulkan(std::move(vulkan)),
       device(std::move(device)), 
       render_fence(std::make_unique<VulkanFence>(this->device)),
       stage_fence(std::make_unique<VulkanFence>(this->device)),
-      render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       staging_command(std::make_unique<VulkanCommandBuffers>(this->device)),
+      render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device)),
       rendering_finished(std::make_unique<VulkanSemaphore>(this->device))
   {}
@@ -257,16 +263,6 @@ public:
     this->render_command->submit(this->device->default_queue,
                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                  this->render_fence->fence);
-  }
-
-  void present(Node * root) const
-  {
-    SceneRenderer renderer(this->vulkan, 
-                           this->device, 
-                           this->render_command.get(), 
-                           this->extent);
-
-    root->present(&renderer);
   }
 
   std::shared_ptr<VulkanInstance> vulkan;

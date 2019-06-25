@@ -76,12 +76,6 @@ protected:
     StateScope<SceneRenderer, RenderState> scope(renderer);
     Group::doRender(renderer);
   }
-
-  void doPresent(SceneRenderer * renderer) override
-  {
-    StateScope<SceneRenderer, RenderState> scope(renderer);
-    Group::doPresent(renderer);
-  }
 };
 
 class Camera : public Node {

@@ -51,16 +51,17 @@ private:
                                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     allocator->imageobjects.push_back(this->imageobject);
-  }
 
-  void doStage(MemoryStager * stager) override
-  {
-    this->imageview = std::make_shared<VulkanImageView>(stager->device,
-                                                        this->image->image,
-                                                        this->format,
-                                                        VK_IMAGE_VIEW_TYPE_2D,
-                                                        this->component_mapping,
-                                                        this->subresource_range);
+    allocator->alloc_callbacks.push_back([this](MemoryAllocator * allocator) {
+      this->imageview = std::make_shared<VulkanImageView>(allocator->device,
+                                                          this->image->image,
+                                                          this->format,
+                                                          VK_IMAGE_VIEW_TYPE_2D,
+                                                          this->component_mapping,
+                                                          this->subresource_range);
+
+      allocator->state.framebuffer_attachments.push_back(this->imageview->view);
+    });
   }
 
   VkFormat format;
@@ -125,6 +126,40 @@ private:
   std::vector<uint32_t> preserve_attachments;
 };
 
+class FramebufferObject : public Group {
+public:
+  NO_COPY_OR_ASSIGNMENT(FramebufferObject)
+  FramebufferObject() = delete;
+  virtual ~FramebufferObject() = default;
+
+  FramebufferObject(std::vector<std::shared_ptr<Node>> framebuffer_attachments)
+  {
+    this->children = framebuffer_attachments;
+  }
+
+private:
+  void doAlloc(MemoryAllocator * allocator) override
+  {
+    Group::doAlloc(allocator);
+    allocator->alloc_callbacks.push_back([this](MemoryAllocator * allocator) {
+      this->framebuffer = std::make_unique<VulkanFramebuffer>(allocator->device,
+                                                              allocator->state.renderpass,
+                                                              allocator->state.framebuffer_attachments,
+                                                              allocator->extent,
+                                                              1);
+    });
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.framebuffer = this->framebuffer->framebuffer;
+  }
+
+
+public:
+  std::unique_ptr<VulkanFramebuffer> framebuffer;
+};
+
 class RenderpassObject : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(RenderpassObject)
@@ -132,65 +167,35 @@ public:
 
   RenderpassObject(std::vector<VkAttachmentDescription> attachments,
                    std::vector<std::shared_ptr<SubpassObject>> subpasses,
-                   std::vector<std::shared_ptr<FramebufferAttachment>> framebuffer_attachments) :
+                   std::vector<std::shared_ptr<Node>> framebuffer_attachments) :
     attachments(std::move(attachments)),
-    subpasses(std::move(subpasses)),
-    framebuffer_attachments(std::move(framebuffer_attachments))
+    subpasses(std::move(subpasses))
   {
     for (auto & subpass : this->subpasses) {
       this->subpass_descriptions.push_back(subpass->description);
     }
+
+    this->framebuffer = std::make_shared<FramebufferObject>(framebuffer_attachments);
   }
 
-  void resize(RenderManager * rendermanager)
+  void resize(std::shared_ptr<VulkanDevice> device, VkExtent2D extent)
   {
-    {
-      MemoryAllocator allocator(rendermanager->device, rendermanager->extent);
-      for (const auto& attachment : this->framebuffer_attachments) {
-        attachment->alloc(&allocator);
-      }
-    }
-
-    MemoryStager stager(rendermanager->vulkan,
-                        rendermanager->device,
-                        rendermanager->staging_command->buffer(),
-                        rendermanager->extent);
-
-    this->stageFramebuffer(&stager);
+    MemoryAllocator allocator(device, extent);
+    allocator.state.renderpass = this->renderpass;
+    this->framebuffer->alloc(&allocator);
   }
 
 private:
-  void stageFramebuffer(MemoryStager * stager)
-  {
-    std::vector<VkImageView> framebuffer_attachments;
-    for (auto & attachment : this->framebuffer_attachments) {
-      attachment->stage(stager);
-      framebuffer_attachments.push_back(attachment->imageview->view);
-    }
-
-    this->framebuffer = std::make_unique<VulkanFramebuffer>(stager->device,
-                                                            this->renderpass,
-                                                            framebuffer_attachments,
-                                                            stager->extent,
-                                                            1);
-  }
-
   void doAlloc(MemoryAllocator * allocator) override
   {
-    for (const auto& attachment : this->framebuffer_attachments) {
-      attachment->alloc(allocator);
-    }
-
     this->renderpass = std::make_shared<VulkanRenderpass>(allocator->device,
                                                           this->attachments,
                                                           this->subpass_descriptions);
-    Group::doAlloc(allocator);
-  }
 
-  void doStage(MemoryStager * stager) override
-  {
-    this->stageFramebuffer(stager);
-    Group::doStage(stager);
+    allocator->state.renderpass = this->renderpass;
+    this->framebuffer->alloc(allocator);
+    
+    Group::doAlloc(allocator);
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -202,7 +207,7 @@ private:
   void doRecord(CommandRecorder * recorder) override
   {
     recorder->state.renderpass = this->renderpass;
-    recorder->state.framebuffer = this->framebuffer->framebuffer;
+    this->framebuffer->record(recorder);
 
     Group::doRecord(recorder);
   }
@@ -222,7 +227,7 @@ private:
     VulkanCommandBufferScope commandbuffer(renderer->command->buffer());
 
     VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
-                                           this->framebuffer->framebuffer,
+                                           this->framebuffer->framebuffer->framebuffer,
                                            renderarea,
                                            clearvalues,
                                            renderer->command->buffer());
@@ -233,8 +238,7 @@ private:
   std::vector<VkAttachmentDescription> attachments;
   std::vector<std::shared_ptr<SubpassObject>> subpasses;
   std::vector<VkSubpassDescription> subpass_descriptions;
-  std::vector<std::shared_ptr<FramebufferAttachment>> framebuffer_attachments;
-  std::unique_ptr<VulkanFramebuffer> framebuffer;
+  std::shared_ptr<FramebufferObject> framebuffer;
   std::shared_ptr<VulkanRenderpass> renderpass;
 };
 
@@ -252,6 +256,39 @@ public:
       present_mode(present_mode),
       surface_format(surface_format)
   {}
+
+  void present(std::shared_ptr<VulkanInstance> vulkan, std::shared_ptr<VulkanDevice> device)
+  {
+    THROW_ON_ERROR(vulkan->vkAcquireNextImage(device->device,
+                                              this->swapchain->swapchain,
+                                              UINT64_MAX,
+                                              this->swapchain_image_ready->semaphore,
+                                              nullptr,
+                                              &this->image_index));
+
+    std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
+    std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
+
+    this->swap_buffers_command->submit(device->default_queue,
+                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                       this->image_index,
+                                       wait_semaphores,
+                                       signal_semaphores);
+
+    VkPresentInfoKHR present_info{
+      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,              // sType
+      nullptr,                                         // pNext
+      static_cast<uint32_t>(signal_semaphores.size()), // waitSemaphoreCount
+      signal_semaphores.data(),                        // pWaitSemaphores
+      1,                                               // swapchainCount
+      &this->swapchain->swapchain,                     // pSwapchains
+      &this->image_index,                              // pImageIndices
+      nullptr                                          // pResults
+    };
+
+    THROW_ON_ERROR(vulkan->vkQueuePresent(device->default_queue, &present_info));
+  }
+
 
 private:
   void doStage(MemoryStager * stager) override
@@ -301,7 +338,7 @@ private:
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         stager->device->default_queue_index,    // srcQueueFamilyIndex
         stager->device->default_queue_index,    // dstQueueFamilyIndex
-        swapchain_images[i],                    // image
+        this->swapchain_images[i],              // image
         this->subresource_range
       };
     }
@@ -414,41 +451,6 @@ private:
     }
   }
 
-  void doRender(SceneRenderer * renderer) override
-  {
-    THROW_ON_ERROR(renderer->vulkan->vkAcquireNextImage(renderer->device->device,
-                                                        this->swapchain->swapchain,
-                                                        UINT64_MAX,
-                                                        this->swapchain_image_ready->semaphore,
-                                                        nullptr,
-                                                        &this->image_index));
-  }
-
-  void doPresent(SceneRenderer * renderer) override
-  {
-    std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
-    std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
-
-    this->swap_buffers_command->submit(renderer->device->default_queue,
-                                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                      this->image_index,
-                                      wait_semaphores,
-                                      signal_semaphores);
-
-    VkPresentInfoKHR present_info{
-      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,              // sType
-      nullptr,                                         // pNext
-      static_cast<uint32_t>(signal_semaphores.size()), // waitSemaphoreCount
-      signal_semaphores.data(),                        // pWaitSemaphores
-      1,                                               // swapchainCount
-      &this->swapchain->swapchain,                     // pSwapchains
-      &this->image_index,                              // pImageIndices
-      nullptr                                          // pResults
-    };
-
-    THROW_ON_ERROR(renderer->vulkan->vkQueuePresent(renderer->device->default_queue, &present_info));
-  }
-
   std::shared_ptr<FramebufferAttachment> color_attachment;
   VkSurfaceKHR surface;
   VkPresentModeKHR present_mode;
@@ -478,8 +480,7 @@ public:
                std::shared_ptr<Separator> scene) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
-    surface(std::move(surface)),
-    root(std::make_shared<Separator>())
+    surface(std::move(surface))
   {
     auto physical_device = this->device->physical_device.device;
     std::vector<VkSurfaceFormatKHR> surface_formats = this->vulkan->getPhysicalDeviceSurfaceFormats(physical_device, this->surface->surface);
@@ -540,7 +541,7 @@ public:
         VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
         std::vector<uint32_t>{}
       )},
-        std::vector<std::shared_ptr<FramebufferAttachment>>{
+        std::vector<std::shared_ptr<Node>>{
           color_attachment,
           depth_attachment
       });
@@ -559,15 +560,13 @@ public:
       scene
     };
 
-    this->root->children = {
-      this->renderpass,
-      this->swapchain
-    };
+    this->rendermanager->alloc(this->renderpass.get());
+    this->rendermanager->stage(this->renderpass.get());
+    this->rendermanager->pipeline(this->renderpass.get());
+    this->rendermanager->record(this->renderpass.get());
 
-    this->rendermanager->alloc(this->root.get());
-    this->rendermanager->stage(this->root.get());
-    this->rendermanager->pipeline(this->root.get());
-    this->rendermanager->record(this->root.get());
+    this->rendermanager->stage(this->swapchain.get());
+    this->rendermanager->record(this->swapchain.get());
   }
 
   ~VulkanViewer()
@@ -583,8 +582,8 @@ public:
   void redraw()
   {
     try {
-      this->rendermanager->render(this->root.get());
-      this->rendermanager->present(this->root.get());
+      this->rendermanager->render(this->renderpass.get());
+      this->swapchain->present(this->vulkan, this->device);
     }
     catch (VkException &) {
       // recreate swapchain, try again next frame
@@ -602,10 +601,12 @@ public:
                                                                         &this->surface_capabilities));
 
     this->rendermanager->resize(this->surface_capabilities.currentExtent);
-    this->renderpass->resize(this->rendermanager.get());
-    
+
+    this->renderpass->resize(this->device, this->surface_capabilities.currentExtent);
+    this->rendermanager->record(this->renderpass.get());
+
     this->rendermanager->stage(this->swapchain.get());
-    this->rendermanager->record(this->root.get());
+    this->rendermanager->record(this->swapchain.get());
 
     this->redraw();
   }
@@ -617,5 +618,4 @@ public:
   std::shared_ptr<RenderpassObject> renderpass;
   std::unique_ptr<RenderManager> rendermanager;
   std::shared_ptr<SwapchainObject> swapchain;
-  std::shared_ptr<Separator> root;
 };

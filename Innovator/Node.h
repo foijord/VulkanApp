@@ -34,18 +34,12 @@ public:
     this->doRender(renderer);
   }
 
-  void present(class SceneRenderer * renderer)
-  {
-    this->doPresent(renderer);
-  }
-
 private:
   virtual void doAlloc(class MemoryAllocator *) {}
   virtual void doStage(class MemoryStager *) {}
   virtual void doPipeline(class PipelineCreator *) {}
   virtual void doRecord(class CommandRecorder *) {}
   virtual void doRender(class SceneRenderer *) {}
-  virtual void doPresent(class SceneRenderer *) {}
 };
 
 class Group : public Node {
@@ -92,13 +86,6 @@ protected:
   {
     for (const auto& node : this->children) {
       node->render(renderer);
-    }
-  }
-
-  void doPresent(class SceneRenderer * renderer) override
-  {
-    for (const auto& node : this->children) {
-      node->present(renderer);
     }
   }
 };

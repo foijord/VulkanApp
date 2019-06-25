@@ -17,6 +17,8 @@ struct MemoryState {
     nullptr, 0, 0
   };
   class BufferData * bufferdata{ nullptr };
+  std::vector<VkImageView> framebuffer_attachments;
+  std::shared_ptr<VulkanRenderpass> renderpass;
   VkExtent2D extent;
 };
 
