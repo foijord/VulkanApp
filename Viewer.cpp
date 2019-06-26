@@ -297,9 +297,86 @@ int main(int argc, char *argv[])
                                                  device_extensions,
                                                  queue_create_infos);
 
+    VkFormat color_format{ VK_FORMAT_B8G8R8A8_UNORM };
+    VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
 
-    auto scene = std::make_shared<Separator>();
-    scene->children = {
+    auto color_attachment = std::make_shared<FramebufferAttachment>(color_format,
+                                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                                    VK_IMAGE_ASPECT_COLOR_BIT);
+
+    auto depth_attachment = std::make_shared<FramebufferAttachment>(depth_format,
+                                                                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                                    VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    std::shared_ptr<Group> renderpass = std::make_shared<RenderpassObject>(
+      std::vector<VkAttachmentDescription>{
+      {
+        0,                                                    // flags
+        color_format,                                         // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_UNDEFINED,                            // initialLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
+      },{
+        0,                                                    // flags
+        depth_format,                                         // format
+        VK_SAMPLE_COUNT_1_BIT,                                // samples
+        VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
+        VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
+        VK_IMAGE_LAYOUT_UNDEFINED,                            // initialLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
+      } },
+      std::vector<std::shared_ptr<SubpassObject>>{
+        std::make_shared<SubpassObject>(
+          0,
+          VK_PIPELINE_BIND_POINT_GRAPHICS,
+          std::vector<VkAttachmentReference>{},
+          std::vector<VkAttachmentReference>{ { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL } },
+          std::vector<VkAttachmentReference>{},
+          VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
+          std::vector<uint32_t>{}
+      )});
+
+
+    std::vector<VkPresentModeKHR> present_modes = vulkan->getPhysicalDeviceSurfacePresentModes(physical_device.device, surface->surface);
+    VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR }; // always present?
+
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+      throw std::runtime_error("surface does not support VK_PRESENT_MODE_FIFO_KHR");
+    }
+
+    auto find_surface_format = [&]() {
+      std::vector<VkSurfaceFormatKHR> surface_formats = 
+        vulkan->getPhysicalDeviceSurfaceFormats(physical_device.device, surface->surface);
+      for (VkSurfaceFormatKHR surface_format : surface_formats) {
+        if (surface_format.format == color_format) {
+          return surface_format;
+        }
+      }
+      throw std::runtime_error("color attachment format not supported!");
+    };
+
+    VkSurfaceFormatKHR surface_format = find_surface_format();
+
+    auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
+                                                       surface->surface,
+                                                       present_mode,
+                                                       surface_format);
+
+
+    auto framebuffer = std::make_shared<FramebufferObject>(
+      std::vector<std::shared_ptr<Node>>{
+        color_attachment,
+        depth_attachment
+    });
+
+    renderpass->children = {
+      framebuffer,
       camera,
       eval_file("crate.scene")
     };
@@ -307,7 +384,8 @@ int main(int argc, char *argv[])
     auto viewer = std::make_shared<VulkanViewer>(vulkan, 
                                                  device, 
                                                  surface, 
-                                                 scene);
+                                                 renderpass,
+                                                 swapchain);
 
     window.camera = camera;
     window.viewer = viewer;

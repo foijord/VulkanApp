@@ -27,19 +27,24 @@ FindAll(Node * root, std::vector<NodeType*> & results) {
   }
 }
 
-class MemoryAllocator {
+class TraversalContext {
 public:
-  typedef std::function<void(MemoryAllocator *)> alloc_callback;
-  NO_COPY_OR_ASSIGNMENT(MemoryAllocator)
-  MemoryAllocator() = delete;
+  typedef std::function<void(TraversalContext *)> alloc_callback;
+  NO_COPY_OR_ASSIGNMENT(TraversalContext)
+  TraversalContext() = delete;
 
-  explicit MemoryAllocator(std::shared_ptr<VulkanDevice> device,
+  explicit TraversalContext(std::shared_ptr<VulkanInstance> vulkan, 
+                           std::shared_ptr<VulkanDevice> device,
+                           VkCommandBuffer command,
                            VkExtent2D extent) :
+    vulkan(std::move(vulkan)),
     device(std::move(device)),
-    extent(extent)
+    extent(extent),
+    command(command),
+    command_scope(std::make_unique<VulkanCommandBufferScope>(command))
   {}
 
-  ~MemoryAllocator()
+  ~TraversalContext()
   {
     try {
       this->allocate();
@@ -52,9 +57,13 @@ public:
     }
   }
 
-  MemoryState state{};
+  State state{};
+  std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   VkExtent2D extent;
+  VkCommandBuffer command;
+  std::unique_ptr<VulkanCommandBufferScope> command_scope;
+
   std::vector<std::shared_ptr<ImageObject>> imageobjects;
   std::vector<std::shared_ptr<BufferObject>> bufferobjects;
   std::vector<alloc_callback> alloc_callbacks;
@@ -82,31 +91,6 @@ private:
       buffer_object->bind(memory, offset);
     }
   }
-};
-
-class MemoryStager {
-public:
-  NO_COPY_OR_ASSIGNMENT(MemoryStager)
-  MemoryStager() = delete;
-  ~MemoryStager() = default;
-
-  explicit MemoryStager(std::shared_ptr<VulkanInstance> vulkan, 
-                        std::shared_ptr<VulkanDevice> device,
-                        VkCommandBuffer command,
-                        VkExtent2D extent) :
-    vulkan(std::move(vulkan)),
-    device(std::move(device)),
-    command(command),
-    extent(extent),
-    command_scope(std::make_unique<VulkanCommandBufferScope>(command))
-  {}
-
-  StageState state{};
-  std::shared_ptr<VulkanInstance> vulkan;
-  std::shared_ptr<VulkanDevice> device;
-  VkCommandBuffer command;
-  VkExtent2D extent;
-  std::unique_ptr<VulkanCommandBufferScope> command_scope;
 };
 
 class PipelineCreator {
@@ -162,15 +146,15 @@ public:
                          VkExtent2D extent) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
-    command(command)
-  {
-    state.extent = extent;
-  }
+    command(command),
+    extent(extent)
+  {}
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   RenderState state;
   VulkanCommandBuffers * command;
+  VkExtent2D extent;
 };
 
 class RenderManager {
@@ -179,9 +163,11 @@ public:
   RenderManager() = delete;
 
   explicit RenderManager(std::shared_ptr<VulkanInstance> vulkan,
-                         std::shared_ptr<VulkanDevice> device) :
+                         std::shared_ptr<VulkanDevice> device,
+                         VkExtent2D extent) :
       vulkan(std::move(vulkan)),
-      device(std::move(device)), 
+      device(std::move(device)),
+      extent(extent),
       render_fence(std::make_unique<VulkanFence>(this->device)),
       stage_fence(std::make_unique<VulkanFence>(this->device)),
       staging_command(std::make_unique<VulkanCommandBuffers>(this->device)),
@@ -200,26 +186,43 @@ public:
     }
   }
 
-  void resize(VkExtent2D extent)
-  {
-    this->extent = extent;
+  void alloc(Node * root) const
+  {    
+    TraversalContext context(this->vulkan,
+                             this->device,
+                             this->staging_command->buffer(),
+                             this->extent);
+
+    root->alloc(&context);
   }
 
-  void alloc(Node * root) const
+  void resize(Node * root, VkExtent2D extent)
   {
-    MemoryAllocator allocator(this->device, this->extent);
-    root->alloc(&allocator);
+    this->extent = extent;
+    {
+      TraversalContext context(this->vulkan,
+                               this->device,
+                               this->staging_command->buffer(),
+                               this->extent);
+
+      root->resize(&context);
+    }
+    FenceScope fence_scope(this->device->device, this->stage_fence->fence);
+    
+    this->staging_command->submit(this->device->default_queue,
+                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                  this->stage_fence->fence);
   }
 
   void stage(Node * root) const
   {
     {
-      MemoryStager stager(this->vulkan,
-                          this->device,
-                          this->staging_command->buffer(),
-                          this->extent);
+      TraversalContext context(this->vulkan,
+                               this->device,
+                               this->staging_command->buffer(),
+                               this->extent);
 
-      root->stage(&stager);
+      root->stage(&context);
     }
     FenceScope fence_scope(this->device->device, this->stage_fence->fence);
     
@@ -267,12 +270,12 @@ public:
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
+  VkExtent2D extent;
+
   std::shared_ptr<VulkanFence> render_fence;
   std::shared_ptr<VulkanFence> stage_fence;
   std::unique_ptr<VulkanCommandBuffers> staging_command;
   std::unique_ptr<VulkanCommandBuffers> render_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
   std::unique_ptr<VulkanSemaphore> rendering_finished;
-
-  VkExtent2D extent;
 };

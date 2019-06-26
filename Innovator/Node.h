@@ -9,14 +9,19 @@ public:
   Node() = default;
   virtual ~Node() = default;
 
-  void alloc(class MemoryAllocator * allocator)
+  void alloc(class TraversalContext * context)
   {
-    this->doAlloc(allocator);
+    this->doAlloc(context);
   }
 
-  void stage(class MemoryStager * stager)
+  void resize(class TraversalContext * context)
   {
-    this->doStage(stager);
+    this->doResize(context);
+  }
+
+  void stage(class TraversalContext * context)
+  {
+    this->doStage(context);
   }
 
   void pipeline(class PipelineCreator * creator)
@@ -35,8 +40,9 @@ public:
   }
 
 private:
-  virtual void doAlloc(class MemoryAllocator *) {}
-  virtual void doStage(class MemoryStager *) {}
+  virtual void doAlloc(class TraversalContext *) {}
+  virtual void doResize(class TraversalContext *) {}
+  virtual void doStage(class TraversalContext *) {}
   virtual void doPipeline(class PipelineCreator *) {}
   virtual void doRecord(class CommandRecorder *) {}
   virtual void doRender(class SceneRenderer *) {}
@@ -54,17 +60,24 @@ public:
   std::vector<std::shared_ptr<Node>> children;
 
 protected:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
     for (const auto& node : this->children) {
-      node->alloc(allocator);
+      node->alloc(context);
     }
   }
 
-  void doStage(MemoryStager * stager) override
+  void doResize(TraversalContext * context) override
   {
     for (const auto& node : this->children) {
-      node->stage(stager);
+      node->resize(context);
+    }
+  }
+
+  void doStage(TraversalContext * context) override
+  {
+    for (const auto& node : this->children) {
+      node->stage(context);
     }
   }
 

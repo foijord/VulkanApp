@@ -12,6 +12,17 @@ struct VulkanIndexBufferDescription {
   VkBuffer buffer;
 };
 
+struct State {
+  VkDescriptorBufferInfo descriptor_buffer_info{
+    nullptr, 0, 0
+  };
+  VkBuffer buffer{ nullptr };
+  class BufferData * bufferdata{ nullptr };
+  std::vector<VkImageView> framebuffer_attachments;
+  std::shared_ptr<VulkanRenderpass> renderpass;
+  VkExtent2D extent;
+};
+
 struct MemoryState {
   VkDescriptorBufferInfo descriptor_buffer_info{
     nullptr, 0, 0
@@ -73,9 +84,6 @@ struct RecordState {
 };
 
 struct RenderState {
-  VkFramebuffer framebuffer;
-  VkExtent2D extent;
-
   mat4d ModelMatrix{
     1, 0, 0, 0,
     0, 1, 0, 0,

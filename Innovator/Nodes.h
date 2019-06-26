@@ -47,16 +47,22 @@ public:
   {}
 
 protected:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
-    StateScope<MemoryAllocator, MemoryState> scope(allocator);
-    Group::doAlloc(allocator);
+    StateScope<TraversalContext, State> scope(context);
+    Group::doAlloc(context);
   }
 
-  void doStage(MemoryStager * stager) override
+  void doResize(TraversalContext * context) override
   {
-    StateScope<MemoryStager, StageState> scope(stager);
-    Group::doStage(stager);
+    StateScope<TraversalContext, State> scope(context);
+    Group::doResize(context);
+  }
+
+  void doStage(TraversalContext * context) override
+  {
+    StateScope<TraversalContext, State> scope(context);
+    Group::doStage(context);
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -148,11 +154,14 @@ public:
   }
 
 private:
+  void doResize(TraversalContext * context) override
+  {
+    this->aspectratio = static_cast<float>(context->extent.width) /
+                        static_cast<float>(context->extent.height);
+  }
+
   void doRender(SceneRenderer * renderer) override
   {
-    this->aspectratio = static_cast<float>(renderer->state.extent.width) /
-                        static_cast<float>(renderer->state.extent.height);
-
     renderer->state.ViewMatrix = this->viewmatrix();
     renderer->state.ProjMatrix = this->projmatrix();
   }
@@ -204,14 +213,14 @@ public:
   virtual size_t stride() const = 0;
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
-    allocator->state.bufferdata = this;
+    context->state.bufferdata = this;
   }
 
-  void doStage(MemoryStager * stager) override
+  void doStage(TraversalContext * context) override
   {
-    stager->state.bufferdata = this;
+    context->state.bufferdata = this;
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -322,24 +331,24 @@ public:
   {}
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      std::make_shared<VulkanBuffer>(allocator->device,
+      std::make_shared<VulkanBuffer>(context->device,
                                      this->create_flags,
-                                     allocator->state.bufferdata->size(),
+                                     context->state.bufferdata->size(),
                                      this->usage_flags,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    allocator->bufferobjects.push_back(this->buffer);
+    context->bufferobjects.push_back(this->buffer);
   }
 
-  void doStage(MemoryStager * stager) override
+  void doStage(TraversalContext * context) override
   {
-    stager->state.buffer = this->buffer->buffer->buffer;
-    MemoryMap memmap(this->buffer->memory.get(), stager->state.bufferdata->size(), this->buffer->offset);
-    stager->state.bufferdata->copy(memmap.mem);
+    context->state.buffer = this->buffer->buffer->buffer;
+    MemoryMap memmap(this->buffer->memory.get(), context->state.bufferdata->size(), this->buffer->offset);
+    context->state.bufferdata->copy(memmap.mem);
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -369,29 +378,29 @@ public:
   {}
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
     this->buffer = std::make_shared<BufferObject>(
-      std::make_shared<VulkanBuffer>(allocator->device,
+      std::make_shared<VulkanBuffer>(context->device,
                                      this->create_flags,
-                                     allocator->state.bufferdata->size(),
+                                     context->state.bufferdata->size(),
                                      this->usage_flags,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    allocator->bufferobjects.push_back(this->buffer);
+    context->bufferobjects.push_back(this->buffer);
   }
 
-  void doStage(MemoryStager * stager) override
+  void doStage(TraversalContext * context) override
   {
     std::vector<VkBufferCopy> regions = { {
         0,                                                  // srcOffset
         0,                                                  // dstOffset
-        stager->state.bufferdata->size(),                   // size
+        context->state.bufferdata->size(),                   // size
     } };
 
-    vkCmdCopyBuffer(stager->command,
-                    stager->state.buffer,
+    vkCmdCopyBuffer(context->command,
+                    context->state.buffer,
                     this->buffer->buffer->buffer,
                     static_cast<uint32_t>(regions.size()),
                     regions.data());
@@ -422,18 +431,18 @@ public:
   {}
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
     
     this->buffer = std::make_shared<BufferObject>(
-      std::make_shared<VulkanBuffer>(allocator->device,
+      std::make_shared<VulkanBuffer>(context->device,
                                      0,                                     
                                      this->size,
                                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    allocator->bufferobjects.push_back(this->buffer);
+    context->bufferobjects.push_back(this->buffer);
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -621,9 +630,9 @@ public:
   }
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
-    this->shader = std::make_unique<VulkanShaderModule>(allocator->device, this->code);
+    this->shader = std::make_unique<VulkanShaderModule>(context->device, this->code);
   }
 
   void doPipeline(PipelineCreator * creator) override
@@ -654,10 +663,10 @@ public:
   virtual ~Sampler() = default;
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
     this->sampler = std::make_unique<VulkanSampler>(
-      allocator->device,
+      context->device,
       VK_FILTER_LINEAR,
       VK_FILTER_LINEAR,
       VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -714,12 +723,12 @@ public:
   virtual ~ImageNode() = default;
 
 private:
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
     VkImageFormatProperties image_format_properties;
 
     THROW_ON_ERROR(vkGetPhysicalDeviceImageFormatProperties(
-      allocator->device->physical_device.device,
+      context->device->physical_device.device,
       this->texture->format(),
       this->texture->image_type(),
       this->tiling,
@@ -728,17 +737,17 @@ private:
       &image_format_properties));
 
     this->buffer = std::make_shared<BufferObject>(
-      std::make_shared<VulkanBuffer>(allocator->device,
+      std::make_shared<VulkanBuffer>(context->device,
                                      0,                                     
                                      this->texture->size(),
                                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                      VK_SHARING_MODE_EXCLUSIVE),
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    allocator->bufferobjects.push_back(this->buffer);
+    context->bufferobjects.push_back(this->buffer);
 
     this->image = std::make_shared<VulkanImage>(
-      allocator->device,
+      context->device,
       this->texture->image_type(),
       this->texture->format(),
       this->texture->extent(0),
@@ -751,19 +760,19 @@ private:
       this->create_flags);
 
     this->image_object = std::make_shared<ImageObject>(
-      allocator->device,
+      context->device,
       this->image,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    allocator->imageobjects.push_back(this->image_object);
+    context->imageobjects.push_back(this->image_object);
   }
 
-  void doStage(MemoryStager * stager) override
+  void doStage(TraversalContext * context) override
   {
     this->buffer->memcpy(this->texture->data(), this->texture->size());
 
     this->view = std::make_unique<VulkanImageView>(
-      stager->device,
+      context->device,
       this->image->image,
       this->texture->format(),
       this->texture->image_view_type(),
@@ -777,13 +786,13 @@ private:
       VK_ACCESS_TRANSFER_WRITE_BIT,                          // dstAccessMask
       VK_IMAGE_LAYOUT_UNDEFINED,                             // oldLayout
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                  // newLayout
-      stager->device->default_queue_index,                   // srcQueueFamilyIndex
-      stager->device->default_queue_index,                   // dstQueueFamilyIndex
+      context->device->default_queue_index,                   // srcQueueFamilyIndex
+      context->device->default_queue_index,                   // dstQueueFamilyIndex
       this->image->image,                                    // image
       this->subresource_range,                               // subresourceRange
     };
 
-    vkCmdPipelineBarrier(stager->command,
+    vkCmdPipelineBarrier(context->command,
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          0, 0, nullptr, 0, nullptr, 1,
@@ -813,7 +822,7 @@ private:
       buffer_offset += this->texture->size(mip_level);
     }
 
-    vkCmdCopyBufferToImage(stager->command,
+    vkCmdCopyBufferToImage(context->command,
                            this->buffer->buffer->buffer,
                            this->image->image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -950,10 +959,10 @@ public:
 private:
   virtual void execute(VkCommandBuffer command, CommandRecorder * recorder) = 0;
 
-  void doAlloc(MemoryAllocator * allocator) override
+  void doAlloc(TraversalContext * context) override
   {
     this->command = std::make_unique<VulkanCommandBuffers>(
-      allocator->device,
+      context->device,
       1,
       VK_COMMAND_BUFFER_LEVEL_SECONDARY);
   }
@@ -1143,4 +1152,467 @@ private:
   int32_t vertexoffset;
   uint32_t firstinstance;
   VkDeviceSize offset;
+};
+
+class FramebufferAttachment : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(FramebufferAttachment)
+  virtual ~FramebufferAttachment() = default;
+
+  FramebufferAttachment(VkFormat format,
+                        VkImageUsageFlags usage,
+                        VkImageAspectFlags aspectMask) :
+    format(format),
+    usage(usage),
+    aspectMask(aspectMask)
+  {}
+
+private:
+  void doAlloc(TraversalContext * context) override
+  {
+    VkExtent3D extent = { context->extent.width, context->extent.height, 1 };
+    this->image = std::make_shared<VulkanImage>(context->device,
+                                                VK_IMAGE_TYPE_2D,
+                                                this->format,
+                                                extent,
+                                                this->subresource_range.levelCount,
+                                                this->subresource_range.layerCount,
+                                                VK_SAMPLE_COUNT_1_BIT,
+                                                VK_IMAGE_TILING_OPTIMAL,
+                                                this->usage,
+                                                VK_SHARING_MODE_EXCLUSIVE,
+                                                0);
+
+    this->imageobject = std::make_shared<ImageObject>(context->device,
+                                                      this->image,
+                                                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    context->imageobjects.push_back(this->imageobject);
+
+    context->alloc_callbacks.push_back([this](TraversalContext * context) {
+      this->imageview = std::make_shared<VulkanImageView>(context->device,
+                                                          this->image->image,
+                                                          this->format,
+                                                          VK_IMAGE_VIEW_TYPE_2D,
+                                                          this->component_mapping,
+                                                          this->subresource_range);
+
+      context->state.framebuffer_attachments.push_back(this->imageview->view);
+    });
+  }
+
+  VkFormat format;
+  VkImageUsageFlags usage;
+  VkImageAspectFlags aspectMask;
+ 
+  VkImageSubresourceRange subresource_range{
+    aspectMask, 0, 1, 0, 1
+  };
+
+  VkComponentMapping component_mapping{
+    VK_COMPONENT_SWIZZLE_R,
+    VK_COMPONENT_SWIZZLE_G,
+    VK_COMPONENT_SWIZZLE_B,
+    VK_COMPONENT_SWIZZLE_A
+  };
+
+public:
+  std::shared_ptr<VulkanImage> image;
+  std::shared_ptr<ImageObject> imageobject;
+  std::shared_ptr<VulkanImageView> imageview;
+};
+
+class SubpassObject {
+public:
+  NO_COPY_OR_ASSIGNMENT(SubpassObject)
+
+  SubpassObject(VkSubpassDescriptionFlags flags,
+                VkPipelineBindPoint bind_point,
+                std::vector<VkAttachmentReference> input_attachments,
+                std::vector<VkAttachmentReference> color_attachments,
+                std::vector<VkAttachmentReference> resolve_attachments,
+                VkAttachmentReference depth_stencil_attachment,
+                std::vector<uint32_t> preserve_attachments) :
+    input_attachments(input_attachments),
+    color_attachments(color_attachments),
+    resolve_attachments(resolve_attachments),
+    depth_stencil_attachment(depth_stencil_attachment),
+    preserve_attachments(preserve_attachments)
+  {
+    this->description = {
+      flags,                                                    // flags
+      bind_point,                                               // pipelineBindPoint
+      static_cast<uint32_t>(this->input_attachments.size()),    // inputAttachmentCount
+      this->input_attachments.data(),                           // pInputAttachments
+      static_cast<uint32_t>(this->color_attachments.size()),    // colorAttachmentCount
+      this->color_attachments.data(),                           // pColorAttachments
+      this->resolve_attachments.data(),                         // pResolveAttachments
+      &this->depth_stencil_attachment,                          // pDepthStencilAttachment
+      static_cast<uint32_t>(this->preserve_attachments.size()), // preserveAttachmentCount
+      this->preserve_attachments.data()                         // pPreserveAttachments
+    };
+  }
+
+  VkSubpassDescription description;
+
+private:
+  std::vector<VkAttachmentReference> input_attachments;
+  std::vector<VkAttachmentReference> color_attachments;
+  std::vector<VkAttachmentReference> resolve_attachments;
+  VkAttachmentReference depth_stencil_attachment;
+  std::vector<uint32_t> preserve_attachments;
+};
+
+class FramebufferObject : public Group {
+public:
+  NO_COPY_OR_ASSIGNMENT(FramebufferObject)
+  FramebufferObject() = delete;
+  virtual ~FramebufferObject() = default;
+
+  FramebufferObject(std::vector<std::shared_ptr<Node>> framebuffer_attachments)
+    : Group(framebuffer_attachments)
+  {}
+
+private:
+  void doAlloc(TraversalContext * context) override
+  {
+    Group::doAlloc(context);
+    context->alloc_callbacks.push_back([this](TraversalContext * context) {
+      this->framebuffer = std::make_unique<VulkanFramebuffer>(context->device,
+                                                              context->state.renderpass,
+                                                              context->state.framebuffer_attachments,
+                                                              context->extent,
+                                                              1);
+    });
+  }
+
+  void doResize(TraversalContext * context) override
+  {
+    this->doAlloc(context);
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.framebuffer = this->framebuffer->framebuffer;
+  }
+
+
+public:
+  std::unique_ptr<VulkanFramebuffer> framebuffer;
+};
+
+class RenderpassObject : public Group {
+public:
+  NO_COPY_OR_ASSIGNMENT(RenderpassObject)
+  virtual ~RenderpassObject() = default;
+
+  RenderpassObject(std::vector<VkAttachmentDescription> attachments,
+                   std::vector<std::shared_ptr<SubpassObject>> subpasses) :
+    attachments(std::move(attachments)),
+    subpasses(std::move(subpasses))
+  {
+    for (auto & subpass : this->subpasses) {
+      this->subpass_descriptions.push_back(subpass->description);
+    }
+  }
+
+private:
+  void doAlloc(TraversalContext * context) override
+  {
+    this->renderpass = std::make_shared<VulkanRenderpass>(context->device,
+                                                          this->attachments,
+                                                          this->subpass_descriptions);
+
+    context->state.renderpass = this->renderpass;
+    Group::doAlloc(context);
+  }
+
+  void doResize(TraversalContext * context) override
+  {
+    context->state.renderpass = this->renderpass;
+    Group::doResize(context);
+  }
+
+  void doPipeline(PipelineCreator * creator) override
+  {
+    creator->state.renderpass = this->renderpass;
+    Group::doPipeline(creator);
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    recorder->state.renderpass = this->renderpass;
+    Group::doRecord(recorder);
+  }
+
+  void doRender(SceneRenderer * renderer) override
+  {
+    if (this->children.empty()) {
+      throw std::runtime_error("RenderpassObject::doRender(): Nothing to render!");
+    }
+
+    std::shared_ptr<FramebufferObject> framebuffer = 
+      std::dynamic_pointer_cast<FramebufferObject>(this->children[0]);
+
+    if (!framebuffer) {
+      throw std::runtime_error("RenderpassObject::doRender(): Renderpass does not contain a framebuffer!");
+    }
+
+    const VkRect2D renderarea{
+      { 0, 0 },                 // offset
+      renderer->extent          // extent
+    };
+
+    const std::vector<VkClearValue> clearvalues{
+      { { { 0.0f, 0.0f, 0.0f, 0.0f } } },
+      { { { 1.0f, 0 } } }
+    };
+
+    VulkanCommandBufferScope commandbuffer(renderer->command->buffer());
+
+    VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
+                                           framebuffer->framebuffer->framebuffer,
+                                           renderarea,
+                                           clearvalues,
+                                           renderer->command->buffer());
+
+    Group::doRender(renderer);
+  }
+
+  std::vector<VkAttachmentDescription> attachments;
+  std::vector<std::shared_ptr<SubpassObject>> subpasses;
+  std::vector<VkSubpassDescription> subpass_descriptions;
+  std::shared_ptr<VulkanRenderpass> renderpass;
+};
+
+class SwapchainObject : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(SwapchainObject)
+  virtual ~SwapchainObject() = default;
+
+  SwapchainObject(std::shared_ptr<FramebufferAttachment> color_attachment,
+                  VkSurfaceKHR surface,
+                  VkPresentModeKHR present_mode,
+                  VkSurfaceFormatKHR surface_format) :
+      color_attachment(std::move(color_attachment)),
+      surface(surface),
+      present_mode(present_mode),
+      surface_format(surface_format)
+  {}
+
+  void present(std::shared_ptr<VulkanInstance> vulkan, std::shared_ptr<VulkanDevice> device)
+  {
+    THROW_ON_ERROR(vulkan->vkAcquireNextImage(device->device,
+                                              this->swapchain->swapchain,
+                                              UINT64_MAX,
+                                              this->swapchain_image_ready->semaphore,
+                                              nullptr,
+                                              &this->image_index));
+
+    std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
+    std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
+
+    this->swap_buffers_command->submit(device->default_queue,
+                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                       this->image_index,
+                                       wait_semaphores,
+                                       signal_semaphores);
+
+    VkPresentInfoKHR present_info{
+      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,              // sType
+      nullptr,                                         // pNext
+      static_cast<uint32_t>(signal_semaphores.size()), // waitSemaphoreCount
+      signal_semaphores.data(),                        // pWaitSemaphores
+      1,                                               // swapchainCount
+      &this->swapchain->swapchain,                     // pSwapchains
+      &this->image_index,                              // pImageIndices
+      nullptr                                          // pResults
+    };
+
+    THROW_ON_ERROR(vulkan->vkQueuePresent(device->default_queue, &present_info));
+  }
+
+
+private:
+  void doResize(TraversalContext * context) override
+  {
+    this->doStage(context);
+  }
+
+  void doStage(TraversalContext * context) override
+  {
+    this->swapchain_image_ready = std::make_unique<VulkanSemaphore>(context->device);
+    this->swap_buffers_finished = std::make_unique<VulkanSemaphore>(context->device);
+
+    VkSwapchainKHR prevswapchain = (this->swapchain) ? this->swapchain->swapchain : nullptr;
+
+    this->swapchain = std::make_unique<VulkanSwapchain>(
+      context->device,
+      context->vulkan,
+      surface,
+      3,
+      surface_format.format,
+      surface_format.colorSpace,
+      context->extent,
+      1,
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+      VK_SHARING_MODE_EXCLUSIVE,
+      std::vector<uint32_t>{ context->device->default_queue_index, },
+      VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+      present_mode,
+      VK_FALSE,
+      prevswapchain);
+
+    uint32_t count;
+    THROW_ON_ERROR(context->vulkan->vkGetSwapchainImages(context->device->device, 
+                                                        this->swapchain->swapchain, 
+                                                        &count, 
+                                                        nullptr));
+    this->swapchain_images.resize(count);
+    THROW_ON_ERROR(context->vulkan->vkGetSwapchainImages(context->device->device, 
+                                                        this->swapchain->swapchain, 
+                                                        &count, 
+                                                        this->swapchain_images.data()));
+
+    std::vector<VkImageMemoryBarrier> image_barriers(count);
+    for (uint32_t i = 0; i < count; i++) {
+      image_barriers[i] = {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, // sType
+        nullptr,                                // pNext
+        0,
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        context->device->default_queue_index,    // srcQueueFamilyIndex
+        context->device->default_queue_index,    // dstQueueFamilyIndex
+        this->swapchain_images[i],              // image
+        this->subresource_range
+      };
+    }
+
+    vkCmdPipelineBarrier(context->command,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         0, 0, nullptr, 0, nullptr,
+                         count, image_barriers.data());
+  }
+
+  void doRecord(CommandRecorder * recorder) override
+  {
+    this->swap_buffers_command = std::make_unique<VulkanCommandBuffers>(recorder->device, 
+                                                                        this->swapchain_images.size(),
+                                                                        VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    for (size_t i = 0; i < this->swapchain_images.size(); i++) {
+      VkImageMemoryBarrier src_image_barriers[2] = { 
+      {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+        VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        this->swapchain_images[i],                                     // image
+        this->subresource_range,                                       // subresourceRange
+      },{
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+        VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        this->color_attachment->image->image,                          // image
+        this->subresource_range,                                       // subresourceRange
+      } };
+
+      VulkanCommandBufferScope command_scope(this->swap_buffers_command->buffer(i));
+
+      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr,
+                           2, src_image_barriers);
+
+      const VkImageSubresourceLayers subresource_layers{
+        this->subresource_range.aspectMask,     // aspectMask
+        this->subresource_range.baseMipLevel,   // mipLevel
+        this->subresource_range.baseArrayLayer, // baseArrayLayer
+        this->subresource_range.layerCount      // layerCount;
+      };
+
+      const VkOffset3D offset = {
+        0, 0, 0
+      };
+
+      VkExtent3D extent3d = { recorder->extent.width, recorder->extent.height, 1 };
+
+      VkImageCopy image_copy{
+        subresource_layers,             // srcSubresource
+        offset,                         // srcOffset
+        subresource_layers,             // dstSubresource
+        offset,                         // dstOffset
+        extent3d                        // extent
+      };
+
+      vkCmdCopyImage(this->swap_buffers_command->buffer(i),
+                     color_attachment->image->image,
+                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                     this->swapchain_images[i],
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                     1, &image_copy);
+
+      VkImageMemoryBarrier dst_image_barriers[2] = { 
+      {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_TRANSFER_WRITE_BIT,                                  // srcAccessMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // oldLayout
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        this->swapchain_images[i],                                     // image
+        this->subresource_range,                                       // subresourceRange
+      },{
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+        nullptr,                                                       // pNext
+        VK_ACCESS_TRANSFER_READ_BIT,                                   // srcAccessMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // oldLayout
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
+        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
+        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        this->color_attachment->image->image,                          // image
+        this->subresource_range,                                       // subresourceRange
+      } };
+
+      vkCmdPipelineBarrier(this->swap_buffers_command->buffer(i),
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr,
+                           2, dst_image_barriers);
+    }
+  }
+
+  std::shared_ptr<FramebufferAttachment> color_attachment;
+  VkSurfaceKHR surface;
+  VkPresentModeKHR present_mode;
+  VkSurfaceFormatKHR surface_format;
+
+  std::unique_ptr<VulkanSwapchain> swapchain;
+  std::vector<VkImage> swapchain_images;
+  std::unique_ptr<VulkanCommandBuffers> swap_buffers_command;
+  std::unique_ptr<VulkanSemaphore> swapchain_image_ready;
+  std::unique_ptr<VulkanSemaphore> swap_buffers_finished;
+
+  const VkImageSubresourceRange subresource_range{
+    VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+  };
+
+  uint32_t image_index;
 };
