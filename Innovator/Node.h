@@ -39,6 +39,11 @@ public:
     this->doRender(renderer);
   }
 
+  void present(class TraversalContext * context)
+  {
+    this->doPresent(context);
+  }
+
 private:
   virtual void doAlloc(class TraversalContext *) {}
   virtual void doResize(class TraversalContext *) {}
@@ -46,6 +51,7 @@ private:
   virtual void doPipeline(class PipelineCreator *) {}
   virtual void doRecord(class CommandRecorder *) {}
   virtual void doRender(class SceneRenderer *) {}
+  virtual void doPresent(class TraversalContext *) {}
 };
 
 class Group : public Node {
@@ -99,6 +105,13 @@ protected:
   {
     for (const auto& node : this->children) {
       node->render(renderer);
+    }
+  }
+
+  void doPresent(class TraversalContext * context) override
+  {
+    for (const auto& node : this->children) {
+      node->present(context);
     }
   }
 };

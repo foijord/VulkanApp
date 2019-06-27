@@ -82,6 +82,12 @@ protected:
     StateScope<SceneRenderer, RenderState> scope(renderer);
     Group::doRender(renderer);
   }
+
+  void doPresent(TraversalContext * context) override
+  {
+    StateScope<TraversalContext, State> scope(context);
+    Group::doPresent(context);
+  }
 };
 
 class Camera : public Node {
@@ -1201,6 +1207,7 @@ private:
     });
   }
 
+public:
   VkFormat format;
   VkImageUsageFlags usage;
   VkImageAspectFlags aspectMask;
@@ -1266,12 +1273,8 @@ private:
 class FramebufferObject : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(FramebufferObject)
-  FramebufferObject() = delete;
+  FramebufferObject() = default;
   virtual ~FramebufferObject() = default;
-
-  FramebufferObject(std::vector<std::shared_ptr<Node>> framebuffer_attachments)
-    : Group(framebuffer_attachments)
-  {}
 
 private:
   void doAlloc(TraversalContext * context) override
@@ -1392,27 +1395,32 @@ public:
 
   SwapchainObject(std::shared_ptr<FramebufferAttachment> color_attachment,
                   VkSurfaceKHR surface,
-                  VkPresentModeKHR present_mode,
-                  VkSurfaceFormatKHR surface_format) :
+                  VkPresentModeKHR present_mode) :
       color_attachment(std::move(color_attachment)),
       surface(surface),
-      present_mode(present_mode),
-      surface_format(surface_format)
+      present_mode(present_mode)
   {}
 
-  void present(std::shared_ptr<VulkanInstance> vulkan, std::shared_ptr<VulkanDevice> device)
+private:
+  void doPresent(TraversalContext * context) override
   {
-    THROW_ON_ERROR(vulkan->vkAcquireNextImage(device->device,
-                                              this->swapchain->swapchain,
-                                              UINT64_MAX,
-                                              this->swapchain_image_ready->semaphore,
-                                              nullptr,
-                                              &this->image_index));
+    std::vector<VkPresentModeKHR> present_modes = 
+      context->vulkan->getPhysicalDeviceSurfacePresentModes(context->device->physical_device.device, this->surface);
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+      throw std::runtime_error("surface does not support present mode");
+    }
+
+    THROW_ON_ERROR(context->vulkan->vkAcquireNextImage(context->device->device,
+                                                       this->swapchain->swapchain,
+                                                       UINT64_MAX,
+                                                       this->swapchain_image_ready->semaphore,
+                                                       nullptr,
+                                                       &this->image_index));
 
     std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
     std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
 
-    this->swap_buffers_command->submit(device->default_queue,
+    this->swap_buffers_command->submit(context->device->default_queue,
                                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                        this->image_index,
                                        wait_semaphores,
@@ -1429,11 +1437,10 @@ public:
       nullptr                                          // pResults
     };
 
-    THROW_ON_ERROR(vulkan->vkQueuePresent(device->default_queue, &present_info));
+    THROW_ON_ERROR(context->vulkan->vkQueuePresent(context->device->default_queue, &present_info));
   }
 
 
-private:
   void doResize(TraversalContext * context) override
   {
     this->doStage(context);
@@ -1441,6 +1448,19 @@ private:
 
   void doStage(TraversalContext * context) override
   {
+    auto find_surface_format = [&]() {
+      std::vector<VkSurfaceFormatKHR> surface_formats =
+        context->vulkan->getPhysicalDeviceSurfaceFormats(context->device->physical_device.device, this->surface);
+      for (VkSurfaceFormatKHR surface_format : surface_formats) {
+        if (surface_format.format == this->color_attachment->format) {
+          return surface_format;
+        }
+      }
+      throw std::runtime_error("color attachment format not supported!");
+    };
+
+    VkSurfaceFormatKHR surface_format = find_surface_format();
+
     this->swapchain_image_ready = std::make_unique<VulkanSemaphore>(context->device);
     this->swap_buffers_finished = std::make_unique<VulkanSemaphore>(context->device);
 
@@ -1486,7 +1506,7 @@ private:
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         context->device->default_queue_index,    // srcQueueFamilyIndex
         context->device->default_queue_index,    // dstQueueFamilyIndex
-        this->swapchain_images[i],              // image
+        this->swapchain_images[i],               // image
         this->subresource_range
       };
     }
@@ -1602,7 +1622,6 @@ private:
   std::shared_ptr<FramebufferAttachment> color_attachment;
   VkSurfaceKHR surface;
   VkPresentModeKHR present_mode;
-  VkSurfaceFormatKHR surface_format;
 
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::vector<VkImage> swapchain_images;

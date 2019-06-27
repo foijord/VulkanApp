@@ -23,22 +23,6 @@ struct State {
   VkExtent2D extent;
 };
 
-struct MemoryState {
-  VkDescriptorBufferInfo descriptor_buffer_info{
-    nullptr, 0, 0
-  };
-  class BufferData * bufferdata{ nullptr };
-  std::vector<VkImageView> framebuffer_attachments;
-  std::shared_ptr<VulkanRenderpass> renderpass;
-  VkExtent2D extent;
-};
-
-struct StageState {
-  VkBuffer buffer{ nullptr };
-  class BufferData * bufferdata{ nullptr };
-  std::shared_ptr<VulkanRenderpass> renderpass;
-};
-
 struct PipelineState {
   VkPipelineRasterizationStateCreateInfo rasterization_state{
     VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, // sType

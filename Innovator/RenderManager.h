@@ -268,6 +268,16 @@ public:
                                  this->render_fence->fence);
   }
 
+  void present(Node * root) const
+  {
+    TraversalContext context(this->vulkan,
+                             this->device,
+                             this->staging_command->buffer(),
+                             this->extent);
+
+    root->present(&context);
+  }
+
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   VkExtent2D extent;
