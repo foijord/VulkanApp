@@ -297,14 +297,11 @@ int main(int argc, char *argv[])
                                                  device_extensions,
                                                  queue_create_infos);
 
-    VkFormat color_format{ VK_FORMAT_B8G8R8A8_UNORM };
-    VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
-
-    auto color_attachment = std::make_shared<FramebufferAttachment>(color_format,
+    auto color_attachment = std::make_shared<FramebufferAttachment>(VK_FORMAT_B8G8R8A8_UNORM,
                                                                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                                                     VK_IMAGE_ASPECT_COLOR_BIT);
 
-    auto depth_attachment = std::make_shared<FramebufferAttachment>(depth_format,
+    auto depth_attachment = std::make_shared<FramebufferAttachment>(VK_FORMAT_D32_SFLOAT,
                                                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                                                     VK_IMAGE_ASPECT_DEPTH_BIT);
 
@@ -312,7 +309,7 @@ int main(int argc, char *argv[])
       std::vector<VkAttachmentDescription>{
       {
         0,                                                    // flags
-        color_format,                                         // format
+        color_attachment->format,                             // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
         VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
         VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
@@ -322,7 +319,7 @@ int main(int argc, char *argv[])
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
       },{
         0,                                                    // flags
-        depth_format,                                         // format
+        depth_attachment->format,                             // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
         VK_ATTACHMENT_LOAD_OP_CLEAR,                          // loadOp
         VK_ATTACHMENT_STORE_OP_STORE,                         // storeOp
@@ -342,31 +339,9 @@ int main(int argc, char *argv[])
           std::vector<uint32_t>{}
       )});
 
-
-    std::vector<VkPresentModeKHR> present_modes = vulkan->getPhysicalDeviceSurfacePresentModes(physical_device.device, surface->surface);
-    VkPresentModeKHR present_mode{ VK_PRESENT_MODE_FIFO_KHR }; // always present?
-
-    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
-      throw std::runtime_error("surface does not support VK_PRESENT_MODE_FIFO_KHR");
-    }
-
-    auto find_surface_format = [&]() {
-      std::vector<VkSurfaceFormatKHR> surface_formats = 
-        vulkan->getPhysicalDeviceSurfaceFormats(physical_device.device, surface->surface);
-      for (VkSurfaceFormatKHR surface_format : surface_formats) {
-        if (surface_format.format == color_format) {
-          return surface_format;
-        }
-      }
-      throw std::runtime_error("color attachment format not supported!");
-    };
-
-    VkSurfaceFormatKHR surface_format = find_surface_format();
-
     auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
                                                        surface->surface,
-                                                       present_mode,
-                                                       surface_format);
+                                                       VK_PRESENT_MODE_FIFO_KHR);
 
 
     auto framebuffer = std::make_shared<FramebufferObject>(
@@ -375,17 +350,23 @@ int main(int argc, char *argv[])
         depth_attachment
     });
 
+
     renderpass->children = {
       framebuffer,
       camera,
       eval_file("crate.scene")
     };
 
+    auto scene = std::make_shared<Group>();
+    scene->children = {
+      renderpass,
+      swapchain
+    };
+
     auto viewer = std::make_shared<VulkanViewer>(vulkan, 
                                                  device, 
                                                  surface, 
-                                                 renderpass,
-                                                 swapchain);
+                                                 scene);
 
     window.camera = camera;
     window.viewer = viewer;

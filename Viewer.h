@@ -25,13 +25,11 @@ public:
   VulkanViewer(std::shared_ptr<VulkanInstance> vulkan, 
                std::shared_ptr<VulkanDevice> device,
                std::shared_ptr<::VulkanSurface> surface, 
-               std::shared_ptr<Group> scene,
-               std::shared_ptr<SwapchainObject> swapchain) :
+               std::shared_ptr<Group> scene) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
     surface(std::move(surface)),
-    scene(std::move(scene)),
-    swapchain(std::move(swapchain))
+    scene(std::move(scene))
   {
     THROW_ON_ERROR(this->vulkan->vkGetPhysicalDeviceSurfaceCapabilities(this->device->physical_device.device,
                                                                         this->surface->surface,
@@ -45,9 +43,6 @@ public:
     this->rendermanager->stage(this->scene.get());
     this->rendermanager->pipeline(this->scene.get());
     this->rendermanager->record(this->scene.get());
-
-    this->rendermanager->stage(this->swapchain.get());
-    this->rendermanager->record(this->swapchain.get());
   }
 
   ~VulkanViewer()
@@ -64,7 +59,7 @@ public:
   {
     try {
       this->rendermanager->render(this->scene.get());
-      this->swapchain->present(this->vulkan, this->device);
+      this->rendermanager->present(this->scene.get());
     }
     catch (VkException &) {
       // recreate swapchain, try again next frame
@@ -84,9 +79,6 @@ public:
     this->rendermanager->resize(this->scene.get(), this->surface_capabilities.currentExtent);
     this->rendermanager->record(this->scene.get());
 
-    this->rendermanager->resize(this->swapchain.get(), this->surface_capabilities.currentExtent);
-    this->rendermanager->record(this->swapchain.get());
-
     this->redraw();
   }
 
@@ -96,5 +88,4 @@ public:
   VkSurfaceCapabilitiesKHR surface_capabilities{};
   std::shared_ptr<Group> scene;
   std::unique_ptr<RenderManager> rendermanager;
-  std::shared_ptr<SwapchainObject> swapchain;
 };
