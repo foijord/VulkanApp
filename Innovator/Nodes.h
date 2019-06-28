@@ -1273,12 +1273,8 @@ private:
 class FramebufferObject : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(FramebufferObject)
-  FramebufferObject() = delete;
+  FramebufferObject() = default;
   virtual ~FramebufferObject() = default;
-
-  FramebufferObject(std::vector<std::shared_ptr<Node>> framebuffer_attachments)
-    : Group(framebuffer_attachments)
-  {}
 
 private:
   void doAlloc(TraversalContext * context) override

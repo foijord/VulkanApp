@@ -343,13 +343,11 @@ int main(int argc, char *argv[])
                                                        surface->surface,
                                                        VK_PRESENT_MODE_FIFO_KHR);
 
-
-    auto framebuffer = std::make_shared<FramebufferObject>(
-      std::vector<std::shared_ptr<Node>>{
-        color_attachment,
-        depth_attachment
-    });
-
+    auto framebuffer = std::make_shared<FramebufferObject>();
+    framebuffer->children = {
+      color_attachment,
+      depth_attachment
+    };
 
     renderpass->children = {
       framebuffer,
