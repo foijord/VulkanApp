@@ -208,16 +208,6 @@ int main(int argc, char *argv[])
   try {
     VulkanImageFactory::Register<QTextureImage>();
 
-    VkApplicationInfo application_info{
-      VK_STRUCTURE_TYPE_APPLICATION_INFO, // sType
-      nullptr,                            // pNext
-      "Innovator Viewer",                 // pApplicationName
-      1,                                  // applicationVersion
-      "Innovator",                        // pEngineName
-      1,                                  // engineVersion
-      VK_API_VERSION_1_0,                 // apiVersion
-    };
-
     std::vector<const char *> instance_layers{
 #ifdef _DEBUG
       "VK_LAYER_LUNARG_standard_validation",
@@ -235,7 +225,7 @@ int main(int argc, char *argv[])
     };
 
     auto vulkan = std::make_shared<VulkanInstance>(
-      application_info,
+      "Innovator",
       instance_layers,
       instance_extensions);
 
@@ -264,9 +254,6 @@ int main(int argc, char *argv[])
       QX11Info::connection());
 #endif
 
-    auto camera = std::make_shared<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f);
-    camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
-
     VkPhysicalDeviceFeatures required_device_features;
     ::memset(&required_device_features, VK_FALSE, sizeof(VkPhysicalDeviceFeatures));
     required_device_features.geometryShader = VK_TRUE;
@@ -274,12 +261,6 @@ int main(int argc, char *argv[])
     required_device_features.textureCompressionBC = VK_TRUE;
     required_device_features.fragmentStoresAndAtomics = VK_TRUE;
 
-    auto physical_device = vulkan->selectPhysicalDevice(required_device_features);
-
-    VkQueueFlags queue_flags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
-    std::vector<VkDeviceQueueCreateInfo> queue_create_infos{ 
-      physical_device.getQueueCreateInfo(queue_flags, surface->surface)
-    };
 
     std::vector<const char *> device_layers{
 #ifdef _DEBUG
@@ -291,14 +272,15 @@ int main(int argc, char *argv[])
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
-    auto device = std::make_shared<VulkanDevice>(physical_device,
+    auto device = std::make_shared<VulkanDevice>(vulkan,
+                                                 surface->surface,
                                                  required_device_features,
                                                  device_layers,
                                                  device_extensions,
-                                                 queue_create_infos);
+                                                 VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
 
     auto color_attachment = std::make_shared<FramebufferAttachment>(VK_FORMAT_B8G8R8A8_UNORM,
-                                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                                                                     VK_IMAGE_ASPECT_COLOR_BIT);
 
     auto depth_attachment = std::make_shared<FramebufferAttachment>(VK_FORMAT_D32_SFLOAT,
@@ -348,6 +330,9 @@ int main(int argc, char *argv[])
       color_attachment,
       depth_attachment
     };
+
+    auto camera = std::make_shared<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f);
+    camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
 
     renderpass->children = {
       framebuffer,

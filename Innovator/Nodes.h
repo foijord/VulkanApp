@@ -1169,9 +1169,12 @@ public:
                         VkImageUsageFlags usage,
                         VkImageAspectFlags aspectMask) :
     format(format),
-    usage(usage),
-    aspectMask(aspectMask)
-  {}
+    usage(usage)
+  {
+    this->subresource_range = {
+      aspectMask, 0, 1, 0, 1
+    };
+  }
 
 private:
   void doAlloc(TraversalContext * context) override
@@ -1210,11 +1213,7 @@ private:
 public:
   VkFormat format;
   VkImageUsageFlags usage;
-  VkImageAspectFlags aspectMask;
- 
-  VkImageSubresourceRange subresource_range{
-    aspectMask, 0, 1, 0, 1
-  };
+  VkImageSubresourceRange subresource_range;
 
   VkComponentMapping component_mapping{
     VK_COMPONENT_SWIZZLE_R,
