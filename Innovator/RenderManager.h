@@ -3,6 +3,7 @@
 #include <Innovator/Misc/Defines.h>
 #include <Innovator/Node.h>
 #include <Innovator/State.h>
+#include <Innovator/VulkanObjects.h>
 
 #include <map>
 #include <memory>
@@ -34,11 +35,13 @@ public:
   TraversalContext() = delete;
 
   explicit TraversalContext(std::shared_ptr<VulkanInstance> vulkan, 
-                           std::shared_ptr<VulkanDevice> device,
-                           VkCommandBuffer command,
-                           VkExtent2D extent) :
+                            std::shared_ptr<VulkanDevice> device,
+                            VkQueue queue,
+                            VkCommandBuffer command,
+                            VkExtent2D extent) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
+    queue(queue),
     extent(extent),
     command(command),
     command_scope(std::make_unique<VulkanCommandBufferScope>(command))
@@ -60,6 +63,7 @@ public:
   State state{};
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
+  VkQueue queue;
   VkExtent2D extent;
   VkCommandBuffer command;
   std::unique_ptr<VulkanCommandBufferScope> command_scope;
@@ -164,9 +168,11 @@ public:
 
   explicit RenderManager(std::shared_ptr<VulkanInstance> vulkan,
                          std::shared_ptr<VulkanDevice> device,
+                         std::shared_ptr<Group> root,
                          VkExtent2D extent) :
       vulkan(std::move(vulkan)),
       device(std::move(device)),
+      root(std::move(root)),
       extent(extent),
       render_fence(std::make_unique<VulkanFence>(this->device)),
       stage_fence(std::make_unique<VulkanFence>(this->device)),
@@ -174,7 +180,14 @@ public:
       render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
       pipelinecache(std::make_shared<VulkanPipelineCache>(this->device)),
       rendering_finished(std::make_unique<VulkanSemaphore>(this->device))
-  {}
+  {
+    this->default_queue = this->device->getQueue(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
+
+    this->alloc(this->root.get());
+    this->stage(this->root.get());
+    this->pipeline(this->root.get());
+    this->record(this->root.get());
+  }
 
   virtual ~RenderManager() 
   {
@@ -186,10 +199,34 @@ public:
     }
   }
 
+  void redraw()
+  {
+    try {
+      this->render(this->root.get());
+      this->present(this->root.get());
+    }
+    catch (VkException &) {
+      // recreate swapchain, try again next frame
+      //this->resize();
+    }
+  }
+
+  void resize(VkExtent2D extent)
+  {
+    // make sure all work submitted is done before we start recreating stuff
+    THROW_ON_ERROR(vkDeviceWaitIdle(this->device->device));
+
+    this->resize(this->root.get(), extent);
+    this->record(this->root.get());
+
+    this->redraw();
+  }
+
   void alloc(Node * root) const
   {    
     TraversalContext context(this->vulkan,
                              this->device,
+                             this->default_queue,
                              this->staging_command->buffer(),
                              this->extent);
 
@@ -202,6 +239,7 @@ public:
     {
       TraversalContext context(this->vulkan,
                                this->device,
+                               this->default_queue,
                                this->staging_command->buffer(),
                                this->extent);
 
@@ -209,7 +247,7 @@ public:
     }
     FenceScope fence_scope(this->device->device, this->stage_fence->fence);
     
-    this->staging_command->submit(this->device->default_queue,
+    this->staging_command->submit(this->default_queue,
                                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                   this->stage_fence->fence);
   }
@@ -219,6 +257,7 @@ public:
     {
       TraversalContext context(this->vulkan,
                                this->device,
+                               this->default_queue,
                                this->staging_command->buffer(),
                                this->extent);
 
@@ -226,7 +265,7 @@ public:
     }
     FenceScope fence_scope(this->device->device, this->stage_fence->fence);
     
-    this->staging_command->submit(this->device->default_queue,
+    this->staging_command->submit(this->default_queue,
                                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                   this->stage_fence->fence);
   }
@@ -263,7 +302,7 @@ public:
     std::vector<VkSemaphore> wait_semaphores{};
     std::vector<VkSemaphore> signal_semaphores = { this->rendering_finished->semaphore };
 
-    this->render_command->submit(this->device->default_queue,
+    this->render_command->submit(this->default_queue,
                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                  this->render_fence->fence);
   }
@@ -272,6 +311,7 @@ public:
   {
     TraversalContext context(this->vulkan,
                              this->device,
+                             this->default_queue,
                              this->staging_command->buffer(),
                              this->extent);
 
@@ -280,6 +320,8 @@ public:
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
+  std::shared_ptr<Group> root;
+  VkQueue default_queue{ nullptr };
   VkExtent2D extent;
 
   std::shared_ptr<VulkanFence> render_fence;

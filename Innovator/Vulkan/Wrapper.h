@@ -41,7 +41,7 @@ public:
     this->extension_properties.resize(count);
     THROW_ON_ERROR(vkEnumerateDeviceExtensionProperties(this->device, nullptr, &count, this->extension_properties.data()));
   }
-  
+
   uint32_t getQueueIndex(VkQueueFlags required_flags, const std::vector<VkBool32> & filter)
   {
     // check for exact match of required flags
@@ -291,12 +291,10 @@ public:
   VulkanDevice() = delete;
 
   VulkanDevice(std::shared_ptr<VulkanInstance> vulkan,
-                               VkSurfaceKHR surface,
-                               const VkPhysicalDeviceFeatures& enabled_features,
-                               const std::vector<const char*>& required_layers,
-                               const std::vector<const char*>& required_extensions,
-                               VkQueueFlags queue_flags)
-    : physical_device(vulkan->selectPhysicalDevice(enabled_features))
+               const VkPhysicalDeviceFeatures& device_features,
+               const std::vector<const char*>& required_layers,
+               const std::vector<const char*>& required_extensions) : 
+    physical_device(vulkan->selectPhysicalDevice(device_features))
   {
     std::for_each(required_layers.begin(), required_layers.end(), [&](const char * layer_name) {
       for (auto properties : physical_device.layer_properties)
@@ -312,25 +310,23 @@ public:
       throw std::runtime_error("Required device extension " + std::string(extension_name) + " not supported.");
     });
 
-    std::vector<VkBool32> filter(physical_device.queue_family_properties.size(), VK_TRUE);
-    if (surface) {
-      for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
-        vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, surface, &filter[i]);
-      }
-    }
-
     std::array<float, 1> priorities = { 1.0f };
-
-    std::vector<VkDeviceQueueCreateInfo> queue_create_infos{
-      {
+    uint32_t num_queues = static_cast<uint32_t>(this->physical_device.queue_family_properties.size());
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
+    for (uint32_t queue_index = 0; queue_index < num_queues; queue_index++) {
+      queue_create_infos.push_back({
         VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,         // sType
         nullptr,                                            // pNext
         0,                                                  // flags
-        physical_device.getQueueIndex(queue_flags, filter), // queueFamilyIndex
+        queue_index,                                        // queueFamilyIndex
         static_cast<uint32_t>(priorities.size()),           // queueCount   
         priorities.data()                                   // pQueuePriorities
-      }
-    };
+      });
+    }
+
+    if (queue_create_infos.empty()) {
+      throw std::runtime_error("no queues found");
+    }
 
     VkDeviceCreateInfo device_create_info{
       VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,                 // sType
@@ -342,19 +338,21 @@ public:
       required_layers.data(),                               // ppEnabledLayerNames
       static_cast<uint32_t>(required_extensions.size()),    // enabledExtensionCount
       required_extensions.data(),                           // ppEnabledExtensionNames
-      &enabled_features,                                    // pEnabledFeatures
+      &device_features,                                     // pEnabledFeatures
     };
 
     THROW_ON_ERROR(vkCreateDevice(this->physical_device.device, &device_create_info, nullptr, &this->device));
 
-    this->default_queue_index = queue_create_infos[0].queueFamilyIndex;
-    vkGetDeviceQueue(this->device, this->default_queue_index, 0, &this->default_queue);
+    this->queues.resize(num_queues);
+    for (uint32_t i = 0; i < num_queues; i++) {
+      vkGetDeviceQueue(this->device, i, 0, &this->queues[i]);
+    }
 
     VkCommandPoolCreateInfo create_info{
       VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,       // sType
       nullptr,                                          // pNext 
       VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,  // flags
-      this->default_queue_index,                        // queueFamilyIndex 
+      0,                                                // queueFamilyIndex 
     };
 
     THROW_ON_ERROR(vkCreateCommandPool(this->device, &create_info, nullptr, &this->default_pool));
@@ -366,10 +364,27 @@ public:
     vkDestroyDevice(this->device, nullptr);
   }
 
+  VkQueue getQueue(VkQueueFlags required_flags)
+  {
+    std::vector<VkBool32> filter(this->physical_device.queue_family_properties.size(), VK_TRUE);
+    uint32_t queue_index = this->physical_device.getQueueIndex(required_flags, filter);
+    return this->queues[queue_index];
+  }
+
+  VkQueue getQueue(VkQueueFlags required_flags, VkSurfaceKHR surface)
+  {
+    std::vector<VkBool32> filter(physical_device.queue_family_properties.size(), VK_TRUE);
+    for (uint32_t i = 0; i < physical_device.queue_family_properties.size(); i++) {
+      vkGetPhysicalDeviceSurfaceSupportKHR(physical_device.device, i, surface, &filter[i]);
+    }
+    uint32_t queue_index = this->physical_device.getQueueIndex(required_flags, filter);
+    return this->queues[queue_index];
+  }
+
+
   VkDevice device{ nullptr };
   VulkanPhysicalDevice physical_device;
-  VkQueue default_queue{ nullptr };
-  uint32_t default_queue_index{ 0 };
+  std::vector<VkQueue> queues;
   VkCommandPool default_pool{ nullptr };
 };
 

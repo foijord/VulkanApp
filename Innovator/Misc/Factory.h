@@ -44,5 +44,3 @@ public:
 
   static ImageFunc create_image;
 };
-
-VulkanImageFactory::ImageFunc VulkanImageFactory::create_image;

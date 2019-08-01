@@ -792,8 +792,8 @@ private:
       VK_ACCESS_TRANSFER_WRITE_BIT,                          // dstAccessMask
       VK_IMAGE_LAYOUT_UNDEFINED,                             // oldLayout
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                  // newLayout
-      context->device->default_queue_index,                   // srcQueueFamilyIndex
-      context->device->default_queue_index,                   // dstQueueFamilyIndex
+      0,                                                     // srcQueueFamilyIndex
+      0,                                                     // dstQueueFamilyIndex
       this->image->image,                                    // image
       this->subresource_range,                               // subresourceRange
     };
@@ -1401,14 +1401,35 @@ public:
   {}
 
 private:
-  void doPresent(TraversalContext * context) override
+  void doAlloc(TraversalContext * context) override
   {
+    this->present_queue = context->device->getQueue(0, this->surface);
+
     std::vector<VkPresentModeKHR> present_modes = 
       context->vulkan->getPhysicalDeviceSurfacePresentModes(context->device->physical_device.device, this->surface);
-    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+    if (std::find(present_modes.begin(), present_modes.end(), this->present_mode) == present_modes.end()) {
       throw std::runtime_error("surface does not support present mode");
     }
 
+    auto find_surface_format = [&]() {
+      std::vector<VkSurfaceFormatKHR> surface_formats =
+        context->vulkan->getPhysicalDeviceSurfaceFormats(context->device->physical_device.device, this->surface);
+      for (VkSurfaceFormatKHR surface_format : surface_formats) {
+        if (surface_format.format == this->color_attachment->format) {
+          return surface_format;
+        }
+      }
+      throw std::runtime_error("color attachment format not supported!");
+    };
+
+    this->surface_format = find_surface_format();
+
+    this->swapchain_image_ready = std::make_unique<VulkanSemaphore>(context->device);
+    this->swap_buffers_finished = std::make_unique<VulkanSemaphore>(context->device);
+  }
+
+  void doPresent(TraversalContext * context) override
+  {
     THROW_ON_ERROR(context->vulkan->vkAcquireNextImage(context->device->device,
                                                        this->swapchain->swapchain,
                                                        UINT64_MAX,
@@ -1419,7 +1440,7 @@ private:
     std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
     std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
 
-    this->swap_buffers_command->submit(context->device->default_queue,
+    this->swap_buffers_command->submit(this->present_queue,
                                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                        this->image_index,
                                        wait_semaphores,
@@ -1436,7 +1457,7 @@ private:
       nullptr                                          // pResults
     };
 
-    THROW_ON_ERROR(context->vulkan->vkQueuePresent(context->device->default_queue, &present_info));
+    THROW_ON_ERROR(context->vulkan->vkQueuePresent(this->present_queue, &present_info));
   }
 
 
@@ -1447,39 +1468,23 @@ private:
 
   void doStage(TraversalContext * context) override
   {
-    auto find_surface_format = [&]() {
-      std::vector<VkSurfaceFormatKHR> surface_formats =
-        context->vulkan->getPhysicalDeviceSurfaceFormats(context->device->physical_device.device, this->surface);
-      for (VkSurfaceFormatKHR surface_format : surface_formats) {
-        if (surface_format.format == this->color_attachment->format) {
-          return surface_format;
-        }
-      }
-      throw std::runtime_error("color attachment format not supported!");
-    };
-
-    VkSurfaceFormatKHR surface_format = find_surface_format();
-
-    this->swapchain_image_ready = std::make_unique<VulkanSemaphore>(context->device);
-    this->swap_buffers_finished = std::make_unique<VulkanSemaphore>(context->device);
-
     VkSwapchainKHR prevswapchain = (this->swapchain) ? this->swapchain->swapchain : nullptr;
 
     this->swapchain = std::make_unique<VulkanSwapchain>(
       context->device,
       context->vulkan,
-      surface,
+      this->surface,
       3,
-      surface_format.format,
-      surface_format.colorSpace,
+      this->surface_format.format,
+      this->surface_format.colorSpace,
       context->extent,
       1,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
-      std::vector<uint32_t>{ context->device->default_queue_index, },
+      std::vector<uint32_t>{ 0, },
       VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-      present_mode,
+      this->present_mode,
       VK_FALSE,
       prevswapchain);
 
@@ -1503,8 +1508,8 @@ private:
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        context->device->default_queue_index,    // srcQueueFamilyIndex
-        context->device->default_queue_index,    // dstQueueFamilyIndex
+        0,                                       // srcQueueFamilyIndex
+        0,                                       // dstQueueFamilyIndex
         this->swapchain_images[i],               // image
         this->subresource_range
       };
@@ -1532,8 +1537,8 @@ private:
         VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // oldLayout
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
-        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
-        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        0,                                                             // srcQueueFamilyIndex
+        0,                                                             // dstQueueFamilyIndex
         this->swapchain_images[i],                                     // image
         this->subresource_range,                                       // subresourceRange
       },{
@@ -1543,8 +1548,8 @@ private:
         VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
-        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
-        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        0,                                                             // srcQueueFamilyIndex
+        0,                                                             // dstQueueFamilyIndex
         this->color_attachment->image->image,                          // image
         this->subresource_range,                                       // subresourceRange
       } };
@@ -1593,8 +1598,8 @@ private:
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // oldLayout
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                               // newLayout
-        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
-        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        0,                                                             // srcQueueFamilyIndex
+        0,                                                             // dstQueueFamilyIndex
         this->swapchain_images[i],                                     // image
         this->subresource_range,                                       // subresourceRange
       },{
@@ -1604,8 +1609,8 @@ private:
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // oldLayout
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
-        recorder->device->default_queue_index,                         // srcQueueFamilyIndex
-        recorder->device->default_queue_index,                         // dstQueueFamilyIndex
+        0,                                                             // srcQueueFamilyIndex
+        0,                                                             // dstQueueFamilyIndex
         this->color_attachment->image->image,                          // image
         this->subresource_range,                                       // subresourceRange
       } };
@@ -1621,6 +1626,8 @@ private:
   std::shared_ptr<FramebufferAttachment> color_attachment;
   VkSurfaceKHR surface;
   VkPresentModeKHR present_mode;
+  VkSurfaceFormatKHR surface_format;
+  VkQueue present_queue;
 
   std::unique_ptr<VulkanSwapchain> swapchain;
   std::vector<VkImage> swapchain_images;

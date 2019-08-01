@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Innovator/Misc/Defines.h>
+#include <vector>
+#include <memory>
 
 class Node {
 public:
