@@ -1,3 +1,4 @@
+#include <VulkanWindow.h>
 #include <EventHandler.h>
 #include <Innovator/File.h>
 #include <Innovator/Misc/Factory.h>
@@ -13,6 +14,7 @@
 #endif
 
 #include <iostream>
+#include <vector>
 
 VulkanImageFactory::ImageFunc VulkanImageFactory::create_image;
 
@@ -183,12 +185,7 @@ int main(int argc, char *argv[])
       swapchain
     };
 
-    auto rendermanager = std::make_shared<RenderManager>(vulkan,
-                                                         device,
-                                                         scene,
-                                                         VkExtent2D{ 512, 512 });
-
-    auto handler = std::make_unique<EventHandler>(rendermanager, camera);
+    auto handler = std::make_unique<EventHandler>(vulkan, device, scene, camera);
     window.installEventFilter(handler.get());
     window.show();
 

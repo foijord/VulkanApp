@@ -9,7 +9,7 @@ using namespace Innovator::Math;
 
 struct VulkanIndexBufferDescription {
   VkIndexType type;
-  VkBuffer buffer;
+  VkBuffer buffer{ nullptr };
 };
 
 struct State {
@@ -19,11 +19,9 @@ struct State {
   VkBuffer buffer{ nullptr };
   class BufferData * bufferdata{ nullptr };
   std::vector<VkImageView> framebuffer_attachments;
-  std::shared_ptr<VulkanRenderpass> renderpass;
-  VkExtent2D extent;
-};
+  std::shared_ptr<VulkanRenderpass> renderpass{ nullptr };
+  VkExtent2D extent{ 0, 0 };
 
-struct PipelineState {
   VkPipelineRasterizationStateCreateInfo rasterization_state{
     VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, // sType
     nullptr,                                                    // pNext
@@ -40,13 +38,9 @@ struct PipelineState {
     1.0f,                                                       // lineWidth
   };
 
-  VkBuffer buffer { nullptr };
   VkImageView imageView { nullptr };
   VkImageLayout imageLayout { VK_IMAGE_LAYOUT_UNDEFINED };
   VkSampler sampler{ nullptr };
-  std::shared_ptr<VulkanRenderpass> renderpass;
-
-  class BufferData * bufferdata { nullptr };
 
   std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
   std::vector<VkDescriptorPoolSize> descriptor_pool_sizes;
@@ -54,14 +48,8 @@ struct PipelineState {
   std::vector<VkDescriptorSetLayoutBinding> descriptor_set_layout_bindings;
   std::vector<VkVertexInputBindingDescription> vertex_input_bindings;
   std::vector<VkVertexInputAttributeDescription> vertex_attributes;
-};
 
-struct RecordState {
-  VkBuffer buffer{ nullptr };
-  class BufferData * bufferdata { nullptr };
-  VkFramebuffer framebuffer;
-  std::shared_ptr<VulkanRenderpass> renderpass;
-
+  VkFramebuffer framebuffer{ nullptr };
   VulkanIndexBufferDescription index_buffer_description;
   std::vector<VkBuffer> vertex_attribute_buffers;
   std::vector<VkDeviceSize> vertex_attribute_buffer_offsets;

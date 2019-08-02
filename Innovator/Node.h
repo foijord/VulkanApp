@@ -11,27 +11,27 @@ public:
   Node() = default;
   virtual ~Node() = default;
 
-  void alloc(class TraversalContext * context)
+  void alloc(class RenderManager * context)
   {
     this->doAlloc(context);
   }
 
-  void resize(class TraversalContext * context)
+  void resize(class RenderManager * context)
   {
     this->doResize(context);
   }
 
-  void stage(class TraversalContext * context)
+  void stage(class RenderManager * context)
   {
     this->doStage(context);
   }
 
-  void pipeline(class PipelineCreator * creator)
+  void pipeline(class RenderManager * creator)
   {
     this->doPipeline(creator);
   }
 
-  void record(class CommandRecorder * recorder)
+  void record(class RenderManager * recorder)
   {
     this->doRecord(recorder);
   }
@@ -41,19 +41,19 @@ public:
     this->doRender(renderer);
   }
 
-  void present(class TraversalContext * context)
+  void present(class RenderManager * context)
   {
     this->doPresent(context);
   }
 
 private:
-  virtual void doAlloc(class TraversalContext *) {}
-  virtual void doResize(class TraversalContext *) {}
-  virtual void doStage(class TraversalContext *) {}
-  virtual void doPipeline(class PipelineCreator *) {}
-  virtual void doRecord(class CommandRecorder *) {}
+  virtual void doAlloc(class RenderManager *) {}
+  virtual void doResize(class RenderManager *) {}
+  virtual void doStage(class RenderManager *) {}
+  virtual void doPipeline(class RenderManager *) {}
+  virtual void doRecord(class RenderManager *) {}
   virtual void doRender(class SceneRenderer *) {}
-  virtual void doPresent(class TraversalContext *) {}
+  virtual void doPresent(class RenderManager *) {}
 };
 
 class Group : public Node {
@@ -68,35 +68,35 @@ public:
   std::vector<std::shared_ptr<Node>> children;
 
 protected:
-  void doAlloc(TraversalContext * context) override
+  void doAlloc(RenderManager * context) override
   {
     for (const auto& node : this->children) {
       node->alloc(context);
     }
   }
 
-  void doResize(TraversalContext * context) override
+  void doResize(RenderManager * context) override
   {
     for (const auto& node : this->children) {
       node->resize(context);
     }
   }
 
-  void doStage(TraversalContext * context) override
+  void doStage(RenderManager * context) override
   {
     for (const auto& node : this->children) {
       node->stage(context);
     }
   }
 
-  void doPipeline(PipelineCreator * creator) override
+  void doPipeline(RenderManager * creator) override
   {
     for (const auto& node : this->children) {
       node->pipeline(creator);
     }
   }
 
-  void doRecord(CommandRecorder * recorder) override
+  void doRecord(RenderManager * recorder) override
   {
     for (const auto& node : this->children) {
       node->record(recorder);
@@ -110,7 +110,7 @@ protected:
     }
   }
 
-  void doPresent(class TraversalContext * context) override
+  void doPresent(class RenderManager * context) override
   {
     for (const auto& node : this->children) {
       node->present(context);

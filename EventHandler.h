@@ -104,17 +104,24 @@ public:
   }
 };
 
-
 class EventHandler : public QObject {
   Q_OBJECT
 public:
-  EventHandler(std::shared_ptr<RenderManager> rendermanager,
+  EventHandler(std::shared_ptr<VulkanInstance> vulkan,
+               std::shared_ptr<VulkanDevice> device,
+               std::shared_ptr<Group> root,
                std::shared_ptr<Camera> camera,
                QObject * parent = nullptr) : 
     QObject(parent),
-    rendermanager(std::move(rendermanager)),
+    root(std::move(root)),
     camera(std::move(camera))
-  {}
+  {
+    this->rendermanager = std::make_shared<RenderManager>(vulkan,
+                                                          device,
+                                                          VkExtent2D{ 512, 512 });
+
+    this->rendermanager->init(this->root.get());
+  }
 
 protected:
   bool eventFilter(QObject *obj, QEvent *event) override
@@ -149,7 +156,7 @@ private:
       static_cast<uint32_t>(e->size().width()),
       static_cast<uint32_t>(e->size().height())
     };
-    this->rendermanager->resize(extent);
+    this->rendermanager->resize(this->root.get(), extent);
   }
 
   void keyPressEvent(QKeyEvent * e)
@@ -187,11 +194,12 @@ private:
       default: break;
       }
       this->mouse_pos = pos;
-      this->rendermanager->redraw();
+      this->rendermanager->redraw(this->root.get());
     }
   }
 
 public:
+  std::shared_ptr<Group> root;
   std::shared_ptr<RenderManager> rendermanager;
   std::shared_ptr<Camera> camera;
 
