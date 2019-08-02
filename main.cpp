@@ -84,22 +84,22 @@ int main(int argc, char *argv[])
 #endif
 
     VulkanApplication app(argc, argv);
-    QWindow window;
-    window.resize(512, 512);
-
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-    auto surface = std::make_shared<::VulkanSurface>(
-      vulkan,
-      reinterpret_cast<HWND>(window.winId()),
-      GetModuleHandle(nullptr));
-
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-    auto surface = std::make_shared<::VulkanSurface>(
-      vulkan,
-      static_cast<xcb_window_t>(window.winId()),
-      QX11Info::connection());
-#endif
-
+//    QWindow window;
+//    window.resize(512, 512);
+//
+//#if defined(VK_USE_PLATFORM_WIN32_KHR)
+//    auto surface = std::make_shared<::VulkanSurface>(
+//      vulkan,
+//      reinterpret_cast<HWND>(window.winId()),
+//      GetModuleHandle(nullptr));
+//
+//#elif defined(VK_USE_PLATFORM_XCB_KHR)
+//    auto surface = std::make_shared<::VulkanSurface>(
+//      vulkan,
+//      static_cast<xcb_window_t>(window.winId()),
+//      QX11Info::connection());
+//#endif
+//
     std::vector<const char *> device_layers{
 #ifdef _DEBUG
       "VK_LAYER_LUNARG_standard_validation",
@@ -160,9 +160,9 @@ int main(int argc, char *argv[])
           std::vector<uint32_t>{}
         )});
 
-    auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
-                                                       surface->surface,
-                                                       VK_PRESENT_MODE_FIFO_KHR);
+    //auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
+    //                                                   surface->surface,
+    //                                                   VK_PRESENT_MODE_FIFO_KHR);
 
     auto framebuffer = std::make_shared<FramebufferObject>();
     framebuffer->children = {
@@ -179,15 +179,19 @@ int main(int argc, char *argv[])
       eval_file("crate.scene")
     };
 
-    auto scene = std::make_shared<Group>();
-    scene->children = {
-      renderpass,
-      swapchain
-    };
+    //auto scene = std::make_shared<Group>();
+    //scene->children = {
+    //  renderpass,
+    //  //swapchain
+    //};
 
-    auto handler = std::make_unique<EventHandler>(vulkan, device, scene, camera);
-    window.installEventFilter(handler.get());
+    VulkanWindow window(vulkan, device, color_attachment, renderpass, camera);
+    window.resize(512, 512);
     window.show();
+
+    //auto handler = std::make_unique<EventHandler>(vulkan, device, scene, camera);
+    //window.installEventFilter(handler.get());
+    //window.show();
 
     return VulkanApplication::exec();
   }

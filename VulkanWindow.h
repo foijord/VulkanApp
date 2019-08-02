@@ -25,17 +25,16 @@ public:
                std::shared_ptr<Camera> camera, 
                QWindow * parent = nullptr) :
     QWindow(parent),
-    root(std::move(root)),
     camera(std::move(camera))
   {
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-    auto surface = std::make_shared<::VulkanSurface>(
+    this->surface = std::make_shared<::VulkanSurface>(
       vulkan,
       reinterpret_cast<HWND>(this->winId()),
       GetModuleHandle(nullptr));
 
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
-    auto surface = std::make_shared<::VulkanSurface>(
+    this->surface = std::make_shared<::VulkanSurface>(
       vulkan,
       static_cast<xcb_window_t>(this->winId()),
       QX11Info::connection());
@@ -47,10 +46,10 @@ public:
 
 
     auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
-                                                       surface->surface,
+                                                       this->surface->surface,
                                                        VK_PRESENT_MODE_FIFO_KHR);
 
-    this->root = std::make_shared<Separator>();
+    this->root = std::make_shared<Group>();
     this->root->children = {
       scene,
       swapchain
@@ -108,6 +107,7 @@ public:
     }
   }
 
+  std::shared_ptr<::VulkanSurface> surface;
   std::shared_ptr<Group> root;
   std::shared_ptr<RenderManager> rendermanager;
   std::shared_ptr<Camera> camera;
