@@ -40,9 +40,14 @@ public:
       QX11Info::connection());
 #endif
 
+	VkExtent2D extent{
+		static_cast<uint32_t>(this->width()),
+		static_cast<uint32_t>(this->height())
+	};
+
     this->rendermanager = std::make_shared<RenderManager>(vulkan,
                                                           device,
-                                                          VkExtent2D{ 512, 512 });
+                                                          extent);
 
 
     auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
@@ -61,11 +66,13 @@ public:
   void resizeEvent(QResizeEvent * e) override
   {
     QWindow::resizeEvent(e);
-    VkExtent2D extent{
-      static_cast<uint32_t>(e->size().width()),
-      static_cast<uint32_t>(e->size().height())
-    };
-    this->rendermanager->resize(this->root.get(), extent);
+	if (this->rendermanager) {
+		VkExtent2D extent{
+		  static_cast<uint32_t>(e->size().width()),
+		  static_cast<uint32_t>(e->size().height())
+		};
+		this->rendermanager->resize(this->root.get(), extent);
+	}
   }
 
   void keyPressEvent(QKeyEvent * e) override
