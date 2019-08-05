@@ -1,17 +1,9 @@
 #include <VulkanWindow.h>
-#include <EventHandler.h>
 #include <Innovator/File.h>
 #include <Innovator/Misc/Factory.h>
 #include <Innovator/Misc/Defines.h>
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-#include <Innovator/Win32Surface.h>
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-#include <Innovator/XcbSurface.h>
-#endif
 
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-#include <QX11Info>
-#endif
+#include <QApplication>
 
 #include <iostream>
 #include <vector>
@@ -47,6 +39,98 @@ static VkBool32 DebugCallback(VkFlags flags,
   std::cout << message << std::endl;
   return VK_FALSE;
 }
+
+class QTextureImage : public VulkanTextureImage {
+public:
+  NO_COPY_OR_ASSIGNMENT(QTextureImage)
+
+    explicit QTextureImage(const std::string & filename) :
+    image(QImage(filename.c_str()))
+  {
+    this->image = this->image.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
+  }
+
+  virtual ~QTextureImage() = default;
+
+  VkExtent3D extent(size_t) const override
+  {
+    return {
+      static_cast<uint32_t>(this->image.size().width()),
+      static_cast<uint32_t>(this->image.size().height()),
+      1
+    };
+  }
+
+  uint32_t base_level() const override
+  {
+    return 0;
+  }
+
+  uint32_t levels() const override
+  {
+    return 1;
+  }
+
+  uint32_t base_layer() const override
+  {
+    return 0;
+  }
+
+  uint32_t layers() const override
+  {
+    return 1;
+  }
+
+  size_t size() const override
+  {
+    return this->image.sizeInBytes();
+  }
+
+  size_t size(size_t) const override
+  {
+    return this->image.sizeInBytes();
+  }
+
+  const unsigned char * data() const override
+  {
+    return this->image.bits();
+  }
+
+  VkFormat format() const override
+  {
+    return VK_FORMAT_R8G8B8A8_UNORM;
+  }
+
+  VkImageType image_type() const override
+  {
+    return VK_IMAGE_TYPE_2D;
+  }
+
+  VkImageViewType image_view_type() const override
+  {
+    return VK_IMAGE_VIEW_TYPE_2D;
+  }
+
+  QImage image;
+};
+
+class VulkanApplication : public QApplication {
+public:
+  VulkanApplication(int& argc, char** argv) :
+    QApplication(argc, argv)
+  {}
+
+  bool notify(QObject* receiver, QEvent* event)
+  {
+    try {
+      return QApplication::notify(receiver, event);
+    }
+    catch (std::exception & e) {
+      std::cerr << std::string("caught exception in VulkanApplication::notify(): ") + typeid(e).name() << std::endl;
+    }
+    return false;
+  }
+};
 
 
 int main(int argc, char *argv[])
@@ -162,8 +246,8 @@ int main(int argc, char *argv[])
     };
 
     VulkanWindow window(vulkan, device, color_attachment, renderpass, camera);
-    //window.resize(512, 512);
     window.show();
+    //window.resize(512, 512);
 
     return VulkanApplication::exec();
   }
