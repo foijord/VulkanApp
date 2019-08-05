@@ -28,16 +28,14 @@ public:
     camera(std::move(camera))
   {
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-    this->surface = std::make_shared<::VulkanSurface>(
-      vulkan,
-      reinterpret_cast<HWND>(this->winId()),
-      GetModuleHandle(nullptr));
+    this->surface = std::make_shared<::VulkanSurface>(vulkan,
+                                                      reinterpret_cast<HWND>(this->winId()),
+                                                      GetModuleHandle(nullptr));
 
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
-    this->surface = std::make_shared<::VulkanSurface>(
-      vulkan,
-      static_cast<xcb_window_t>(this->winId()),
-      QX11Info::connection());
+    this->surface = std::make_shared<::VulkanSurface>(vulkan,
+                                                      static_cast<xcb_window_t>(this->winId()),
+                                                      QX11Info::connection());
 #endif
 
 	  VkExtent2D extent{
@@ -45,9 +43,14 @@ public:
 		  static_cast<uint32_t>(this->height())
 	  };
 
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    THROW_ON_ERROR(vulkan->vkGetPhysicalDeviceSurfaceCapabilities(device->physical_device.device,
+                                                                  this->surface->surface,
+                                                                  &surface_capabilities));
+
     this->rendermanager = std::make_shared<RenderManager>(vulkan,
                                                           device,
-                                                          extent);
+                                                          surface_capabilities.currentExtent);
 
     auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
                                                        this->surface->surface,
@@ -70,8 +73,8 @@ public:
 		    static_cast<uint32_t>(e->size().width()),
 		    static_cast<uint32_t>(e->size().height())
 		  };
-		this->rendermanager->resize(this->root.get(), extent);
-	}
+		  this->rendermanager->resize(this->root.get(), extent);
+	  }
   }
 
   void keyPressEvent(QKeyEvent * e) override

@@ -246,8 +246,8 @@ int main(int argc, char *argv[])
     };
 
     VulkanWindow window(vulkan, device, color_attachment, renderpass, camera);
+    window.resize(512, 512);
     window.show();
-    //window.resize(512, 512);
 
     return VulkanApplication::exec();
   }

@@ -85,7 +85,7 @@ public:
     }
     catch (VkException &) {
       // recreate swapchain, try again next frame
-      this->resize(root, this->extent);
+      //this->resize(root, this->extent);
     }
   }
 
