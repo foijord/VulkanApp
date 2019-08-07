@@ -1394,9 +1394,11 @@ public:
 
   SwapchainObject(std::shared_ptr<FramebufferAttachment> color_attachment,
                   VkSurfaceKHR surface,
+                  VkSurfaceFormatKHR surface_format,
                   VkPresentModeKHR present_mode) :
       color_attachment(std::move(color_attachment)),
       surface(surface),
+      surface_format(surface_format),
       present_mode(present_mode)
   {}
 
@@ -1404,62 +1406,9 @@ private:
   void doAlloc(RenderManager * context) override
   {
     this->present_queue = context->device->getQueue(0, this->surface);
-
-    std::vector<VkPresentModeKHR> present_modes = 
-      context->vulkan->getPhysicalDeviceSurfacePresentModes(context->device->physical_device.device, this->surface);
-    if (std::find(present_modes.begin(), present_modes.end(), this->present_mode) == present_modes.end()) {
-      throw std::runtime_error("surface does not support present mode");
-    }
-
-    auto find_surface_format = [&]() {
-      std::vector<VkSurfaceFormatKHR> surface_formats =
-        context->vulkan->getPhysicalDeviceSurfaceFormats(context->device->physical_device.device, this->surface);
-      for (VkSurfaceFormatKHR surface_format : surface_formats) {
-        if (surface_format.format == this->color_attachment->format) {
-          return surface_format;
-        }
-      }
-      throw std::runtime_error("color attachment format not supported!");
-    };
-
-    this->surface_format = find_surface_format();
-
     this->swapchain_image_ready = std::make_unique<VulkanSemaphore>(context->device);
     this->swap_buffers_finished = std::make_unique<VulkanSemaphore>(context->device);
   }
-
-  void doPresent(RenderManager * context) override
-  {
-    THROW_ON_ERROR(context->vulkan->vkAcquireNextImage(context->device->device,
-                                                       this->swapchain->swapchain,
-                                                       UINT64_MAX,
-                                                       this->swapchain_image_ready->semaphore,
-                                                       nullptr,
-                                                       &this->image_index));
-
-    std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
-    std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
-
-    this->swap_buffers_command->submit(this->present_queue,
-                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                       this->image_index,
-                                       wait_semaphores,
-                                       signal_semaphores);
-
-    VkPresentInfoKHR present_info{
-      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,              // sType
-      nullptr,                                         // pNext
-      static_cast<uint32_t>(signal_semaphores.size()), // waitSemaphoreCount
-      signal_semaphores.data(),                        // pWaitSemaphores
-      1,                                               // swapchainCount
-      &this->swapchain->swapchain,                     // pSwapchains
-      &this->image_index,                              // pImageIndices
-      nullptr                                          // pResults
-    };
-
-    THROW_ON_ERROR(context->vulkan->vkQueuePresent(this->present_queue, &present_info));
-  }
-
 
   void doResize(RenderManager * context) override
   {
@@ -1621,6 +1570,38 @@ private:
                            0, 0, nullptr, 0, nullptr,
                            2, dst_image_barriers);
     }
+  }
+
+  void doPresent(RenderManager * context) override
+  {
+    THROW_ON_ERROR(context->vulkan->vkAcquireNextImage(context->device->device,
+      this->swapchain->swapchain,
+      UINT64_MAX,
+      this->swapchain_image_ready->semaphore,
+      nullptr,
+      &this->image_index));
+
+    std::vector<VkSemaphore> wait_semaphores = { this->swapchain_image_ready->semaphore };
+    std::vector<VkSemaphore> signal_semaphores = { this->swap_buffers_finished->semaphore };
+
+    this->swap_buffers_command->submit(this->present_queue,
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      this->image_index,
+      wait_semaphores,
+      signal_semaphores);
+
+    VkPresentInfoKHR present_info{
+      VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,              // sType
+      nullptr,                                         // pNext
+      static_cast<uint32_t>(signal_semaphores.size()), // waitSemaphoreCount
+      signal_semaphores.data(),                        // pWaitSemaphores
+      1,                                               // swapchainCount
+      &this->swapchain->swapchain,                     // pSwapchains
+      &this->image_index,                              // pImageIndices
+      nullptr                                          // pResults
+    };
+
+    THROW_ON_ERROR(context->vulkan->vkQueuePresent(this->present_queue, &present_info));
   }
 
   std::shared_ptr<FramebufferAttachment> color_attachment;

@@ -38,15 +38,26 @@ public:
                                                       QX11Info::connection());
 #endif
 
-	  VkExtent2D extent{
-		  static_cast<uint32_t>(this->width()),
-		  static_cast<uint32_t>(this->height())
-	  };
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    std::vector<VkPresentModeKHR> present_modes =
+      vulkan->getPhysicalDeviceSurfacePresentModes(device->physical_device.device, this->surface->surface);
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
+      throw std::runtime_error("surface does not support present mode");
+    }
 
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-    THROW_ON_ERROR(vulkan->vkGetPhysicalDeviceSurfaceCapabilities(device->physical_device.device,
-                                                                  this->surface->surface,
-                                                                  &surface_capabilities));
+    VkSurfaceFormatKHR surface_format = [&]() {
+      std::vector<VkSurfaceFormatKHR> surface_formats =
+        vulkan->getPhysicalDeviceSurfaceFormats(device->physical_device.device, this->surface->surface);
+      for (VkSurfaceFormatKHR surface_format : surface_formats) {
+        if (surface_format.format == color_attachment->format) {
+          return surface_format;
+        }
+      }
+      throw std::runtime_error("color attachment format not supported!");
+    }();
+
+    VkSurfaceCapabilitiesKHR surface_capabilities = 
+      vulkan->getPhysicalDeviceSurfaceCapabilities(device->physical_device.device, this->surface->surface);
 
     this->rendermanager = std::make_shared<RenderManager>(vulkan,
                                                           device,
@@ -54,7 +65,8 @@ public:
 
     auto swapchain = std::make_shared<SwapchainObject>(color_attachment,
                                                        this->surface->surface,
-                                                       VK_PRESENT_MODE_FIFO_KHR);
+                                                       surface_format,
+                                                       present_mode);
 
     this->root = std::make_shared<Group>();
     this->root->children = {

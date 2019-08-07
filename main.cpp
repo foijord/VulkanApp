@@ -167,8 +167,6 @@ int main(int argc, char *argv[])
       DebugCallback);
 #endif
 
-    VulkanApplication app(argc, argv);
-
 	std::vector<const char *> device_layers{
 #ifdef _DEBUG
       "VK_LAYER_LUNARG_standard_validation",
@@ -245,6 +243,7 @@ int main(int argc, char *argv[])
       eval_file("crate.scene")
     };
 
+    VulkanApplication app(argc, argv);
     VulkanWindow window(vulkan, device, color_attachment, renderpass, camera);
     window.resize(512, 512);
     window.show();

@@ -251,6 +251,13 @@ public:
     return devices.front();
   }
 
+  VkSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities(VkPhysicalDevice device, VkSurfaceKHR surface)
+  {
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    THROW_ON_ERROR(this->vkGetPhysicalDeviceSurfaceCapabilities(device, surface, &surface_capabilities));
+    return surface_capabilities;
+  }
+
   std::vector<VkSurfaceFormatKHR> getPhysicalDeviceSurfaceFormats(VkPhysicalDevice device, VkSurfaceKHR surface) 
   {
     uint32_t count;
