@@ -3,12 +3,7 @@
 #include <Innovator/Nodes.h>
 #include <Innovator/RenderManager.h>
 #include <Innovator/misc/Defines.h>
-
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-#include <Innovator/Win32Surface.h>
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-#include <Innovator/XcbSurface.h>
-#endif
+#include <Innovator/VulkanSurface.h>
 
 #include <QWindow>
 #include <QResizeEvent>
@@ -27,37 +22,15 @@ public:
     QWindow(parent),
     camera(std::move(camera))
   {
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-    this->surface = std::make_shared<::VulkanSurface>(vulkan,
-                                                      reinterpret_cast<HWND>(this->winId()),
-                                                      GetModuleHandle(nullptr));
+    this->surface = std::make_shared<::VulkanSurface>(vulkan, this);
 
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-    this->surface = std::make_shared<::VulkanSurface>(vulkan,
-                                                      static_cast<xcb_window_t>(this->winId()),
-                                                      QX11Info::connection());
-#endif
+    VkSurfaceCapabilitiesKHR surface_capabilities = this->surface->getSurfaceCapabilities(device);
 
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-    std::vector<VkPresentModeKHR> present_modes =
-      vulkan->getPhysicalDeviceSurfacePresentModes(device->physical_device.device, this->surface->surface);
-    if (std::find(present_modes.begin(), present_modes.end(), present_mode) == present_modes.end()) {
-      throw std::runtime_error("surface does not support present mode");
-    }
 
-    VkSurfaceFormatKHR surface_format = [&]() {
-      std::vector<VkSurfaceFormatKHR> surface_formats =
-        vulkan->getPhysicalDeviceSurfaceFormats(device->physical_device.device, this->surface->surface);
-      for (VkSurfaceFormatKHR surface_format : surface_formats) {
-        if (surface_format.format == color_attachment->format) {
-          return surface_format;
-        }
-      }
-      throw std::runtime_error("color attachment format not supported!");
-    }();
+    this->surface->checkPresentModeSupport(device, present_mode);
+    VkSurfaceFormatKHR surface_format = this->surface->getSupportedSurfaceFormat(device, color_attachment->format);
 
-    VkSurfaceCapabilitiesKHR surface_capabilities = 
-      vulkan->getPhysicalDeviceSurfaceCapabilities(device->physical_device.device, this->surface->surface);
 
     this->rendermanager = std::make_shared<RenderManager>(vulkan,
                                                           device,
