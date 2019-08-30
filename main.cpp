@@ -111,6 +111,17 @@ public:
     return VK_IMAGE_VIEW_TYPE_2D;
   }
 
+  VkImageSubresourceRange subresource_range() const override
+  {
+    return {
+      VK_IMAGE_ASPECT_COLOR_BIT,  // aspectMask 
+      this->base_level(),         // baseMipLevel 
+      this->levels(),             // levelCount 
+      this->base_layer(),         // baseArrayLayer 
+      this->layers()              // layerCount 
+    };
+  }
+
   QImage image;
 };
 

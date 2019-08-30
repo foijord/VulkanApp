@@ -22,6 +22,7 @@ public:
   virtual VkFormat format() const = 0;
   virtual VkImageType image_type() const = 0;
   virtual VkImageViewType image_view_type() const = 0;
+  virtual VkImageSubresourceRange subresource_range() const = 0;
 };
 
 class VulkanImageFactory {

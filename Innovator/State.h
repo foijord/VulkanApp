@@ -18,6 +18,7 @@ struct State {
   };
   VkBuffer buffer{ nullptr };
   class BufferData * bufferdata{ nullptr };
+  class VulkanTextureImage* texture{ nullptr };
   std::vector<VkImageView> framebuffer_attachments;
   std::shared_ptr<VulkanRenderpass> renderpass{ nullptr };
   VkExtent2D extent{ 0, 0 };
@@ -38,6 +39,7 @@ struct State {
     1.0f,                                                       // lineWidth
   };
 
+  VkImage image{ nullptr };
   VkImageView imageView { nullptr };
   VkImageLayout imageLayout { VK_IMAGE_LAYOUT_UNDEFINED };
   VkSampler sampler{ nullptr };

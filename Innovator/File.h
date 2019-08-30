@@ -79,6 +79,31 @@ VkBufferUsageFlags bufferusageflags(const List & lst)
   return flags;
 }
 
+VkImageUsageFlags imageusageflags(const List& lst)
+{
+  std::vector<VkImageUsageFlagBits> flagbits = any_cast<VkImageUsageFlagBits>(lst);
+  VkImageUsageFlags flags = 0;
+  for (auto bit : flagbits) {
+    flags |= bit;
+  }
+  return flags;
+}
+
+VkImageCreateFlags imagecreateflags(const List& lst)
+{
+  if (lst.empty()) {
+    return 0;
+  }
+
+  std::vector<VkImageCreateFlagBits> flagbits = any_cast<VkImageCreateFlagBits>(lst);
+  VkImageCreateFlags flags = 0;
+  for (auto bit : flagbits) {
+    flags |= bit;
+  }
+  return flags;
+}
+
+
 std::shared_ptr<Separator> eval_file(const std::string & filename)
 {
   env_ptr env = scm::global_env();
@@ -88,13 +113,17 @@ std::shared_ptr<Separator> eval_file(const std::string & filename)
     { "int32", fun_ptr(make_object<int32_t, Number>) },
     { "uint32", fun_ptr(make_object<uint32_t, Number>) },
     { "count", fun_ptr(count) },
-    { "image", fun_ptr(node<ImageNode, std::string>) },
     { "shader", fun_ptr(node<Shader, std::string, VkShaderStageFlagBits>) },
-    { "sampler", fun_ptr(node<Sampler>) },
+    { "sampler", fun_ptr(node<Sampler, VkFilter, VkFilter, VkSamplerMipmapMode, VkSamplerAddressMode, VkSamplerAddressMode, VkSamplerAddressMode>) },
+    { "textureimage", fun_ptr(node<TextureImage, std::string>) },
+    { "image", fun_ptr(node<Image, VkSampleCountFlagBits, VkImageTiling, VkImageUsageFlags, VkSharingMode, VkImageCreateFlags, VkImageLayout>) },
+    { "imageview", fun_ptr(node<ImageView, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle>) },
     { "separator", fun_ptr(separator) },
     { "bufferdata_float", fun_ptr(bufferdata<float>) },
     { "bufferdata_uint32", fun_ptr(bufferdata<uint32_t>) },
     { "bufferusageflags", fun_ptr(bufferusageflags) },
+    { "imageusageflags", fun_ptr(imageusageflags) },
+    { "imagecreateflags", fun_ptr(imagecreateflags) },
     { "cpumemorybuffer", fun_ptr(node<CpuMemoryBuffer, VkBufferUsageFlags>) },
     { "gpumemorybuffer", fun_ptr(node<GpuMemoryBuffer, VkBufferUsageFlags>) },
     { "transformbuffer", fun_ptr(node<TransformBuffer>) },
@@ -103,6 +132,70 @@ std::shared_ptr<Separator> eval_file(const std::string & filename)
     { "descriptorsetlayoutbinding", fun_ptr(node<DescriptorSetLayoutBinding, uint32_t, VkDescriptorType, VkShaderStageFlagBits>) },
     { "vertexinputbindingdescription", fun_ptr(node<VertexInputBindingDescription, uint32_t, uint32_t, VkVertexInputRate>) },
     { "vertexinputattributedescription", fun_ptr(node<VertexInputAttributeDescription, uint32_t, uint32_t, VkFormat, uint32_t>) },
+
+    { "VK_FILTER_NEAREST", VK_FILTER_NEAREST },
+    { "VK_FILTER_LINEAR", VK_FILTER_LINEAR },
+    { "VK_FILTER_CUBIC_IMG", VK_FILTER_CUBIC_IMG },
+
+    { "VK_SAMPLER_MIPMAP_MODE_NEAREST", VK_SAMPLER_MIPMAP_MODE_NEAREST },
+    { "VK_SAMPLER_MIPMAP_MODE_LINEAR", VK_SAMPLER_MIPMAP_MODE_LINEAR },
+
+    { "VK_SAMPLER_ADDRESS_MODE_REPEAT", VK_SAMPLER_ADDRESS_MODE_REPEAT },
+    { "VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT", VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT },
+    { "VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE", VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE },
+    { "VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER", VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER },
+    { "VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE", VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE },
+
+    { "VK_COMPONENT_SWIZZLE_IDENTITY", VK_COMPONENT_SWIZZLE_IDENTITY },
+    { "VK_COMPONENT_SWIZZLE_ZERO", VK_COMPONENT_SWIZZLE_ZERO },
+    { "VK_COMPONENT_SWIZZLE_ONE", VK_COMPONENT_SWIZZLE_ONE },
+    { "VK_COMPONENT_SWIZZLE_R", VK_COMPONENT_SWIZZLE_R },
+    { "VK_COMPONENT_SWIZZLE_G", VK_COMPONENT_SWIZZLE_G },
+    { "VK_COMPONENT_SWIZZLE_B", VK_COMPONENT_SWIZZLE_B },
+    { "VK_COMPONENT_SWIZZLE_A", VK_COMPONENT_SWIZZLE_A },
+    { "VK_COMPONENT_SWIZZLE_BEGIN_RANGE", VK_COMPONENT_SWIZZLE_IDENTITY },
+    { "VK_COMPONENT_SWIZZLE_END_RANGE", VK_COMPONENT_SWIZZLE_A },
+    { "VK_COMPONENT_SWIZZLE_RANGE_SIZE", (VK_COMPONENT_SWIZZLE_A - VK_COMPONENT_SWIZZLE_IDENTITY + 1) },
+
+    { "VK_SAMPLE_COUNT_1_BIT", VK_SAMPLE_COUNT_1_BIT },
+    { "VK_SAMPLE_COUNT_2_BIT", VK_SAMPLE_COUNT_2_BIT },
+    { "VK_SAMPLE_COUNT_4_BIT", VK_SAMPLE_COUNT_4_BIT },
+    { "VK_SAMPLE_COUNT_8_BIT", VK_SAMPLE_COUNT_8_BIT },
+    { "VK_SAMPLE_COUNT_16_BIT", VK_SAMPLE_COUNT_16_BIT },
+    { "VK_SAMPLE_COUNT_32_BIT", VK_SAMPLE_COUNT_32_BIT },
+    { "VK_SAMPLE_COUNT_64_BIT", VK_SAMPLE_COUNT_64_BIT },
+
+    { "VK_SHARING_MODE_EXCLUSIVE", VK_SHARING_MODE_EXCLUSIVE },
+    { "VK_SHARING_MODE_CONCURRENT", VK_SHARING_MODE_CONCURRENT },
+
+    { "VK_IMAGE_TILING_OPTIMAL", VK_IMAGE_TILING_OPTIMAL },
+    { "VK_IMAGE_TILING_LINEAR", VK_IMAGE_TILING_LINEAR },
+
+    { "VK_IMAGE_LAYOUT_UNDEFINED", VK_IMAGE_LAYOUT_UNDEFINED },
+    { "VK_IMAGE_LAYOUT_GENERAL", VK_IMAGE_LAYOUT_GENERAL },
+    { "VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL", VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL", VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL", VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL", VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL", VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL", VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_PREINITIALIZED", VK_IMAGE_LAYOUT_PREINITIALIZED },
+    { "VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL", VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL", VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_PRESENT_SRC_KHR", VK_IMAGE_LAYOUT_PRESENT_SRC_KHR },
+    { "VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR", VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR },
+    { "VK_IMAGE_LAYOUT_SHADING_RATE_OPTIMAL_NV", VK_IMAGE_LAYOUT_SHADING_RATE_OPTIMAL_NV },
+    { "VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL_KHR", VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL },
+    { "VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL_KHR", VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL },
+
+    { "VK_IMAGE_USAGE_TRANSFER_SRC_BIT", VK_IMAGE_USAGE_TRANSFER_SRC_BIT },
+    { "VK_IMAGE_USAGE_TRANSFER_DST_BIT", VK_IMAGE_USAGE_TRANSFER_DST_BIT },
+    { "VK_IMAGE_USAGE_SAMPLED_BIT", VK_IMAGE_USAGE_SAMPLED_BIT },
+    { "VK_IMAGE_USAGE_STORAGE_BIT", VK_IMAGE_USAGE_STORAGE_BIT },
+    { "VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT", VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT },
+    { "VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT", VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT },
+    { "VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT", VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT },
+    { "VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT", VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT },
 
     { "VK_SHADER_STAGE_VERTEX_BIT", VK_SHADER_STAGE_VERTEX_BIT },
     { "VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT },
