@@ -1644,3 +1644,205 @@ private:
 
   uint32_t image_index{ 0 };
 };
+
+
+class OffscreenImage : public Node {
+public:
+	NO_COPY_OR_ASSIGNMENT(OffscreenImage)
+	virtual ~OffscreenImage() = default;
+
+  OffscreenImage(std::shared_ptr<FramebufferAttachment> color_attachment)
+		: color_attachment(color_attachment)
+	{}
+
+private:
+	void doAlloc(RenderManager* context) override
+	{
+    this->offscreen_fence = std::make_unique<VulkanFence>(context->device);
+
+    VkExtent3D extent = { context->extent.width, context->extent.height, 1 };
+
+    this->image = std::make_shared<VulkanImage>(context->device,
+                                                VK_IMAGE_TYPE_2D,
+                                                VK_FORMAT_R8G8B8A8_UNORM,
+                                                extent,
+                                                this->subresource_range.levelCount,
+                                                this->subresource_range.layerCount,
+                                                VK_SAMPLE_COUNT_1_BIT,
+                                                VK_IMAGE_TILING_LINEAR,
+                                                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                                VK_SHARING_MODE_EXCLUSIVE);
+
+    this->image_object = std::make_shared<ImageObject>(context->device,
+                                                       this->image,
+                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    context->imageobjects.push_back(this->image_object);
+	}
+
+  void doResize(RenderManager* context) override
+  {
+    this->doAlloc(context);
+  }
+
+	void doRecord(RenderManager* recorder) override
+	{
+		this->get_image_command = std::make_unique<VulkanCommandBuffers>(recorder->device);
+		VulkanCommandBufferScope command_scope(this->get_image_command->buffer());
+
+    VkImageMemoryBarrier src_image_barriers[2] = { 
+    {
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+      nullptr,                                                       // pNext
+      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+      VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                      // oldLayout
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
+      0,                                                             // srcQueueFamilyIndex
+      0,                                                             // dstQueueFamilyIndex
+      this->color_attachment->image->image,                          // image
+      this->subresource_range,                                       // subresourceRange
+    }, {
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+      nullptr,                                                       // pNext
+      0,                                                             // srcAccessMask
+      VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
+      VK_IMAGE_LAYOUT_UNDEFINED,                                     // oldLayout
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // newLayout
+      0,                                                             // srcQueueFamilyIndex
+      0,                                                             // dstQueueFamilyIndex
+      this->image->image,                                            // image
+      this->subresource_range,                                       // subresourceRange
+      }
+    };
+
+		vkCmdPipelineBarrier(this->get_image_command->buffer(),
+ 			                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+			                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+			                   0, 0, nullptr, 0, nullptr,
+			                   1, src_image_barriers);
+
+    const VkImageSubresourceLayers subresource_layers{
+      this->subresource_range.aspectMask,     // aspectMask
+      this->subresource_range.baseMipLevel,   // mipLevel
+      this->subresource_range.baseArrayLayer, // baseArrayLayer
+      this->subresource_range.layerCount      // layerCount;
+    };
+
+    const VkOffset3D offset = {
+      0, 0, 0
+    };
+
+    VkExtent3D extent3d = { recorder->extent.width, recorder->extent.height, 1 };
+
+    VkImageCopy image_copy{
+      subresource_layers,             // srcSubresource
+      offset,                         // srcOffset
+      subresource_layers,             // dstSubresource
+      offset,                         // dstOffset
+      extent3d                        // extent
+    };
+
+    vkCmdCopyImage(this->get_image_command->buffer(),
+                   this->color_attachment->image->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   this->image->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &image_copy);
+
+
+    VkImageMemoryBarrier dst_image_barriers[2] = {
+    {
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+      nullptr,                                                       // pNext
+      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
+      VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // oldLayout
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                      // newLayout
+      0,                                                             // srcQueueFamilyIndex
+      0,                                                             // dstQueueFamilyIndex
+      this->color_attachment->image->image,                          // image
+      this->subresource_range,                                       // subresourceRange
+    }, {
+      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                        // sType
+      nullptr,                                                       // pNext
+      0,                                                             // srcAccessMask
+      VK_ACCESS_TRANSFER_WRITE_BIT,                                  // dstAccessMask
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                          // oldLayout
+      VK_IMAGE_LAYOUT_GENERAL,                                       // newLayout
+      0,                                                             // srcQueueFamilyIndex
+      0,                                                             // dstQueueFamilyIndex
+      this->image->image,                                            // image
+      this->subresource_range,                                       // subresourceRange
+      }
+    };
+
+    vkCmdPipelineBarrier(this->get_image_command->buffer(),
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         0, 0, nullptr, 0, nullptr,
+                         1, dst_image_barriers);
+	}
+
+  void doPresent(RenderManager* context) override
+  {
+    {
+      FenceScope fence_scope(context->device->device, this->offscreen_fence->fence);
+
+      this->get_image_command->submit(context->default_queue,
+                                      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                      this->offscreen_fence->fence);
+    }
+
+    VkImageSubresource image_subresource{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
+    VkSubresourceLayout subresource_layout;
+    vkGetImageSubresourceLayout(context->device->device, this->image->image, &image_subresource, &subresource_layout);
+
+    // Map image memory so we can start copying from it
+    const char* data;
+    vkMapMemory(context->device->device, this->image_object->memory->memory, 0, VK_WHOLE_SIZE, 0, (void**)& data);
+    data += subresource_layout.offset;
+
+    std::ofstream file("test.ppm", std::ios::out | std::ios::binary);
+
+    // ppm header
+    file << "P6\n" << context->extent.width << "\n" << context->extent.height << "\n" << 255 << "\n";
+
+    // If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
+    bool colorSwizzle = false;
+    // Check if source is BGR 
+    // Note: Not complete, only contains most common and basic BGR surface formats for demonstation purposes
+    std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+    colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), this->color_attachment->format) != formatsBGR.end());
+
+    // ppm binary pixel data
+    for (uint32_t y = 0; y < context->extent.height; y++) {
+      unsigned int* row = (unsigned int*)data;
+      for (uint32_t x = 0; x < context->extent.width; x++) {
+        if (colorSwizzle) {
+          file.write((char*)row + 2, 1);
+          file.write((char*)row + 1, 1);
+          file.write((char*)row, 1);
+        }
+        else {
+          file.write((char*)row, 3);
+        }
+        row++;
+      }
+      data += subresource_layout.rowPitch;
+    }
+    file.close();
+    vkUnmapMemory(context->device->device, this->image_object->memory->memory);
+
+    std::cout << "Screenshot saved to disk" << std::endl;
+  }
+
+	std::shared_ptr<FramebufferAttachment> color_attachment;
+	std::unique_ptr<VulkanCommandBuffers> get_image_command;
+  const VkImageSubresourceRange subresource_range{
+      VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+  };
+  std::shared_ptr<VulkanImage> image;
+  std::shared_ptr<ImageObject> image_object;
+  std::shared_ptr<VulkanFence> offscreen_fence;
+};
