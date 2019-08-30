@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
                                                  device_extensions);
 
     auto color_attachment = std::make_shared<FramebufferAttachment>(VK_FORMAT_B8G8R8A8_UNORM,
-                                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                                                     VK_IMAGE_ASPECT_COLOR_BIT);
 
     auto depth_attachment = std::make_shared<FramebufferAttachment>(VK_FORMAT_D32_SFLOAT,
@@ -194,8 +194,7 @@ int main(int argc, char *argv[])
                                                                     VK_IMAGE_ASPECT_DEPTH_BIT);
 
     std::shared_ptr<Group> renderpass = std::make_shared<RenderpassObject>(
-      std::vector<VkAttachmentDescription>{
-      {
+      std::vector<VkAttachmentDescription>{ {
         0,                                                    // flags
         color_attachment->format,                             // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
@@ -204,7 +203,7 @@ int main(int argc, char *argv[])
         VK_ATTACHMENT_LOAD_OP_DONT_CARE,                      // stencilLoadOp
         VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
         VK_IMAGE_LAYOUT_UNDEFINED,                            // initialLayout
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // finalLayout
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL              // finalLayout
       }, {
         0,                                                    // flags
         depth_attachment->format,                             // format

@@ -785,24 +785,26 @@ private:
       this->component_mapping,
       this->subresource_range);
 
-    VkImageMemoryBarrier memory_barrier{
-      VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                // sType
-      nullptr,                                               // pNext
-      0,                                                     // srcAccessMask
-      VK_ACCESS_TRANSFER_WRITE_BIT,                          // dstAccessMask
-      VK_IMAGE_LAYOUT_UNDEFINED,                             // oldLayout
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                  // newLayout
-      0,                                                     // srcQueueFamilyIndex
-      0,                                                     // dstQueueFamilyIndex
-      this->image->image,                                    // image
-      this->subresource_range,                               // subresourceRange
-    };
+    {
+      VkImageMemoryBarrier memory_barrier{
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                // sType
+        nullptr,                                               // pNext
+        0,                                                     // srcAccessMask
+        VK_ACCESS_TRANSFER_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_UNDEFINED,                             // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                  // newLayout
+        0,                                                     // srcQueueFamilyIndex
+        0,                                                     // dstQueueFamilyIndex
+        this->image->image,                                    // image
+        this->subresource_range,                               // subresourceRange
+      };
 
-    vkCmdPipelineBarrier(context->command->buffer(),
-                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                         0, 0, nullptr, 0, nullptr, 1,
-                         &memory_barrier);
+      vkCmdPipelineBarrier(context->command->buffer(),
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr, 1,
+                           &memory_barrier);
+    }
 
     std::vector<VkBufferImageCopy> regions;
 
@@ -834,6 +836,27 @@ private:
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            static_cast<uint32_t>(regions.size()),
                            regions.data());
+
+    {
+      VkImageMemoryBarrier memory_barrier{
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                // sType
+        nullptr,                                               // pNext
+        0,                                                     // srcAccessMask
+        VK_ACCESS_TRANSFER_WRITE_BIT,                          // dstAccessMask
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                  // oldLayout
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,              // newLayout
+        0,                                                     // srcQueueFamilyIndex
+        0,                                                     // dstQueueFamilyIndex
+        this->image->image,                                    // image
+        this->subresource_range,                               // subresourceRange
+      };
+
+      vkCmdPipelineBarrier(context->command->buffer(),
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                           0, 0, nullptr, 0, nullptr, 1,
+                           &memory_barrier);
+    }
   }
 
   void doPipeline(RenderManager * creator) override
@@ -1189,8 +1212,7 @@ private:
                                                 VK_SAMPLE_COUNT_1_BIT,
                                                 VK_IMAGE_TILING_OPTIMAL,
                                                 this->usage,
-                                                VK_SHARING_MODE_EXCLUSIVE,
-                                                0);
+                                                VK_SHARING_MODE_EXCLUSIVE);
 
     this->imageobject = std::make_shared<ImageObject>(context->device,
                                                       this->image,
@@ -1428,7 +1450,7 @@ private:
       this->surface_format.colorSpace,
       context->extent,
       1,
-      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       VK_SHARING_MODE_EXCLUSIVE,
       std::vector<uint32_t>{ 0, },
       VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
@@ -1495,7 +1517,7 @@ private:
         nullptr,                                                       // pNext
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // srcAccessMask
         VK_ACCESS_TRANSFER_READ_BIT,                                   // dstAccessMask
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // oldLayout
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                      // oldLayout
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // newLayout
         0,                                                             // srcQueueFamilyIndex
         0,                                                             // dstQueueFamilyIndex
@@ -1557,7 +1579,7 @@ private:
         VK_ACCESS_TRANSFER_READ_BIT,                                   // srcAccessMask
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,                          // dstAccessMask
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                          // oldLayout
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                      // newLayout
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                      // newLayout
         0,                                                             // srcQueueFamilyIndex
         0,                                                             // dstQueueFamilyIndex
         this->color_attachment->image->image,                          // image
@@ -1620,5 +1642,5 @@ private:
     VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
   };
 
-  uint32_t image_index;
+  uint32_t image_index{ 0 };
 };
