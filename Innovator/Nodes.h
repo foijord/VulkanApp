@@ -229,21 +229,21 @@ private:
     context->state.bufferdata = this;
   }
 
-  void doPipeline(RenderManager * creator) override
+  void doPipeline(RenderManager * context) override
   {
-    creator->state.bufferdata = this;
+    context->state.bufferdata = this;
   }
 
-  void doRecord(RenderManager * recorder) override
+  void doRecord(RenderManager * context) override
   {
-    recorder->state.bufferdata = this;
+    context->state.bufferdata = this;
   }
 };
 
 template <typename T>
 class InlineBufferData : public BufferData {
 public:
-  NO_COPY_OR_ASSIGNMENT(InlineBufferData);
+  NO_COPY_OR_ASSIGNMENT(InlineBufferData)
   InlineBufferData() = default;
   virtual ~InlineBufferData() = default;
 
@@ -331,7 +331,8 @@ public:
   CpuMemoryBuffer() = delete;
   virtual ~CpuMemoryBuffer() = default;
 
-  explicit CpuMemoryBuffer(VkBufferUsageFlags usage_flags, VkBufferCreateFlags create_flags = 0) :
+  explicit CpuMemoryBuffer(VkBufferUsageFlags usage_flags, 
+                           VkBufferCreateFlags create_flags = 0) :
     usage_flags(usage_flags), 
     create_flags(create_flags)
   {}
@@ -400,8 +401,8 @@ private:
   void doStage(RenderManager * context) override
   {
     std::vector<VkBufferCopy> regions = { {
-        0,                                                  // srcOffset
-        0,                                                  // dstOffset
+        0,                                                   // srcOffset
+        0,                                                   // dstOffset
         context->state.bufferdata->size(),                   // size
     } };
 
@@ -665,29 +666,42 @@ protected:
 class Sampler : public Node {
 public:
   NO_COPY_OR_ASSIGNMENT(Sampler)
-  Sampler() = default;
   virtual ~Sampler() = default;
+  
+  Sampler(VkFilter mag_filter,
+          VkFilter min_filter,
+          VkSamplerMipmapMode mipmap_mode,
+          VkSamplerAddressMode address_mode_u,
+          VkSamplerAddressMode address_mode_v,
+          VkSamplerAddressMode address_mode_w) :
+    mag_filter(mag_filter),
+    min_filter(min_filter),
+    mipmap_mode(mipmap_mode),
+    address_mode_u(address_mode_u),
+    address_mode_v(address_mode_v),
+    address_mode_w(address_mode_w),
+    mip_lod_bias(0.0f)
+  {}
 
 private:
   void doAlloc(RenderManager * context) override
   {
-    this->sampler = std::make_unique<VulkanSampler>(
-      context->device,
-      VK_FILTER_LINEAR,
-      VK_FILTER_LINEAR,
-      VK_SAMPLER_MIPMAP_MODE_LINEAR,
-      VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-      VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-      VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-      0.f,
-      VK_FALSE,
-      1.f,
-      VK_FALSE,
-      VK_COMPARE_OP_NEVER,
-      0.f,
-      0.f,
-      VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
-      VK_FALSE);    
+    this->sampler = std::make_unique<VulkanSampler>(context->device,
+                                                    this->mag_filter,
+                                                    this->min_filter,
+                                                    this->mipmap_mode,
+                                                    this->address_mode_u,
+                                                    this->address_mode_v,
+                                                    this->address_mode_w,
+                                                    this->mip_lod_bias,
+                                                    VK_FALSE,
+                                                    1.f,
+                                                    VK_FALSE,
+                                                    VK_COMPARE_OP_NEVER,
+                                                    0.f,
+                                                    0.f,
+                                                    VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+                                                    VK_FALSE);
   }
 
   void doPipeline(RenderManager * creator) override
@@ -696,94 +710,110 @@ private:
   }
 
   std::unique_ptr<VulkanSampler> sampler;
+  VkFilter mag_filter;
+  VkFilter min_filter;
+  VkSamplerMipmapMode mipmap_mode;
+  VkSamplerAddressMode address_mode_u;
+  VkSamplerAddressMode address_mode_v;
+  VkSamplerAddressMode address_mode_w;
+  float mip_lod_bias;
 };
 
-class ImageNode : public Node {
+class TextureImage : public BufferData {
 public:
-  NO_COPY_OR_ASSIGNMENT(ImageNode)
+  NO_COPY_OR_ASSIGNMENT(TextureImage)
+  TextureImage() = delete;
+  virtual ~TextureImage() = default;
 
-  explicit ImageNode(std::shared_ptr<VulkanTextureImage> texture) :
-    texture(std::move(texture)),
-    sample_count(VK_SAMPLE_COUNT_1_BIT),
-    sharing_mode(VK_SHARING_MODE_EXCLUSIVE),
-    create_flags(0),
-    usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
-    tiling(VK_IMAGE_TILING_OPTIMAL),
-    component_mapping({
-      VK_COMPONENT_SWIZZLE_R,         // r
-      VK_COMPONENT_SWIZZLE_G,         // g
-      VK_COMPONENT_SWIZZLE_B,         // b
-      VK_COMPONENT_SWIZZLE_A}),       // a
-    subresource_range({
-      VK_IMAGE_ASPECT_COLOR_BIT,          // aspectMask 
-      this->texture->base_level(),         // baseMipLevel 
-      this->texture->levels(),             // levelCount 
-      this->texture->base_layer(),         // baseArrayLayer 
-      this->texture->layers()})            // layerCount 
+  explicit TextureImage(const std::string& filename) :
+    texture(VulkanImageFactory::Create(filename))
   {}
 
-  explicit ImageNode(const std::string & filename) :
-    ImageNode(VulkanImageFactory::Create(filename))
-  {}
+  void copy(char* dst) const override
+  {
+    std::copy(this->texture->data(), this->texture->data() + this->texture->size(), dst);
+  }
 
-  virtual ~ImageNode() = default;
+  size_t size() const override
+  {
+    return this->texture->size();
+  }
+
+  size_t stride() const override
+  {
+    return 0;
+  }
 
 private:
-  void doAlloc(RenderManager * context) override
+  void doAlloc(RenderManager* context) override
   {
-    VkImageFormatProperties image_format_properties;
+    context->state.bufferdata = this;
+    context->state.texture = this->texture.get();
+  }
 
-    THROW_ON_ERROR(vkGetPhysicalDeviceImageFormatProperties(
-      context->device->physical_device.device,
-      this->texture->format(),
-      this->texture->image_type(),
-      this->tiling,
-      this->usage_flags,
-      this->create_flags,
-      &image_format_properties));
+  void doStage(RenderManager* context) override
+  {
+    context->state.bufferdata = this;
+    context->state.texture = this->texture.get();
+  }
 
-    this->buffer = std::make_shared<BufferObject>(
-      std::make_shared<VulkanBuffer>(context->device,
-                                     0,                                     
-                                     this->texture->size(),
-                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                     VK_SHARING_MODE_EXCLUSIVE),
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+  void doPipeline(RenderManager* context) override
+  {
+    context->state.bufferdata = this;
+    context->state.texture = this->texture.get();
+  }
 
-    context->bufferobjects.push_back(this->buffer);
+  void doRecord(RenderManager* context) override
+  {
+    context->state.bufferdata = this;
+    context->state.texture = this->texture.get();
+  }
 
-    this->image = std::make_shared<VulkanImage>(
-      context->device,
-      this->texture->image_type(),
-      this->texture->format(),
-      this->texture->extent(0),
-      this->texture->levels(),
-      this->texture->layers(),
-      this->sample_count,
-      this->tiling,
-      this->usage_flags,
-      this->sharing_mode,
-      this->create_flags);
+  std::shared_ptr<VulkanTextureImage> texture;
+};
 
-    this->image_object = std::make_shared<ImageObject>(
-      context->device,
-      this->image,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
+class Image : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(Image)
+  virtual ~Image() = default;
+  Image(VkSampleCountFlagBits sample_count,
+        VkImageTiling tiling,
+        VkImageUsageFlags usage_flags,
+        VkSharingMode sharing_mode,
+        VkImageCreateFlags create_flags,
+        VkImageLayout layout) :
+    sample_count(sample_count),
+    tiling(tiling),
+    usage_flags(usage_flags),
+    sharing_mode(sharing_mode),
+    create_flags(create_flags),
+    layout(layout)
+  {}
+
+private:
+  void doAlloc(RenderManager* context) override
+  {
+    this->image = std::make_shared<VulkanImage>(context->device,
+                                                context->state.texture->image_type(),
+                                                context->state.texture->format(),
+                                                context->state.texture->extent(0),
+                                                context->state.texture->levels(),
+                                                context->state.texture->layers(),
+                                                this->sample_count,
+                                                this->tiling,
+                                                this->usage_flags,
+                                                this->sharing_mode,
+                                                this->create_flags);
+
+    this->image_object = std::make_shared<ImageObject>(this->image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     context->imageobjects.push_back(this->image_object);
   }
 
-  void doStage(RenderManager * context) override
+  void doStage(RenderManager* context) override
   {
-    this->buffer->memcpy(this->texture->data(), this->texture->size());
-
-    this->view = std::make_unique<VulkanImageView>(
-      context->device,
-      this->image->image,
-      this->texture->format(),
-      this->texture->image_view_type(),
-      this->component_mapping,
-      this->subresource_range);
+    context->state.image = this->image->image;
+    VulkanTextureImage* texture = context->state.texture;
 
     {
       VkImageMemoryBarrier memory_barrier{
@@ -796,7 +826,7 @@ private:
         0,                                                     // srcQueueFamilyIndex
         0,                                                     // dstQueueFamilyIndex
         this->image->image,                                    // image
-        this->subresource_range,                               // subresourceRange
+        texture->subresource_range(),                          // subresourceRange
       };
 
       vkCmdPipelineBarrier(context->command->buffer(),
@@ -809,13 +839,13 @@ private:
     std::vector<VkBufferImageCopy> regions;
 
     VkDeviceSize buffer_offset = 0;
-    for (uint32_t mip_level = 0; mip_level < this->texture->levels(); mip_level++) {
+    for (uint32_t mip_level = 0; mip_level < texture->levels(); mip_level++) {
 
       const VkImageSubresourceLayers subresource_layers{
-        this->subresource_range.aspectMask,               // aspectMask
-        mip_level,                                        // mipLevel
-        this->subresource_range.baseArrayLayer,           // baseArrayLayer
-        this->subresource_range.layerCount,               // layerCount
+        texture->subresource_range().aspectMask,               // aspectMask
+        mip_level,                                             // mipLevel
+        texture->subresource_range().baseArrayLayer,           // baseArrayLayer
+        texture->subresource_range().layerCount,               // layerCount
       };
 
       regions.push_back({
@@ -824,19 +854,18 @@ private:
         0,                                         // bufferImageHeight
         subresource_layers,                        // imageSubresource
         { 0, 0, 0 },                               // imageOffset
-        this->texture->extent(mip_level),           // imageExtent
-      });
+        texture->extent(mip_level),                // imageExtent
+        });
 
-      buffer_offset += this->texture->size(mip_level);
+      buffer_offset += texture->size(mip_level);
     }
 
     vkCmdCopyBufferToImage(context->command->buffer(),
-                           this->buffer->buffer->buffer,
+                           context->state.buffer,
                            this->image->image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            static_cast<uint32_t>(regions.size()),
                            regions.data());
-
     {
       VkImageMemoryBarrier memory_barrier{
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,                // sType
@@ -844,11 +873,11 @@ private:
         0,                                                     // srcAccessMask
         VK_ACCESS_TRANSFER_WRITE_BIT,                          // dstAccessMask
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                  // oldLayout
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,              // newLayout
+        this->layout,                                          // newLayout
         0,                                                     // srcQueueFamilyIndex
         0,                                                     // dstQueueFamilyIndex
         this->image->image,                                    // image
-        this->subresource_range,                               // subresourceRange
+        texture->subresource_range(),                          // subresourceRange
       };
 
       vkCmdPipelineBarrier(context->command->buffer(),
@@ -859,26 +888,52 @@ private:
     }
   }
 
-  void doPipeline(RenderManager * creator) override
+  void doPipeline(RenderManager * context) override
   {
-    creator->state.imageView = this->view->view;
-    creator->state.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    context->state.imageLayout = this->layout;
   }
 
-  std::shared_ptr<VulkanTextureImage> texture;
-
-  std::shared_ptr<BufferObject> buffer;
   std::shared_ptr<VulkanImage> image;
   std::shared_ptr<ImageObject> image_object;
-  std::unique_ptr<VulkanImageView> view;
 
   VkSampleCountFlagBits sample_count;
+  VkImageTiling tiling;
+  VkImageUsageFlags usage_flags;
   VkSharingMode sharing_mode;
   VkImageCreateFlags create_flags;
-  VkImageUsageFlags usage_flags;
-  VkImageTiling tiling;
+  VkImageLayout layout;
+};
+
+
+class ImageView : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ImageView)
+  virtual ~ImageView() = default;
+  ImageView(VkComponentSwizzle r,
+            VkComponentSwizzle g,
+            VkComponentSwizzle b,
+            VkComponentSwizzle a) :
+    component_mapping({ r, g, b, a })
+  {}
+
+private:
+  void doStage(RenderManager* context) override
+  {
+    this->view = std::make_unique<VulkanImageView>(context->device,
+                                                   context->state.image,
+                                                   context->state.texture->format(),
+                                                   context->state.texture->image_view_type(),
+                                                   this->component_mapping,
+                                                   context->state.texture->subresource_range());
+  }
+
+  void doPipeline(RenderManager* context) override
+  {
+    context->state.imageView = this->view->view;
+  }
+
+  std::unique_ptr<VulkanImageView> view;
   VkComponentMapping component_mapping;
-  VkImageSubresourceRange subresource_range;
 };
 
 class CullMode : public Node {
@@ -1214,9 +1269,7 @@ private:
                                                 this->usage,
                                                 VK_SHARING_MODE_EXCLUSIVE);
 
-    this->imageobject = std::make_shared<ImageObject>(context->device,
-                                                      this->image,
-                                                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    this->imageobject = std::make_shared<ImageObject>(this->image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     context->imageobjects.push_back(this->imageobject);
 
@@ -1319,7 +1372,6 @@ private:
   {
     recorder->state.framebuffer = this->framebuffer->framebuffer;
   }
-
 
 public:
   std::unique_ptr<VulkanFramebuffer> framebuffer;
@@ -1673,9 +1725,7 @@ private:
                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                                 VK_SHARING_MODE_EXCLUSIVE);
 
-    this->image_object = std::make_shared<ImageObject>(context->device,
-                                                       this->image,
-                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    this->image_object = std::make_shared<ImageObject>(this->image, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     context->imageobjects.push_back(this->image_object);
 	}
@@ -1720,7 +1770,7 @@ private:
  			                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
 			                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
 			                   0, 0, nullptr, 0, nullptr,
-			                   1, src_image_barriers);
+			                   2, src_image_barriers);
 
     const VkImageSubresourceLayers subresource_layers{
       this->subresource_range.aspectMask,     // aspectMask
@@ -1781,7 +1831,7 @@ private:
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          0, 0, nullptr, 0, nullptr,
-                         1, dst_image_barriers);
+                         2, dst_image_barriers);
 	}
 
   void doPresent(RenderManager* context) override
@@ -1822,7 +1872,7 @@ private:
         if (colorSwizzle) {
           file.write((char*)row + 2, 1);
           file.write((char*)row + 1, 1);
-          file.write((char*)row, 1);
+          file.write((char*)row + 0, 1);
         }
         else {
           file.write((char*)row, 3);

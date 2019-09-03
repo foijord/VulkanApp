@@ -44,8 +44,8 @@ class QTextureImage : public VulkanTextureImage {
 public:
   NO_COPY_OR_ASSIGNMENT(QTextureImage)
 
-    explicit QTextureImage(const std::string & filename) :
-    image(QImage(filename.c_str()))
+  explicit QTextureImage(const std::string & filename) :
+  image(QImage(filename.c_str()))
   {
     this->image = this->image.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
   }
@@ -109,6 +109,17 @@ public:
   VkImageViewType image_view_type() const override
   {
     return VK_IMAGE_VIEW_TYPE_2D;
+  }
+
+  VkImageSubresourceRange subresource_range() const override
+  {
+    return {
+      VK_IMAGE_ASPECT_COLOR_BIT,  // aspectMask 
+      this->base_level(),         // baseMipLevel 
+      this->levels(),             // levelCount 
+      this->base_layer(),         // baseArrayLayer 
+      this->layers()              // layerCount 
+    };
   }
 
   QImage image;
