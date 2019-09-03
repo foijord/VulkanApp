@@ -6,7 +6,7 @@
             VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
             VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
 
-   (textureimage "Textures/qt256.png")
+   (textureimage "Textures/metalplate01_rgba.ktx")
    (cpumemorybuffer (bufferusageflags VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
 
    (image VK_SAMPLE_COUNT_1_BIT

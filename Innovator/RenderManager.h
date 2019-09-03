@@ -136,8 +136,7 @@ public:
 
   void alloc(Node * root)
   {    
-    State state;
-    this->state = state;
+    this->state = State();
 
     this->begin_alloc();
     {
@@ -149,8 +148,7 @@ public:
 
   void resize(Node * root)
   {
-    State state;
-    this->state = state;
+    this->state = State();
 
     this->begin_alloc();
     {
@@ -169,9 +167,7 @@ public:
 
   void stage(Node * root)
   {
-    State state;
-    this->state = state;
-
+    this->state = State();
     {
       VulkanCommandBufferScope scope(this->command->buffer());
       root->stage(this);
@@ -185,17 +181,13 @@ public:
 
   void pipeline(Node * root)
   {
-    State state;
-    this->state = state;
-
+    this->state = State();
     root->pipeline(this);
   }
 
   void record(Node * root)
   {
-    State state;
-    this->state = state;
-
+    this->state = State();
     root->record(this);
   }
 

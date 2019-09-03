@@ -414,6 +414,35 @@ public:
   VkDeviceMemory memory{ nullptr };
 };
 
+static VkBool32 DebugCallback(VkFlags flags,
+                              VkDebugReportObjectTypeEXT,
+                              uint64_t,
+                              size_t,
+                              int32_t,
+                              const char* layer,
+                              const char* msg,
+                              void*)
+{
+  std::string message;
+  if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
+    message += "ERROR: ";
+  }
+  if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT) {
+    message += "DEBUG: ";
+  }
+  if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
+    message += "WARNING: ";
+  }
+  if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT) {
+    message += "INFORMATION: ";
+  }
+  if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) {
+    message += "PERFORMANCE_WARNING: ";
+  }
+  message += std::string(layer) + " " + std::string(msg);
+  std::cout << message << std::endl;
+  return VK_FALSE;
+}
 
 class VulkanDebugCallback {
 public:
@@ -422,7 +451,7 @@ public:
 
   explicit VulkanDebugCallback(std::shared_ptr<VulkanInstance> vulkan,
                                VkDebugReportFlagsEXT flags,
-                               PFN_vkDebugReportCallbackEXT callback,
+                               PFN_vkDebugReportCallbackEXT callback = DebugCallback,
                                void * userdata = nullptr)
     : vulkan(std::move(vulkan))
   {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Innovator/Vulkan/Wrapper.h>
-#include <QWindow>
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 #include <Windows.h>
@@ -13,19 +12,6 @@ class VulkanSurface {
 public:
   NO_COPY_OR_ASSIGNMENT(VulkanSurface)
   VulkanSurface() = delete;
-
-  VulkanSurface(std::shared_ptr<VulkanInstance> vulkan,
-                QWindow * window) :
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-    VulkanSurface(vulkan,
-                  reinterpret_cast<HWND>(window->winId()),
-                  GetModuleHandle(nullptr))
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-    VulkanSurface(vulkan,
-                  static_cast<xcb_window_t>(window->winId()),
-                  QX11Info::connection())
-#endif
-    {}
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
   VulkanSurface(std::shared_ptr<VulkanInstance> vulkan,
