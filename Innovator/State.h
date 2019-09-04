@@ -5,7 +5,7 @@
 
 #include <vector>
 
-using namespace Innovator::Math;
+namespace m = Innovator::Math;
 
 struct VulkanIndexBufferDescription {
   VkIndexType type;
@@ -58,21 +58,21 @@ struct State {
 };
 
 struct RenderState {
-  mat4d ModelMatrix{
+  m::mat4d ModelMatrix{
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1,
   };
 
-  mat4d ViewMatrix{
+  m::mat4d ViewMatrix{
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1,
   };
 
-  mat4d ProjMatrix{
+  m::mat4d ProjMatrix{
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,

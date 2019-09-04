@@ -14,7 +14,7 @@
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
 
-using namespace Innovator::Math;
+namespace m = Innovator::Math;
 
 template <typename Traverser, typename State>
 class StateScope {
@@ -112,18 +112,18 @@ public:
     this->e += this->z * dy;
   }
 
-  void pan(const vec2d & dx)
+  void pan(const m::vec2d & dx)
   {
     this->e += this->x * dx.v[0] + this->y * dx.v[1];
   }
 
-  void orbit(const vec2d & dx)
+  void orbit(const m::vec2d & dx)
   {
     this->pan(dx);
     this->lookAt(this->e, this->t, this->y);
   }
 
-  void lookAt(const vec3d & eye, const vec3d & target, const vec3d & up)
+  void lookAt(const m::vec3d & eye, const m::vec3d & target, const m::vec3d & up)
   {
     this->y = up;
     this->e = eye;
@@ -134,7 +134,7 @@ public:
     this->y = normalize(this->z ^ this->x);
   }
 
-  mat4d viewmatrix() const
+  m::mat4d viewmatrix() const
   {
     return {
       this->x.v[0], this->y.v[0], this->z.v[0], 0,
@@ -144,7 +144,7 @@ public:
     };
   }
 
-  mat4d projmatrix() const
+  m::mat4d projmatrix() const
   {
     const auto f = 1.0 / tan(this->fieldofview / 2);
     const auto m00 = f / this->aspectratio;
@@ -172,7 +172,7 @@ private:
     renderer->state.ProjMatrix = this->projmatrix();
   }
 
-  vec3d x, y, z, e, t;
+  m::vec3d x, y, z, e, t;
   float farplane;
   float nearplane;
   float aspectratio;
@@ -185,8 +185,8 @@ public:
   Transform() = default;
   virtual ~Transform() = default;
 
-  explicit Transform(const vec3d & t,
-                     const vec3d & s)
+  explicit Transform(const m::vec3d & t,
+                     const m::vec3d & s)
   {
     for (size_t i = 0; i < 3; i++) {
       this->matrix.m[i].v[i] = s.v[i];
@@ -200,7 +200,7 @@ private:
     renderer->state.ModelMatrix = renderer->state.ModelMatrix * this->matrix;
   }
 
-  mat4d matrix{
+  m::mat4d matrix{
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
@@ -434,7 +434,7 @@ public:
   virtual ~TransformBuffer() = default;
 
   TransformBuffer()
-    : size(sizeof(mat4f) * 2)
+    : size(sizeof(m::mat4f) * 2)
   {}
 
 private:
@@ -459,13 +459,13 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    std::array<mat4f, 2> data = {
-      cast<float>(renderer->state.ViewMatrix * renderer->state.ModelMatrix),
-      cast<float>(renderer->state.ProjMatrix)
+    std::array<m::mat4f, 2> data = {
+      m::cast<float>(renderer->state.ViewMatrix * renderer->state.ModelMatrix),
+      m::cast<float>(renderer->state.ProjMatrix)
     };
 
     MemoryMap map(this->buffer->memory.get(), this->size, this->buffer->offset);
-    std::copy(data.begin(), data.end(), reinterpret_cast<mat4f*>(map.mem));
+    std::copy(data.begin(), data.end(), reinterpret_cast<m::mat4f*>(map.mem));
   }
 
   size_t size;
