@@ -3,7 +3,6 @@ project (Viewer)
 add_executable(Viewer main.cpp)
 
 set_target_properties(Viewer PROPERTIES CXX_STANDARD 17)
-add_definitions(-Wfatal-errors)
 
 IF(WIN32)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_WIN32_KHR")

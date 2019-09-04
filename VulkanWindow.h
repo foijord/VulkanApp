@@ -9,6 +9,7 @@
 #include <windowsx.h>
 #include <tchar.h>
 
+namespace m = Innovator::Math;
 
 class Window {
 public:
@@ -207,8 +208,8 @@ public:
   void mouseMoved(int x, int y)
   {
     if (this->mouse_pressed) {
-      const vec2d pos = { static_cast<double>(x), static_cast<double>(y) };
-      vec2d dx = (this->mouse_pos - pos) * .01;
+      const m::vec2d pos = { static_cast<double>(x), static_cast<double>(y) };
+      m::vec2d dx = (this->mouse_pos - pos) * .01;
       dx.v[1] = -dx.v[1];
       switch (this->button) {
       case 0: this->camera->orbit(dx); break;
@@ -228,5 +229,5 @@ public:
 
   int button;
   bool mouse_pressed{ false };
-  vec2d mouse_pos{};
+  m::vec2d mouse_pos{};
 };
