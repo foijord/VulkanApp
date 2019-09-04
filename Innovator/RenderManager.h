@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Innovator/Misc/Defines.h>
+#include <Innovator/Defines.h>
 #include <Innovator/Node.h>
 #include <Innovator/State.h>
 #include <Innovator/VulkanObjects.h>
@@ -105,7 +105,6 @@ public:
   {
     this->imageobjects.clear();
     this->bufferobjects.clear();
-    this->alloc_callbacks.clear();
   }
 
   void end_alloc()
@@ -128,9 +127,6 @@ public:
 
       const VkDeviceSize offset = 0;
       buffer_object->bind(memory, offset);
-    }
-    for (auto & alloc_callback : this->alloc_callbacks) {
-      alloc_callback(this);
     }
   }
 
@@ -231,6 +227,4 @@ public:
 
   std::vector<std::shared_ptr<ImageObject>> imageobjects;
   std::vector<std::shared_ptr<BufferObject>> bufferobjects;
-  std::vector<alloc_callback> alloc_callbacks;
-
 };

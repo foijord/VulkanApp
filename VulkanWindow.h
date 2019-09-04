@@ -2,14 +2,14 @@
 
 #include <Innovator/Nodes.h>
 #include <Innovator/RenderManager.h>
-#include <Innovator/misc/Defines.h>
+#include <Innovator/Defines.h>
 #include <Innovator/VulkanSurface.h>
+
+#include <glm/glm.hpp>
 
 #include <windows.h>
 #include <windowsx.h>
 #include <tchar.h>
-
-namespace m = Innovator::Math;
 
 class Window {
 public:
@@ -146,8 +146,8 @@ public:
                std::shared_ptr<VulkanDevice> device,
                std::shared_ptr<FramebufferAttachment> color_attachment,
                std::shared_ptr<Group> scene,
-               std::shared_ptr<Camera> camera) :
-    camera(std::move(camera))
+               std::shared_ptr<ViewMatrix> viewmatrix) :
+    viewmatrix(std::move(viewmatrix))
   {
     this->surface = std::make_shared<::VulkanSurface>(vulkan, this->hWnd, this->hInstance);
     VkSurfaceCapabilitiesKHR surface_capabilities = this->surface->getSurfaceCapabilities(device);
@@ -208,13 +208,13 @@ public:
   void mouseMoved(int x, int y)
   {
     if (this->mouse_pressed) {
-      const m::vec2d pos = { static_cast<double>(x), static_cast<double>(y) };
-      m::vec2d dx = (this->mouse_pos - pos) * .01;
-      dx.v[1] = -dx.v[1];
+      const glm::dvec2 pos = { static_cast<double>(x), static_cast<double>(y) };
+      glm::dvec2 dx = (this->mouse_pos - pos) * .01;
+      dx[1] = -dx[1];
       switch (this->button) {
-      case 0: this->camera->orbit(dx); break;
-      case 1: this->camera->pan(dx); break;
-      case 2: this->camera->zoom(dx.v[1]); break;
+      case 0: this->viewmatrix->orbit(dx); break;
+      case 1: this->viewmatrix->pan(dx); break;
+      case 2: this->viewmatrix->zoom(dx[1]); break;
       default: break;
       }
       this->mouse_pos = pos;
@@ -225,9 +225,9 @@ public:
   std::shared_ptr<::VulkanSurface> surface;
   std::shared_ptr<Group> root;
   std::shared_ptr<RenderManager> rendermanager;
-  std::shared_ptr<Camera> camera;
+  std::shared_ptr<ViewMatrix> viewmatrix;
 
   int button;
   bool mouse_pressed{ false };
-  m::vec2d mouse_pos{};
+  glm::dvec2 mouse_pos{};
 };

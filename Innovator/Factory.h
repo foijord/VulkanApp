@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Innovator/Misc/Defines.h>
+#include <Innovator/Defines.h>
 #include <vulkan/vulkan.h>
 #include <functional>
 #include <memory>

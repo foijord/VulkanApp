@@ -1,9 +1,8 @@
-
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 #include <VulkanWindow.h>
 #endif
 #include <Innovator/File.h>
-#include <Innovator/Misc/Factory.h>
+#include <Innovator/Factory.h>
 
 #include <iostream>
 #include <vector>
@@ -68,8 +67,7 @@ int main(int argc, char *argv[])
                                                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                                                     VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    std::shared_ptr<Group> renderpass = std::make_shared<RenderpassObject>(
-      std::vector<VkAttachmentDescription>{ {
+    std::vector<VkAttachmentDescription> attachment_descriptions{ {
         0,                                                    // flags
         color_attachment->format,                             // format
         VK_SAMPLE_COUNT_1_BIT,                                // samples
@@ -89,35 +87,44 @@ int main(int argc, char *argv[])
         VK_ATTACHMENT_STORE_OP_DONT_CARE,                     // stencilStoreOp
         VK_IMAGE_LAYOUT_UNDEFINED,                            // initialLayout
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL      // finalLayout
-      } },
-      std::vector<std::shared_ptr<SubpassObject>>{
-        std::make_shared<SubpassObject>(
-          0,
-          VK_PIPELINE_BIND_POINT_GRAPHICS,
-          std::vector<VkAttachmentReference>{},
-          std::vector<VkAttachmentReference>{ { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL } },
-          std::vector<VkAttachmentReference>{},
-          VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
-          std::vector<uint32_t>{}
-        )});
+    } };
 
+    std::vector<std::shared_ptr<SubpassObject>> subpass_objects{
+      std::make_shared<SubpassObject>(
+        0,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        std::vector<VkAttachmentReference>{},
+        std::vector<VkAttachmentReference>{ { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL } },
+        std::vector<VkAttachmentReference>{},
+        VkAttachmentReference{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
+        std::vector<uint32_t>{}) 
+    };
 
-    auto framebuffer = std::make_shared<FramebufferObject>();
-    framebuffer->children = {
+    std::shared_ptr<Group> renderpass = std::make_shared<RenderpassObject>(
+      attachment_descriptions,
+      subpass_objects);
+
+    std::vector<std::shared_ptr<FramebufferAttachment>> attachments{
       color_attachment,
       depth_attachment
     };
 
-    auto camera = std::make_shared<Camera>(1000.0f, 0.1f, 4.0f / 3, 0.7f);
-    camera->lookAt({ 0, 2, 4 }, { 0, 0, 0 }, { 0, 1, 0 });
+    auto framebuffer = std::make_shared<FramebufferObject>(attachments);
+
+    auto viewmatrix = std::make_shared<ViewMatrix>(glm::dvec3(0, 2, 4), 
+                                                   glm::dvec3(0, 0, 0), 
+                                                   glm::dvec3(0, 1, 0));
+
+    auto projmatrix = std::make_shared<ProjMatrix>(1000.0f, 0.1f, 4.0f / 3.0f, 0.7f);
 
     renderpass->children = {
       framebuffer,
-      camera,
+      viewmatrix,
+      projmatrix,
       eval_file("crate.scene")
     };
 
-    VulkanWindow window(vulkan, device, color_attachment, renderpass, camera);
+    VulkanWindow window(vulkan, device, color_attachment, renderpass, viewmatrix);
     return window.show();
   }
   catch (std::exception & e) {

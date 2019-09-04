@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Innovator/Nodes.h>
-#include <Innovator/Scheme/Scheme.h>
+#include <Innovator/Scheme.h>
 
 #include <string>
 #include <memory>

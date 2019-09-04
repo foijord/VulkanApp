@@ -1,11 +1,9 @@
 #pragma once
 
-#include <Innovator/Vulkan/Wrapper.h>
-#include <Innovator/Math/Matrix.h>
+#include <Innovator/Wrapper.h>
 
+#include <glm/glm.hpp>
 #include <vector>
-
-namespace m = Innovator::Math;
 
 struct VulkanIndexBufferDescription {
   VkIndexType type;
@@ -19,7 +17,6 @@ struct State {
   VkBuffer buffer{ nullptr };
   class BufferData * bufferdata{ nullptr };
   class VulkanTextureImage* texture{ nullptr };
-  std::vector<VkImageView> framebuffer_attachments;
   std::shared_ptr<VulkanRenderpass> renderpass{ nullptr };
   VkExtent2D extent{ 0, 0 };
 
@@ -51,31 +48,13 @@ struct State {
   std::vector<VkVertexInputBindingDescription> vertex_input_bindings;
   std::vector<VkVertexInputAttributeDescription> vertex_attributes;
 
-  VkFramebuffer framebuffer{ nullptr };
   VulkanIndexBufferDescription index_buffer_description;
   std::vector<VkBuffer> vertex_attribute_buffers;
   std::vector<VkDeviceSize> vertex_attribute_buffer_offsets;
 };
 
 struct RenderState {
-  m::mat4d ModelMatrix{
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  };
-
-  m::mat4d ViewMatrix{
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  };
-
-  m::mat4d ProjMatrix{
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  };
+  glm::dmat4 ModelMatrix{ 1.0 };
+  glm::dmat4 ViewMatrix{ 1.0 };
+  glm::dmat4 ProjMatrix{ 1.0 };
 };

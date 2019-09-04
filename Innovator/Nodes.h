@@ -2,19 +2,17 @@
 
 #include <Innovator/RenderManager.h>
 #include <Innovator/Node.h>
-#include <Innovator/Math/Matrix.h>
-#include <Innovator/Misc/Defines.h>
-#include <Innovator/Misc/Factory.h>
+#include <Innovator/Defines.h>
+#include <Innovator/Factory.h>
 
 #include <vulkan/vulkan.h>
+#include <glm/glm.hpp>
 
 #include <utility>
 #include <vector>
 #include <memory>
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
-
-namespace m = Innovator::Math;
 
 template <typename Traverser, typename State>
 class StateScope {
@@ -90,94 +88,85 @@ protected:
   }
 };
 
-class Camera : public Node {
-public:
-  NO_COPY_OR_ASSIGNMENT(Camera)
-  virtual ~Camera() = default;
 
-  explicit Camera(float farplane, float nearplane, float aspectratio, float fieldofview)
-    : x{ 1, 0, 0 },
-      y{ 0, 1, 0 },
-      z{ 0, 0, 1 },
-      e{ 0, 0, 0 },
-      t{ 0, 0, 0 },
-      farplane(farplane),
-      nearplane(nearplane),
-      aspectratio(aspectratio),
-      fieldofview(fieldofview)
+class ViewMatrix : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ViewMatrix)
+  ViewMatrix() = delete;
+  virtual ~ViewMatrix() = default;
+
+  ViewMatrix(glm::dvec3 eye, glm::dvec3 target, glm::dvec3 up)
+    : mat(glm::lookAt(eye, target, up))
   {}
 
   void zoom(double dy)
   {
-    this->e += this->z * dy;
+    this->mat = glm::translate(this->mat, glm::dvec3(0.0, 0.0, dy));
   }
 
-  void pan(const m::vec2d & dx)
+  void pan(const glm::dvec2& dx)
   {
-    this->e += this->x * dx.v[0] + this->y * dx.v[1];
+    this->mat = glm::translate(this->mat, glm::dvec3(dx, 0.0));
   }
 
-  void orbit(const m::vec2d & dx)
+  void orbit(const glm::dvec2& dx)
   {
-    this->pan(dx);
-    this->lookAt(this->e, this->t, this->y);
   }
 
-  void lookAt(const m::vec3d & eye, const m::vec3d & target, const m::vec3d & up)
-  {
-    this->y = up;
-    this->e = eye;
-    this->t = target;
 
-    this->z = normalize(this->e - this->t);
-    this->x = normalize(this->y ^ this->z);
-    this->y = normalize(this->z ^ this->x);
+private:
+  void doRender(SceneRenderer* renderer) override
+  {
+    renderer->state.ViewMatrix = this->mat;
   }
 
-  m::mat4d viewmatrix() const
-  {
-    return {
-      this->x.v[0], this->y.v[0], this->z.v[0], 0,
-      this->x.v[1], this->y.v[1], this->z.v[1], 0,
-      this->x.v[2], this->y.v[2], this->z.v[2], 0,
-       -(x * e),      -(y * e),     -(z * e),   1,
-    };
-  }
+  glm::dmat4 mat{ 1.0 };
+};
 
-  m::mat4d projmatrix() const
-  {
-    const auto f = 1.0 / tan(this->fieldofview / 2);
-    const auto m00 = f / this->aspectratio;
-    const auto m22 = this->farplane / (this->nearplane - this->farplane);
-    const auto m32 = (this->nearplane * this->farplane) / (this->nearplane - this->farplane);
 
-    return {
-      m00, 0, 0,  0,
-      0, -f, 0,   0,
-      0, 0, m22, -1,
-      0, 0, m32,  0,
-    };
+class ProjMatrix : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(ProjMatrix)
+  ProjMatrix() = delete;
+  virtual ~ProjMatrix() = default;
+
+  ProjMatrix(float farplane, float nearplane, float aspectratio, float fieldofview)
+    : farplane(farplane),
+      nearplane(nearplane),
+      aspectratio(aspectratio),
+      fieldofview(fieldofview)
+  {
+    this->mat = glm::perspective(this->fieldofview,
+                                 this->aspectratio,
+                                 this->nearplane,
+                                 this->farplane);
   }
 
 private:
-  void doResize(RenderManager * context) override
+  void doResize(RenderManager* context) override
   {
     this->aspectratio = static_cast<float>(context->extent.width) /
                         static_cast<float>(context->extent.height);
+
+    this->mat = glm::perspective(this->fieldofview,
+                                 this->aspectratio,
+                                 this->nearplane,
+                                 this->farplane);
   }
 
-  void doRender(SceneRenderer * renderer) override
+  void doRender(SceneRenderer* renderer) override
   {
-    renderer->state.ViewMatrix = this->viewmatrix();
-    renderer->state.ProjMatrix = this->projmatrix();
+    renderer->state.ProjMatrix = this->mat;
   }
 
-  m::vec3d x, y, z, e, t;
+  glm::dmat4 mat;
+
   float farplane;
   float nearplane;
   float aspectratio;
   float fieldofview;
 };
+
 
 class Transform : public Node {
 public:
@@ -185,13 +174,11 @@ public:
   Transform() = default;
   virtual ~Transform() = default;
 
-  explicit Transform(const m::vec3d & t,
-                     const m::vec3d & s)
+  explicit Transform(const glm::dvec3 & t,
+                     const glm::dvec3 & s)
   {
-    for (size_t i = 0; i < 3; i++) {
-      this->matrix.m[i].v[i] = s.v[i];
-      this->matrix.m[3].v[i] = t.v[i];
-    }
+    this->matrix = glm::scale(this->matrix, s);
+    this->matrix = glm::translate(this->matrix, t);
   }
 
 private:
@@ -200,12 +187,7 @@ private:
     renderer->state.ModelMatrix = renderer->state.ModelMatrix * this->matrix;
   }
 
-  m::mat4d matrix{
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  };
+  glm::dmat4 matrix{ 1.0 };
 };
 
 class BufferData : public Node {
@@ -434,7 +416,7 @@ public:
   virtual ~TransformBuffer() = default;
 
   TransformBuffer()
-    : size(sizeof(m::mat4f) * 2)
+    : size(sizeof(glm::mat4) * 2)
   {}
 
 private:
@@ -459,13 +441,13 @@ private:
 
   void doRender(SceneRenderer * renderer) override
   {
-    std::array<m::mat4f, 2> data = {
-      m::cast<float>(renderer->state.ViewMatrix * renderer->state.ModelMatrix),
-      m::cast<float>(renderer->state.ProjMatrix)
+    std::array<glm::mat4, 2> data = {
+      glm::mat4(renderer->state.ViewMatrix* renderer->state.ModelMatrix),
+      glm::mat4(renderer->state.ProjMatrix)
     };
 
     MemoryMap map(this->buffer->memory.get(), this->size, this->buffer->offset);
-    std::copy(data.begin(), data.end(), reinterpret_cast<m::mat4f*>(map.mem));
+    std::copy(data.begin(), data.end(), reinterpret_cast<glm::mat4*>(map.mem));
   }
 
   size_t size;
@@ -1097,7 +1079,7 @@ private:
     VulkanCommandBufferScope command_scope(this->command->buffer(),
                                            recorder->state.renderpass->renderpass,
                                            0,
-                                           recorder->state.framebuffer,
+                                           VK_NULL_HANDLE,
                                            VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
 
     vkCmdBindDescriptorSets(this->command->buffer(), 
@@ -1238,7 +1220,7 @@ private:
   VkDeviceSize offset;
 };
 
-class FramebufferAttachment : public Node {
+class FramebufferAttachment {
 public:
   NO_COPY_OR_ASSIGNMENT(FramebufferAttachment)
   virtual ~FramebufferAttachment() = default;
@@ -1254,8 +1236,7 @@ public:
     };
   }
 
-private:
-  void doAlloc(RenderManager * context) override
+  VkImageView alloc(RenderManager * context)
   {
     VkExtent3D extent = { context->extent.width, context->extent.height, 1 };
     this->image = std::make_shared<VulkanImage>(context->device,
@@ -1271,18 +1252,18 @@ private:
 
     this->imageobject = std::make_shared<ImageObject>(this->image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    context->imageobjects.push_back(this->imageobject);
-
-    context->alloc_callbacks.push_back([this](RenderManager * context) {
-      this->imageview = std::make_shared<VulkanImageView>(context->device,
-                                                          this->image->image,
-                                                          this->format,
-                                                          VK_IMAGE_VIEW_TYPE_2D,
-                                                          this->component_mapping,
-                                                          this->subresource_range);
-
-      context->state.framebuffer_attachments.push_back(this->imageview->view);
-    });
+    const auto memory = std::make_shared<VulkanMemory>(context->device,
+                                                       this->imageobject->memory_requirements.size,
+                                                       this->imageobject->memory_type_index);
+    const VkDeviceSize offset = 0;
+    this->imageobject->bind(memory, offset);
+    this->imageview = std::make_shared<VulkanImageView>(context->device,
+                                                        this->image->image,
+                                                        this->format,
+                                                        VK_IMAGE_VIEW_TYPE_2D,
+                                                        this->component_mapping,
+                                                        this->subresource_range);
+    return this->imageview->view;
   }
 
 public:
@@ -1303,17 +1284,51 @@ public:
   std::shared_ptr<VulkanImageView> imageview;
 };
 
+class FramebufferObject : public Node {
+public:
+  NO_COPY_OR_ASSIGNMENT(FramebufferObject)
+  virtual ~FramebufferObject() = default;
+
+  FramebufferObject(std::vector<std::shared_ptr<FramebufferAttachment>> attachments)
+    : attachments(attachments)
+  {}
+
+private:
+  void doAlloc(RenderManager* context) override
+  {
+    std::vector<VkImageView> imageviews;
+    for (auto attachment : this->attachments) {
+      imageviews.push_back(attachment->alloc(context));
+    }
+
+    this->framebuffer = std::make_unique<VulkanFramebuffer>(context->device,
+                                                            context->state.renderpass,
+                                                            imageviews,
+                                                            context->extent,
+                                                            1);
+  }
+
+  void doResize(RenderManager * context) override
+  {
+    this->doAlloc(context);
+  }
+
+public:
+  std::unique_ptr<VulkanFramebuffer> framebuffer;
+  std::vector<std::shared_ptr<FramebufferAttachment>> attachments;
+};
+
 class SubpassObject {
 public:
   NO_COPY_OR_ASSIGNMENT(SubpassObject)
 
-  SubpassObject(VkSubpassDescriptionFlags flags,
-                VkPipelineBindPoint bind_point,
-                std::vector<VkAttachmentReference> input_attachments,
-                std::vector<VkAttachmentReference> color_attachments,
-                std::vector<VkAttachmentReference> resolve_attachments,
-                VkAttachmentReference depth_stencil_attachment,
-                std::vector<uint32_t> preserve_attachments) :
+    SubpassObject(VkSubpassDescriptionFlags flags,
+      VkPipelineBindPoint bind_point,
+      std::vector<VkAttachmentReference> input_attachments,
+      std::vector<VkAttachmentReference> color_attachments,
+      std::vector<VkAttachmentReference> resolve_attachments,
+      VkAttachmentReference depth_stencil_attachment,
+      std::vector<uint32_t> preserve_attachments) :
     input_attachments(input_attachments),
     color_attachments(color_attachments),
     resolve_attachments(resolve_attachments),
@@ -1344,39 +1359,6 @@ private:
   std::vector<uint32_t> preserve_attachments;
 };
 
-class FramebufferObject : public Group {
-public:
-  NO_COPY_OR_ASSIGNMENT(FramebufferObject)
-  FramebufferObject() = default;
-  virtual ~FramebufferObject() = default;
-
-private:
-  void doAlloc(RenderManager * context) override
-  {
-    Group::doAlloc(context);
-    context->alloc_callbacks.push_back([this](RenderManager * context) {
-      this->framebuffer = std::make_unique<VulkanFramebuffer>(context->device,
-                                                              context->state.renderpass,
-                                                              context->state.framebuffer_attachments,
-                                                              context->extent,
-                                                              1);
-    });
-  }
-
-  void doResize(RenderManager * context) override
-  {
-    this->doAlloc(context);
-  }
-
-  void doRecord(RenderManager * recorder) override
-  {
-    recorder->state.framebuffer = this->framebuffer->framebuffer;
-  }
-
-public:
-  std::unique_ptr<VulkanFramebuffer> framebuffer;
-};
-
 class RenderpassObject : public Group {
 public:
   NO_COPY_OR_ASSIGNMENT(RenderpassObject)
@@ -1393,7 +1375,7 @@ public:
   }
 
 private:
-  void doAlloc(RenderManager * context) override
+  void doAlloc(RenderManager* context) override
   {
     this->renderpass = std::make_shared<VulkanRenderpass>(context->device,
                                                           this->attachments,
@@ -1403,16 +1385,16 @@ private:
     Group::doAlloc(context);
   }
 
-  void doResize(RenderManager * context) override
+  void doResize(RenderManager* context) override
   {
     context->state.renderpass = this->renderpass;
     Group::doResize(context);
   }
 
-  void doPipeline(RenderManager * creator) override
+  void doPipeline(RenderManager * context) override
   {
-    creator->state.renderpass = this->renderpass;
-    Group::doPipeline(creator);
+    context->state.renderpass = this->renderpass;
+    Group::doPipeline(context);
   }
 
   void doRecord(RenderManager * recorder) override
