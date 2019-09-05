@@ -14,17 +14,21 @@ int main(int argc, char *argv[])
     VulkanImageFactory::Register<GliTextureImage>();
 
     std::vector<const char *> instance_layers{
-#ifdef _DEBUG
+#ifdef DEBUG
       "VK_LAYER_LUNARG_standard_validation",
 #endif
     };
 
     std::vector<const char *> instance_extensions{
+#ifdef SURFACE
       VK_KHR_SURFACE_EXTENSION_NAME,
+#endif
+#ifdef DEBUG
       VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#endif
+#if defined(SURFACE) && defined(VK_USE_PLATFORM_WIN32_KHR)
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
+#elif defined(SURFACE) && defined(VK_USE_PLATFORM_XCB_KHR)
       VK_KHR_XCB_SURFACE_EXTENSION_NAME
 #endif
     };
@@ -33,7 +37,7 @@ int main(int argc, char *argv[])
                                                     instance_layers,
                                                     instance_extensions);
 
-#ifdef _DEBUG
+#ifdef DEBUG
     auto debugcb = std::make_unique<VulkanDebugCallback>(
       vulkan,
       VK_DEBUG_REPORT_WARNING_BIT_EXT |
@@ -42,13 +46,15 @@ int main(int argc, char *argv[])
 #endif
 
 	std::vector<const char *> device_layers{
-#ifdef _DEBUG
+#ifdef DEBUG
       "VK_LAYER_LUNARG_standard_validation",
 #endif
     };
 
     std::vector<const char *> device_extensions{
+#ifdef SWAPCHAIN
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
+#endif
     };
 
     VkPhysicalDeviceFeatures device_features;

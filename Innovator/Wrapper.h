@@ -211,16 +211,20 @@ public:
     }
 
     this->vkQueuePresent = this->getProcAddress<PFN_vkQueuePresentKHR>("vkQueuePresentKHR");
+#ifdef SWAPCHAIN
     this->vkCreateSwapchain = this->getProcAddress<PFN_vkCreateSwapchainKHR>("vkCreateSwapchainKHR");
     this->vkAcquireNextImage = this->getProcAddress<PFN_vkAcquireNextImageKHR>("vkAcquireNextImageKHR");
     this->vkDestroySwapchain = this->getProcAddress<PFN_vkDestroySwapchainKHR>("vkDestroySwapchainKHR");
     this->vkGetSwapchainImages = this->getProcAddress<PFN_vkGetSwapchainImagesKHR>("vkGetSwapchainImagesKHR");
+#endif // SWAPCHAIN
     this->vkCreateDebugReportCallback = this->getProcAddress<PFN_vkCreateDebugReportCallbackEXT>("vkCreateDebugReportCallbackEXT");
     this->vkDestroyDebugReportCallback = this->getProcAddress<PFN_vkDestroyDebugReportCallbackEXT>("vkDestroyDebugReportCallbackEXT");
+#ifdef SURFACE
     this->vkGetPhysicalDeviceSurfaceSupport = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfaceSupportKHR>("vkGetPhysicalDeviceSurfaceSupportKHR");
     this->vkGetPhysicalDeviceSurfaceFormats = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>("vkGetPhysicalDeviceSurfaceFormatsKHR");
     this->vkGetPhysicalDeviceSurfaceCapabilities = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>("vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
     this->vkGetPhysicalDeviceSurfacePresentModes = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>("vkGetPhysicalDeviceSurfacePresentModesKHR");
+#endif // SURFACE
   }
 
   ~VulkanInstance()
