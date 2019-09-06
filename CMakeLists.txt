@@ -27,7 +27,8 @@ include_directories(${PROJECT_SOURCE_DIR}/../glm)
 include_directories(${PROJECT_SOURCE_DIR}/../gli)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${Vulkan_INCLUDE_DIRS})
+include_directories(${CUDA_INCLUDE_DIRS})
 
-target_link_libraries(Viewer Vulkan::Vulkan)
+target_link_libraries(Viewer ${Vulkan_LIBRARIES})
 target_link_libraries(Viewer ${CUDA_LIBRARIES})
 
