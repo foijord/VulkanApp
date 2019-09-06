@@ -7,6 +7,8 @@
 #include <iostream>
 #include <vector>
 
+#include <cuda_runtime.h>
+
 
 int main(int argc, char *argv[])
 {
@@ -121,7 +123,7 @@ int main(int argc, char *argv[])
                                                    glm::dvec3(0, 0, 0), 
                                                    glm::dvec3(0, 1, 0));
 
-    auto projmatrix = std::make_shared<ProjMatrix>(1000.0f, 0.1f, 4.0f / 3.0f, 0.7f);
+    auto projmatrix = std::make_shared<ProjMatrix>(1000.0f, 0.1f, 1.0f, 0.7f);
 
     renderpass->children = {
       framebuffer,
@@ -129,6 +131,14 @@ int main(int argc, char *argv[])
       projmatrix,
       eval_file("crate.scene")
     };
+
+    int device_count = 0;
+    cudaError_t error_id = cudaGetDeviceCount(&device_count);
+
+    if (error_id != cudaSuccess) {
+      throw std::runtime_error(cudaGetErrorString(error_id));
+    }
+    std::cout << "CUDA device count: " << device_count << std::endl;
 
 #ifndef HEADLESS
     VulkanWindow window(vulkan, device, color_attachment, renderpass, viewmatrix);

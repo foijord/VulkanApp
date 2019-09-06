@@ -1,5 +1,9 @@
 cmake_minimum_required (VERSION 3.12)
-project (Viewer)
+project (Viewer LANGUAGES CXX CUDA)
+
+find_package(Vulkan REQUIRED)
+find_package(CUDA 10.1 REQUIRED)
+
 add_executable(Viewer main.cpp)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
@@ -19,12 +23,11 @@ else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_XCB_KHR")
 endif(WIN32)
 
-find_package(Vulkan REQUIRED)
-
 include_directories(${PROJECT_SOURCE_DIR}/../glm)
 include_directories(${PROJECT_SOURCE_DIR}/../gli)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${Vulkan_INCLUDE_DIRS})
 
 target_link_libraries(Viewer Vulkan::Vulkan)
+target_link_libraries(Viewer ${CUDA_LIBRARIES})
 
