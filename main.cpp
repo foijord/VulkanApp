@@ -134,6 +134,8 @@ int main(int argc, char *argv[])
     VulkanWindow window(vulkan, device, color_attachment, renderpass, viewmatrix);
     return window.show();
 #else
+    auto offscreen = std::make_shared<OffscreenImage>(color_attachment);
+    
     auto scene = std::make_shared<Group>();
     scene->children = {
       renderpass,

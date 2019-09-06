@@ -211,6 +211,7 @@ public:
     }
 
 #ifndef HEADLESS
+    this->vkQueuePresent = this->getProcAddress<PFN_vkQueuePresentKHR>("vkQueuePresentKHR");
     this->vkCreateSwapchain = this->getProcAddress<PFN_vkCreateSwapchainKHR>("vkCreateSwapchainKHR");
     this->vkAcquireNextImage = this->getProcAddress<PFN_vkAcquireNextImageKHR>("vkAcquireNextImageKHR");
     this->vkDestroySwapchain = this->getProcAddress<PFN_vkDestroySwapchainKHR>("vkDestroySwapchainKHR");
@@ -220,7 +221,6 @@ public:
     this->vkGetPhysicalDeviceSurfaceCapabilities = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>("vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
     this->vkGetPhysicalDeviceSurfacePresentModes = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>("vkGetPhysicalDeviceSurfacePresentModesKHR");
 #endif // HEADLESS
-    this->vkQueuePresent = this->getProcAddress<PFN_vkQueuePresentKHR>("vkQueuePresentKHR");
     this->vkCreateDebugReportCallback = this->getProcAddress<PFN_vkCreateDebugReportCallbackEXT>("vkCreateDebugReportCallbackEXT");
     this->vkDestroyDebugReportCallback = this->getProcAddress<PFN_vkDestroyDebugReportCallbackEXT>("vkDestroyDebugReportCallbackEXT");
   }

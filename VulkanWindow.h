@@ -167,13 +167,11 @@ public:
       surface_format,
       present_mode);
 
-    auto offscreen = std::make_shared<OffscreenImage>(color_attachment);
 
     this->root = std::make_shared<Group>();
     this->root->children = {
       scene,
-      swapchain,
-      //offscreen
+      swapchain
     };
 
     this->rendermanager->init(this->root.get());
