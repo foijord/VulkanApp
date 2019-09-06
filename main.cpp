@@ -7,6 +7,7 @@
 #include <iostream>
 #include <vector>
 
+#include <NvPipe.h>
 #include <cuda_runtime.h>
 
 
@@ -139,6 +140,9 @@ int main(int argc, char *argv[])
       throw std::runtime_error(cudaGetErrorString(error_id));
     }
     std::cout << "CUDA device count: " << device_count << std::endl;
+
+    NvPipe* encoder = NvPipe_CreateEncoder(NVPIPE_RGBA32, NVPIPE_H264, NVPIPE_LOSSY, 32 * 1000 * 1000, 90, 512, 512); // 32 Mbps @ 90 Hz
+    NvPipe_Destroy(encoder);
 
 #ifndef HEADLESS
     VulkanWindow window(vulkan, device, color_attachment, renderpass, viewmatrix);

@@ -31,4 +31,4 @@ include_directories(${CUDA_INCLUDE_DIRS})
 
 target_link_libraries(Viewer ${Vulkan_LIBRARIES})
 target_link_libraries(Viewer ${CUDA_LIBRARIES})
-
+target_link_libraries(Viewer NvPipe)
