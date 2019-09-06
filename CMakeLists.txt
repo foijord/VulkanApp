@@ -11,6 +11,7 @@ add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 option(HEADLESS "Headless Renderer" OFF)
 if(HEADLESS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHEADLESS")
+  target_link_libraries(Viewer NvPipe)
 endif(HEADLESS)
 
 set_target_properties(Viewer PROPERTIES CXX_STANDARD 17)
@@ -31,4 +32,3 @@ include_directories(${CUDA_INCLUDE_DIRS})
 
 target_link_libraries(Viewer ${Vulkan_LIBRARIES})
 target_link_libraries(Viewer ${CUDA_LIBRARIES})
-target_link_libraries(Viewer NvPipe)

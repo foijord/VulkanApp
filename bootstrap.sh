@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# nVidia driver
-sudo add-apt-repository ppa:graphics-drivers
+# NVIDIA driver
+sudo add-apt-repository -y ppa:graphics-drivers
 sudo apt-get update
 sudo apt-get install -y nvidia-driver-435
 
@@ -11,7 +11,7 @@ sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.1.114-bionic.list http://p
 sudo apt update
 sudo apt install -y vulkan-sdk
 
-# CUDA
+# CUDA Toolkit 10.1
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin
 sudo mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600
 sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub

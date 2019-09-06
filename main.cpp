@@ -7,7 +7,9 @@
 #include <iostream>
 #include <vector>
 
+#ifdef HEADLESS
 #include <NvPipe.h>
+#endif
 #include <cuda_runtime.h>
 
 
@@ -133,6 +135,10 @@ int main(int argc, char *argv[])
       eval_file("crate.scene")
     };
 
+#ifndef HEADLESS
+    VulkanWindow window(vulkan, device, color_attachment, renderpass, viewmatrix);
+    return window.show();
+#else
     int device_count = 0;
     cudaError_t error_id = cudaGetDeviceCount(&device_count);
 
@@ -144,10 +150,6 @@ int main(int argc, char *argv[])
     NvPipe* encoder = NvPipe_CreateEncoder(NVPIPE_RGBA32, NVPIPE_H264, NVPIPE_LOSSY, 32 * 1000 * 1000, 90, 512, 512); // 32 Mbps @ 90 Hz
     NvPipe_Destroy(encoder);
 
-#ifndef HEADLESS
-    VulkanWindow window(vulkan, device, color_attachment, renderpass, viewmatrix);
-    return window.show();
-#else
     auto offscreen = std::make_shared<OffscreenImage>(color_attachment);
     
     auto scene = std::make_shared<Group>();
