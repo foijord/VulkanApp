@@ -4,15 +4,10 @@ add_executable(Viewer main.cpp)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
-option(SURFACE "Enable Surface extensions" ON)
-if(SURFACE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSURFACE")
-endif(SURFACE)
-
-option(SWAPCHAIN "Enable Swapchain extensions" ON)
-if(SWAPCHAIN)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSWAPCHAIN")
-endif(SWAPCHAIN)
+option(HEADLESS "Headless Renderer" OFF)
+if(HEADLESS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHEADLESS")
+endif(HEADLESS)
 
 set_target_properties(Viewer PROPERTIES CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGLM_FORCE_DEPTH_ZERO_TO_ONE")

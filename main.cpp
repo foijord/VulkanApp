@@ -20,15 +20,15 @@ int main(int argc, char *argv[])
     };
 
     std::vector<const char *> instance_extensions{
-#ifdef SURFACE
+#ifndef HEADLESS
       VK_KHR_SURFACE_EXTENSION_NAME,
 #endif
 #ifdef DEBUG
       VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
 #endif
-#if defined(SURFACE) && defined(VK_USE_PLATFORM_WIN32_KHR)
+#if !defined(HEADLESS) && defined(VK_USE_PLATFORM_WIN32_KHR)
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-#elif defined(SURFACE) && defined(VK_USE_PLATFORM_XCB_KHR)
+#elif !defined(HEADLESS) && defined(VK_USE_PLATFORM_XCB_KHR)
       VK_KHR_XCB_SURFACE_EXTENSION_NAME
 #endif
     };
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
     };
 
     std::vector<const char *> device_extensions{
-#ifdef SWAPCHAIN
+#ifndef HEADLESS
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
 #endif
     };
@@ -130,8 +130,25 @@ int main(int argc, char *argv[])
       eval_file("crate.scene")
     };
 
+#ifndef HEADLESS
     VulkanWindow window(vulkan, device, color_attachment, renderpass, viewmatrix);
     return window.show();
+#else
+    auto scene = std::make_shared<Group>();
+    scene->children = {
+      renderpass,
+      offscreen
+    };
+
+    VkExtent2D extent{ 512, 512 };
+
+    auto rendermanager = std::make_shared<RenderManager>(vulkan, device, extent);
+
+    rendermanager->init(scene.get());
+    rendermanager->redraw(scene.get());
+
+    return 0;
+#endif
   }
   catch (std::exception & e) {
     std::cerr << std::string("caught exception in main(): ") + typeid(e).name() << std::endl;
