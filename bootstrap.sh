@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+# nVidia driver
+sudo add-apt-repository ppa:graphics-drivers
+sudo apt-get update
+sudo apt-get install -y nvidia-driver-435
+
+# Vulkan SDK
+wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.1.114-bionic.list http://packages.lunarg.com/vulkan/1.1.114/lunarg-vulkan-1.1.114-bionic.list
+sudo apt update
+sudo apt install -y vulkan-sdk
+
 # CUDA
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin
 sudo mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600
@@ -9,3 +20,9 @@ sudo apt-get update
 sudo apt-get -y install cuda
 
 export CUDACXX=/usr/local/cuda-10.1/bin/nvcc
+
+# CMake
+wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | sudo apt-key add -
+sudo apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main'
+sudo apt-get update
+sudo apt-get install -y cmake
