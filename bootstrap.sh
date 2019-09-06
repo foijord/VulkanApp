@@ -27,7 +27,12 @@ sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ bionic main"
 sudo apt-get update
 sudo apt-get install -y cmake
 
+# NvPipe
 git clone https://github.com/NVIDIA/NvPipe.git
-cd NvPipe
+pushd NvPipe
 cmake -DNVPIPE_WITH_DECODER=OFF -DNVPIPE_WITH_OPENGL=OFF -DNVPIPE_BUILD_EXAMPLES=OFF .
 sudo make install
+popd
+
+git clone https://github.com/g-truc/gli.git
+git clone https://github.com/g-truc/glm.git
