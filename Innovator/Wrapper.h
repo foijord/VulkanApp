@@ -216,13 +216,13 @@ public:
     this->vkAcquireNextImage = this->getProcAddress<PFN_vkAcquireNextImageKHR>("vkAcquireNextImageKHR");
     this->vkDestroySwapchain = this->getProcAddress<PFN_vkDestroySwapchainKHR>("vkDestroySwapchainKHR");
     this->vkGetSwapchainImages = this->getProcAddress<PFN_vkGetSwapchainImagesKHR>("vkGetSwapchainImagesKHR");
+    this->vkCreateDebugReportCallback = this->getProcAddress<PFN_vkCreateDebugReportCallbackEXT>("vkCreateDebugReportCallbackEXT");
+    this->vkDestroyDebugReportCallback = this->getProcAddress<PFN_vkDestroyDebugReportCallbackEXT>("vkDestroyDebugReportCallbackEXT");
     this->vkGetPhysicalDeviceSurfaceSupport = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfaceSupportKHR>("vkGetPhysicalDeviceSurfaceSupportKHR");
     this->vkGetPhysicalDeviceSurfaceFormats = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>("vkGetPhysicalDeviceSurfaceFormatsKHR");
     this->vkGetPhysicalDeviceSurfaceCapabilities = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>("vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
     this->vkGetPhysicalDeviceSurfacePresentModes = this->getProcAddress<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>("vkGetPhysicalDeviceSurfacePresentModesKHR");
 #endif // HEADLESS
-    this->vkCreateDebugReportCallback = this->getProcAddress<PFN_vkCreateDebugReportCallbackEXT>("vkCreateDebugReportCallbackEXT");
-    this->vkDestroyDebugReportCallback = this->getProcAddress<PFN_vkDestroyDebugReportCallbackEXT>("vkDestroyDebugReportCallbackEXT");
   }
 
   ~VulkanInstance()
