@@ -33,6 +33,7 @@ pushd NvPipe
 cmake -DNVPIPE_WITH_DECODER=OFF -DNVPIPE_WITH_OPENGL=OFF -DNVPIPE_BUILD_EXAMPLES=OFF .
 sudo make install
 popd
+export LD_LIBRARY_PATH=/usr/local/lib
 
 git clone https://github.com/g-truc/gli.git
 git clone https://github.com/g-truc/glm.git
@@ -40,4 +41,6 @@ git clone https://github.com/g-truc/glm.git
 cd VulkanApp
 cmake -DHEADLESS=ON .
 make
-export LD_LIBRARY_PATH=/usr/local/lib
+
+git config --global user.name "Frode Oijord"
+git config --global user.email "foijord@gmail.com"
