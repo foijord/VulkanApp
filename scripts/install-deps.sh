@@ -39,3 +39,5 @@ git clone https://github.com/g-truc/glm.git
 
 cd VulkanApp
 cmake -DHEADLESS=ON .
+make
+export LD_LIBRARY_PATH=/usr/local/lib
