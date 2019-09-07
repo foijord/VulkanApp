@@ -39,3 +39,6 @@ git clone https://github.com/g-truc/glm.git
 
 cd VulkanApp
 cmake -DHEADLESS=ON .
+
+git config --global user.name "Frode Oijord"
+git config --global user.email "foijord@gmail.com"
