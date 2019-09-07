@@ -36,3 +36,6 @@ popd
 
 git clone https://github.com/g-truc/gli.git
 git clone https://github.com/g-truc/glm.git
+
+cd VulkanApp
+cmake -DHEADLESS=ON .
