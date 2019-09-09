@@ -49,6 +49,18 @@ namespace scm {
     return args;
   }
 
+  template <typename T>
+  std::vector<T> num_cast(const List& lst)
+  {
+    std::vector<T> args(lst.size());
+    std::transform(lst.begin(), lst.end(), args.begin(),
+      [](std::any exp) { 
+      double num = any_cast<double>(exp);
+      return static_cast<T>(num);
+    });
+    return args;
+  }
+
   fun_ptr plus = [](const List & lst)
   {
     std::vector<Number> args = any_cast<Number>(lst);

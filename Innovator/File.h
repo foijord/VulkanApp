@@ -41,22 +41,16 @@ std::shared_ptr<Node> node(const List & lst)
   return make_shared_object<Node, NodeType, Arg...>(lst);
 }
 
-std::shared_ptr<Separator> separator(const List & lst)
+template <typename Type, typename ItemType>
+std::shared_ptr<Type> shared_from_node_list(const List& lst)
 {
-  auto args = any_cast<std::shared_ptr<Node>>(lst);
-  return std::make_shared<Separator>(args);
-};
+  return std::make_shared<Type>(scm::any_cast<ItemType>(lst));
+}
 
 template <typename T>
 std::shared_ptr<Node> bufferdata(const List & lst)
 {
-  auto bufferdata = std::make_shared<InlineBufferData<T>>();
-  auto values = any_cast<Number>(lst);
-  bufferdata->values.resize(values.size());
-  std::transform(values.begin(), values.end(), bufferdata->values.begin(), [](double value) {
-    return static_cast<T>(value);
-  });
-  return bufferdata;
+  return std::make_shared<InlineBufferData<T>>(scm::num_cast<T>(lst));
 }
 
 uint32_t count(const List & list)
@@ -66,43 +60,21 @@ uint32_t count(const List & list)
   if (!bufferdata) {
     throw std::invalid_argument("count only works on BufferData nodes!");
   }
-  return static_cast<uint32_t>(bufferdata->size() / bufferdata->stride());
+  return static_cast<uint32_t>(bufferdata->count());
 }
 
-VkBufferUsageFlags bufferusageflags(const List & lst)
-{
-  std::vector<VkBufferUsageFlagBits> flagbits = any_cast<VkBufferUsageFlagBits>(lst);
-  VkBufferUsageFlags flags = 0;
-  for (auto bit : flagbits) {
-    flags |= bit;
-  }
-  return flags;
-}
-
-VkImageUsageFlags imageusageflags(const List& lst)
-{
-  std::vector<VkImageUsageFlagBits> flagbits = any_cast<VkImageUsageFlagBits>(lst);
-  VkImageUsageFlags flags = 0;
-  for (auto bit : flagbits) {
-    flags |= bit;
-  }
-  return flags;
-}
-
-VkImageCreateFlags imagecreateflags(const List& lst)
-{
+template <typename Flags, typename FlagBits>
+Flags flags(const List& lst) {
   if (lst.empty()) {
     return 0;
   }
-
-  std::vector<VkImageCreateFlagBits> flagbits = any_cast<VkImageCreateFlagBits>(lst);
-  VkImageCreateFlags flags = 0;
+  std::vector<FlagBits> flagbits = any_cast<FlagBits>(lst);
+  Flags flags = 0;
   for (auto bit : flagbits) {
     flags |= bit;
   }
   return flags;
 }
-
 
 std::shared_ptr<Separator> eval_file(const std::string & filename)
 {
@@ -118,12 +90,12 @@ std::shared_ptr<Separator> eval_file(const std::string & filename)
     { "textureimage", fun_ptr(node<TextureImage, std::string>) },
     { "image", fun_ptr(node<Image, VkSampleCountFlagBits, VkImageTiling, VkImageUsageFlags, VkSharingMode, VkImageCreateFlags, VkImageLayout>) },
     { "imageview", fun_ptr(node<ImageView, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle>) },
-    { "separator", fun_ptr(separator) },
+    { "separator", fun_ptr(shared_from_node_list<Separator, std::shared_ptr<Node>>) },
     { "bufferdata_float", fun_ptr(bufferdata<float>) },
     { "bufferdata_uint32", fun_ptr(bufferdata<uint32_t>) },
-    { "bufferusageflags", fun_ptr(bufferusageflags) },
-    { "imageusageflags", fun_ptr(imageusageflags) },
-    { "imagecreateflags", fun_ptr(imagecreateflags) },
+    { "bufferusageflags", fun_ptr(flags<VkBufferUsageFlags, VkBufferUsageFlagBits>) },
+    { "imageusageflags", fun_ptr(flags<VkImageUsageFlags, VkImageUsageFlagBits>) },
+    { "imagecreateflags", fun_ptr(flags<VkImageCreateFlags, VkImageCreateFlagBits>) },
     { "cpumemorybuffer", fun_ptr(node<CpuMemoryBuffer, VkBufferUsageFlags>) },
     { "gpumemorybuffer", fun_ptr(node<GpuMemoryBuffer, VkBufferUsageFlags>) },
     { "transformbuffer", fun_ptr(node<TransformBuffer>) },

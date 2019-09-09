@@ -2,6 +2,7 @@
 #include <VulkanWindow.h>
 #endif
 #include <Innovator/File.h>
+#include <Innovator/Nodes.h>
 #include <Innovator/Factory.h>
 
 #include <iostream>

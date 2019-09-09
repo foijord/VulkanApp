@@ -199,6 +199,10 @@ public:
   virtual void copy(char * dst) const = 0;
   virtual size_t size() const = 0;
   virtual size_t stride() const = 0;
+  size_t count() const 
+  {
+    return this->size() / this->stride();
+  }
 
 private:
   void doAlloc(RenderManager * context) override
