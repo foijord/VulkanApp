@@ -1,12 +1,14 @@
 #pragma once
 
 #include <Innovator/RenderManager.h>
+#include <Innovator/Wrapper.h>
 #include <Innovator/Node.h>
 #include <Innovator/Defines.h>
 #include <Innovator/Factory.h>
 
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <utility>
 #include <vector>
@@ -115,6 +117,15 @@ public:
 
 
 private:
+  void doPipeline(RenderManager* context) override
+  {
+    context->state.push_constant_ranges.push_back({
+      VK_SHADER_STAGE_VERTEX_BIT, // stageFlags
+      0,                          // offset
+      sizeof(glm::mat4)           // size
+    });
+  }
+
   void doRender(SceneRenderer* renderer) override
   {
     renderer->state.ViewMatrix = this->mat;
@@ -184,7 +195,7 @@ public:
 private:
   void doRender(SceneRenderer * renderer) override
   {
-    renderer->state.ModelMatrix = renderer->state.ModelMatrix * this->matrix;
+    renderer->state.ModelMatrix *= this->matrix;
   }
 
   glm::dmat4 matrix{ 1.0 };
@@ -426,7 +437,6 @@ public:
 private:
   void doAlloc(RenderManager * context) override
   {
-    
     this->buffer = std::make_shared<BufferObject>(
       std::make_shared<VulkanBuffer>(context->device,
                                      0,                                     
@@ -446,7 +456,7 @@ private:
   void doRender(SceneRenderer * renderer) override
   {
     std::array<glm::mat4, 2> data = {
-      glm::mat4(renderer->state.ViewMatrix* renderer->state.ModelMatrix),
+      glm::mat4(renderer->state.ViewMatrix * renderer->state.ModelMatrix),
       glm::mat4(renderer->state.ProjMatrix)
     };
 
@@ -969,7 +979,8 @@ private:
 
     this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
       creator->device,
-      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout });
+      std::vector<VkDescriptorSetLayout>{ this->descriptor_set_layout->layout },
+      creator->state.push_constant_ranges);
 
     for (auto & write_descriptor_set : creator->state.write_descriptor_sets) {
       write_descriptor_set.dstSet = this->descriptor_set->descriptor_sets[0];
@@ -985,7 +996,7 @@ private:
 
   void doRecord(RenderManager * recorder) override
   {
-    vkCmdBindDescriptorSets(recorder->render_command->buffer(),
+    vkCmdBindDescriptorSets(this->command->buffer(),
                             VK_PIPELINE_BIND_POINT_COMPUTE,
                             this->pipeline_layout->layout,
                             0,
@@ -994,11 +1005,11 @@ private:
                             0,
                             nullptr);
 
-    vkCmdBindPipeline(recorder->render_command->buffer(),
+    vkCmdBindPipeline(this->command->buffer(),
                       VK_PIPELINE_BIND_POINT_COMPUTE,
                       this->pipeline->pipeline);
 
-    vkCmdDispatch(recorder->render_command->buffer(),
+    vkCmdDispatch(this->command->buffer(),
                   this->group_count_x,
                   this->group_count_y,
                   this->group_count_z);
@@ -1009,6 +1020,7 @@ private:
   uint32_t group_count_z;
 
   std::unique_ptr<VulkanComputePipeline> pipeline;
+  std::unique_ptr<VulkanCommandBuffers> command;
 
   std::shared_ptr<VulkanDescriptorSetLayout> descriptor_set_layout;
   std::shared_ptr<VulkanDescriptorSets> descriptor_set;
@@ -1053,7 +1065,8 @@ private:
 
     this->pipeline_layout = std::make_unique<VulkanPipelineLayout>(
       creator->device,
-      descriptor_set_layouts);
+      descriptor_set_layouts,
+      creator->state.push_constant_ranges);
 
     this->descriptor_sets = std::make_unique<VulkanDescriptorSets>(
       creator->device,
@@ -1085,6 +1098,14 @@ private:
                                            0,
                                            VK_NULL_HANDLE,
                                            VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT);
+
+    //glm::mat4 mv(1.0);
+    //vkCmdPushConstants(this->command->buffer(),
+    //                   this->pipeline_layout->layout,
+    //                   VK_SHADER_STAGE_VERTEX_BIT,
+    //                   0,
+    //                   static_cast<uint32_t>(sizeof(glm::mat4)),
+    //                   glm::value_ptr(mv));
 
     vkCmdBindDescriptorSets(this->command->buffer(), 
                             VK_PIPELINE_BIND_POINT_GRAPHICS, 
@@ -1327,12 +1348,12 @@ public:
   NO_COPY_OR_ASSIGNMENT(SubpassObject)
 
     SubpassObject(VkSubpassDescriptionFlags flags,
-      VkPipelineBindPoint bind_point,
-      std::vector<VkAttachmentReference> input_attachments,
-      std::vector<VkAttachmentReference> color_attachments,
-      std::vector<VkAttachmentReference> resolve_attachments,
-      VkAttachmentReference depth_stencil_attachment,
-      std::vector<uint32_t> preserve_attachments) :
+                  VkPipelineBindPoint bind_point,
+                  std::vector<VkAttachmentReference> input_attachments,
+                  std::vector<VkAttachmentReference> color_attachments,
+                  std::vector<VkAttachmentReference> resolve_attachments,
+                  VkAttachmentReference depth_stencil_attachment,
+                  std::vector<uint32_t> preserve_attachments) :
     input_attachments(input_attachments),
     color_attachments(color_attachments),
     resolve_attachments(resolve_attachments),
@@ -1381,6 +1402,11 @@ public:
 private:
   void doAlloc(RenderManager* context) override
   {
+    this->render_command = std::make_unique<VulkanCommandBuffers>(context->device);
+    this->default_queue = context->device->getQueue(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
+    this->render_fence = std::make_unique<VulkanFence>(context->device);
+    this->rendering_finished = std::make_unique<VulkanSemaphore>(context->device);
+
     this->renderpass = std::make_shared<VulkanRenderpass>(context->device,
                                                           this->attachments,
                                                           this->subpass_descriptions);
@@ -1430,20 +1456,37 @@ private:
       { { { 1.0f, 0 } } }
     };
 
-    VulkanCommandBufferScope commandbuffer(renderer->command->buffer());
+    {
+      renderer->command = this->render_command.get();
 
-    VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
-                                           framebuffer->framebuffer->framebuffer,
-                                           renderarea,
-                                           clearvalues,
-                                           renderer->command->buffer());
+      VulkanCommandBufferScope commandbuffer(this->render_command->buffer());
 
-    Group::doRender(renderer);
+      VulkanRenderPassScope renderpass_scope(this->renderpass->renderpass,
+                                             framebuffer->framebuffer->framebuffer,
+                                             renderarea,
+                                             clearvalues,
+                                             this->render_command->buffer());
+
+      Group::doRender(renderer);
+    }
+
+    FenceScope fence(renderer->device->device, this->render_fence->fence);
+
+    std::vector<VkSemaphore> wait_semaphores{};
+    std::vector<VkSemaphore> signal_semaphores = { this->rendering_finished->semaphore };
+
+    this->render_command->submit(this->default_queue,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                 this->render_fence->fence);
   }
 
   std::vector<VkAttachmentDescription> attachments;
   std::vector<std::shared_ptr<SubpassObject>> subpasses;
   std::vector<VkSubpassDescription> subpass_descriptions;
+  VkQueue default_queue{ nullptr };
+  std::unique_ptr<VulkanSemaphore> rendering_finished;
+  std::unique_ptr<VulkanCommandBuffers> render_command;  
+  std::shared_ptr<VulkanFence> render_fence;
   std::shared_ptr<VulkanRenderpass> renderpass;
 };
 
@@ -1825,7 +1868,7 @@ private:
     {
       FenceScope fence_scope(context->device->device, this->offscreen_fence->fence);
 
-      this->get_image_command->submit(context->default_queue,
+      this->get_image_command->submit(context->queue,
                                       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                       this->offscreen_fence->fence);
     }

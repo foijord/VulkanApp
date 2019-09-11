@@ -21,19 +21,28 @@ public:
 
   explicit SceneRenderer(std::shared_ptr<VulkanInstance> vulkan,
                          std::shared_ptr<VulkanDevice> device,
-                         VulkanCommandBuffers * command,
                          VkExtent2D extent) :
     vulkan(std::move(vulkan)),
     device(std::move(device)),
-    command(command),
     extent(extent)
   {}
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
   RenderState state;
-  VulkanCommandBuffers * command;
+  VulkanCommandBuffers* command{ nullptr };
   VkExtent2D extent;  
+};
+
+class MemoryAllocator {
+public:
+  NO_COPY_OR_ASSIGNMENT(MemoryAllocator)
+  ~MemoryAllocator() = default;
+
+  MemoryAllocator() = delete;
+
+  std::vector<std::shared_ptr<ImageObject>> imageobjects;
+  std::vector<std::shared_ptr<BufferObject>> bufferobjects;
 };
 
 class RenderManager {
@@ -49,14 +58,11 @@ public:
       vulkan(std::move(vulkan)),
       device(std::move(device)),
       extent(extent),
-      render_fence(std::make_unique<VulkanFence>(this->device)),
-      stage_fence(std::make_unique<VulkanFence>(this->device)),
+      fence(std::make_unique<VulkanFence>(this->device)),
       command(std::make_unique<VulkanCommandBuffers>(this->device)),
-      render_command(std::make_unique<VulkanCommandBuffers>(this->device)),
-      pipelinecache(std::make_shared<VulkanPipelineCache>(this->device)),
-      rendering_finished(std::make_unique<VulkanSemaphore>(this->device))
+      pipelinecache(std::make_shared<VulkanPipelineCache>(this->device))
   {
-    this->default_queue = this->device->getQueue(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
+    this->queue = this->device->getQueue(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
   }
 
   virtual ~RenderManager() 
@@ -130,80 +136,66 @@ public:
     }
   }
 
-  void alloc(Node * root)
-  {    
+  void traverse(std::function<void()> action) 
+  {
     this->state = State();
 
     this->begin_alloc();
     {
       VulkanCommandBufferScope scope(this->command->buffer());
-      root->alloc(this);
+      action();
     }
     this->end_alloc();
+
+    FenceScope fence_scope(this->device->device, this->fence->fence);
+
+    this->command->submit(this->queue,
+                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                          this->fence->fence);
+  }
+
+  void alloc(Node * root)
+  {    
+    this->traverse([&]() {
+      root->alloc(this);
+    });
   }
 
   void resize(Node * root)
   {
-    this->state = State();
-
-    this->begin_alloc();
-    {
-      VulkanCommandBufferScope scope(this->command->buffer());
+    this->traverse([&]() {
       root->resize(this);
-    }
-
-    this->end_alloc();
-
-    FenceScope fence_scope(this->device->device, this->stage_fence->fence);
-    
-    this->command->submit(this->default_queue,
-                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                          this->stage_fence->fence);
+    });
   }
 
   void stage(Node * root)
   {
-    this->state = State();
-    {
-      VulkanCommandBufferScope scope(this->command->buffer());
+    this->traverse([&]() {
       root->stage(this);
-    }
-    FenceScope fence_scope(this->device->device, this->stage_fence->fence);
-    
-    this->command->submit(this->default_queue,
-                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                          this->stage_fence->fence);
+    });
   }
 
   void pipeline(Node * root)
   {
-    this->state = State();
-    root->pipeline(this);
+    this->traverse([&]() {
+      root->pipeline(this);
+    });
   }
 
   void record(Node * root)
   {
-    this->state = State();
-    root->record(this);
+    this->traverse([&]() {
+      root->record(this);
+    });
   }
 
   void render(Node * root) const
   {
     SceneRenderer renderer(this->vulkan, 
                            this->device, 
-                           this->render_command.get(), 
                            this->extent);
 
     root->render(&renderer);
-
-    FenceScope fence(this->device->device, this->render_fence->fence);
-
-    std::vector<VkSemaphore> wait_semaphores{};
-    std::vector<VkSemaphore> signal_semaphores = { this->rendering_finished->semaphore };
-
-    this->render_command->submit(this->default_queue,
-                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                 this->render_fence->fence);
   }
 
   void present(Node * root)
@@ -213,17 +205,14 @@ public:
 
   std::shared_ptr<VulkanInstance> vulkan;
   std::shared_ptr<VulkanDevice> device;
-  VkQueue default_queue{ nullptr };
   VkExtent2D extent;
+  VkQueue queue{ nullptr };
 
   State state;
 
-  std::shared_ptr<VulkanFence> render_fence;
-  std::shared_ptr<VulkanFence> stage_fence;
+  std::shared_ptr<VulkanFence> fence;
   std::unique_ptr<VulkanCommandBuffers> command;
-  std::unique_ptr<VulkanCommandBuffers> render_command;
   std::shared_ptr<VulkanPipelineCache> pipelinecache;
-  std::unique_ptr<VulkanSemaphore> rendering_finished;
 
   std::vector<std::shared_ptr<ImageObject>> imageobjects;
   std::vector<std::shared_ptr<BufferObject>> bufferobjects;

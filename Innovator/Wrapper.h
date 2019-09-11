@@ -1248,7 +1248,7 @@ public:
 
   VulkanPipelineLayout(std::shared_ptr<VulkanDevice> device, 
                        const std::vector<VkDescriptorSetLayout> & setlayouts,
-                       const std::vector<VkPushConstantRange> & pushconstantranges = std::vector<VkPushConstantRange>())
+                       const std::vector<VkPushConstantRange> & pushconstantranges)
     : device(std::move(device))
   {
     VkPipelineLayoutCreateInfo create_info{
