@@ -1403,7 +1403,7 @@ private:
   void doAlloc(RenderManager* context) override
   {
     this->render_command = std::make_unique<VulkanCommandBuffers>(context->device);
-    this->default_queue = context->device->getQueue(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
+    this->render_queue = context->device->getQueue(VK_QUEUE_GRAPHICS_BIT);
     this->render_fence = std::make_unique<VulkanFence>(context->device);
     this->rendering_finished = std::make_unique<VulkanSemaphore>(context->device);
 
@@ -1475,7 +1475,7 @@ private:
     std::vector<VkSemaphore> wait_semaphores{};
     std::vector<VkSemaphore> signal_semaphores = { this->rendering_finished->semaphore };
 
-    this->render_command->submit(this->default_queue,
+    this->render_command->submit(this->render_queue,
                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                  this->render_fence->fence);
   }
@@ -1483,7 +1483,7 @@ private:
   std::vector<VkAttachmentDescription> attachments;
   std::vector<std::shared_ptr<SubpassObject>> subpasses;
   std::vector<VkSubpassDescription> subpass_descriptions;
-  VkQueue default_queue{ nullptr };
+  VkQueue render_queue{ nullptr };
   std::unique_ptr<VulkanSemaphore> rendering_finished;
   std::unique_ptr<VulkanCommandBuffers> render_command;  
   std::shared_ptr<VulkanFence> render_fence;
