@@ -7,6 +7,8 @@
 #include <Innovator/Factory.h>
 
 #include <vulkan/vulkan.h>
+#include <shaderc/shaderc.hpp>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -117,15 +119,6 @@ public:
 
 
 private:
-  void doPipeline(RenderManager* context) override
-  {
-    context->state.push_constant_ranges.push_back({
-      VK_SHADER_STAGE_VERTEX_BIT, // stageFlags
-      0,                          // offset
-      sizeof(glm::mat4)           // size
-    });
-  }
-
   void doRender(SceneRenderer* renderer) override
   {
     renderer->state.ViewMatrix = this->mat;
@@ -619,23 +612,45 @@ public:
   virtual ~Shader() = default;
 
   explicit Shader(std::string filename, const VkShaderStageFlagBits stage):
-    filename(std::move(filename)), 
     stage(stage)
   {
-    this->readFile();
-  }
+    std::ifstream input(filename, std::ios::in);
+    std::string glsl(std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{});
 
-  void readFile() 
-  {
-    std::ifstream input(this->filename, std::ios::binary);
-    this->code = std::vector<char>(std::istreambuf_iterator<char>{input},
-                                   std::istreambuf_iterator<char>{});
+    shaderc_shader_kind kind = [stage]() 
+    {
+      switch (stage) {
+      case VK_SHADER_STAGE_VERTEX_BIT:
+        return shaderc_vertex_shader;
+      case VK_SHADER_STAGE_COMPUTE_BIT:
+        return shaderc_compute_shader;
+      case VK_SHADER_STAGE_GEOMETRY_BIT:
+        return shaderc_geometry_shader;
+      case VK_SHADER_STAGE_FRAGMENT_BIT:
+        return shaderc_fragment_shader;
+      case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
+        return shaderc_tess_control_shader;
+      case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
+        return shaderc_tess_evaluation_shader;
+      default:
+        throw std::runtime_error("Unknown shader stage");
+      }
+    }();
+
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+    shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(glsl, kind, filename.c_str(), options);
+
+    if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+      throw std::runtime_error(module.GetErrorMessage());
+    }
+    this->spv = { module.cbegin(), module.cend() };
   }
 
 private:
   void doAlloc(RenderManager * context) override
   {
-    this->shader = std::make_unique<VulkanShaderModule>(context->device, this->code);
+    this->shader = std::make_unique<VulkanShaderModule>(context->device, this->spv);
   }
 
   void doPipeline(RenderManager * creator) override
@@ -652,9 +667,7 @@ private:
   }
 
 protected:
-  std::string filename;
-  std::vector<char> code;
-  std::vector<uint32_t> module;
+  std::vector<uint32_t> spv;
   VkShaderStageFlagBits stage;
   std::unique_ptr<VulkanShaderModule> shader;
 };

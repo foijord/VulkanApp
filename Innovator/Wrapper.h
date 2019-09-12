@@ -1081,15 +1081,15 @@ public:
   VulkanShaderModule() = delete;
 
   VulkanShaderModule(std::shared_ptr<VulkanDevice> device,
-                     const std::vector<char> & code)
+                     const std::vector<uint32_t> & code)
     : device(std::move(device))
   {
     VkShaderModuleCreateInfo create_info {
     VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,      // sType
       nullptr,                                        // pNext
       0,                                              // flags (reserved for future use)
-      code.size(),                                    // codeSize
-      reinterpret_cast<const uint32_t*>(code.data()), // pCode
+      code.size() * sizeof(uint32_t),                 // codeSize
+      code.data(),                                    // pCode
     };
 
     THROW_ON_ERROR(vkCreateShaderModule(this->device->device, &create_info, nullptr, &this->module));

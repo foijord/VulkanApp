@@ -51,8 +51,8 @@
       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER 
       VK_SHADER_STAGE_VERTEX_BIT)
 
-   (shader "Shaders/vert.spv" VK_SHADER_STAGE_VERTEX_BIT)
-   (shader "Shaders/frag.spv" VK_SHADER_STAGE_FRAGMENT_BIT)
+   (shader "Shaders/vertex.vert" VK_SHADER_STAGE_VERTEX_BIT)
+   (shader "Shaders/fragment.frag" VK_SHADER_STAGE_FRAGMENT_BIT)
 
    (indexeddrawcommand 
       (count indices)
