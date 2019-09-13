@@ -42,14 +42,9 @@ std::shared_ptr<Node> node(const List & lst)
 }
 
 template <typename Type, typename ItemType>
-std::shared_ptr<Type> shared_from_node_list(const List& lst)
+std::shared_ptr<Node> shared_from_node_list(const List& lst)
 {
   return std::make_shared<Type>(scm::any_cast<ItemType>(lst));
-}
-
-std::shared_ptr<Node> group(const List& lst)
-{
-  return std::make_shared<Group>(scm::any_cast<std::shared_ptr<Node>>(lst));
 }
 
 template <typename T>
@@ -81,7 +76,7 @@ Flags flags(const List& lst) {
   return flags;
 }
 
-std::shared_ptr<Separator> eval_file(const std::string & filename)
+std::shared_ptr<Node> eval_file(const std::string & filename)
 {
   env_ptr env = scm::global_env();
 
@@ -95,10 +90,10 @@ std::shared_ptr<Separator> eval_file(const std::string & filename)
     { "textureimage", fun_ptr(node<TextureImage, std::string>) },
     { "image", fun_ptr(node<Image, VkSampleCountFlagBits, VkImageTiling, VkImageUsageFlags, VkSharingMode, VkImageCreateFlags, VkImageLayout>) },
     { "imageview", fun_ptr(node<ImageView, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle>) },
-    { "group", fun_ptr(group) },
+    { "group", fun_ptr(shared_from_node_list<Group, std::shared_ptr<Node>>) },
     { "separator", fun_ptr(shared_from_node_list<Separator, std::shared_ptr<Node>>) },
-    { "bufferdata_float", fun_ptr(bufferdata<float>) },
-    { "bufferdata_uint32", fun_ptr(bufferdata<uint32_t>) },
+    { "bufferdata-float", fun_ptr(bufferdata<float>) },
+    { "bufferdata-uint32", fun_ptr(bufferdata<uint32_t>) },
     { "bufferusageflags", fun_ptr(flags<VkBufferUsageFlags, VkBufferUsageFlagBits>) },
     { "imageusageflags", fun_ptr(flags<VkImageUsageFlags, VkImageUsageFlagBits>) },
     { "imagecreateflags", fun_ptr(flags<VkImageCreateFlags, VkImageCreateFlagBits>) },
@@ -245,5 +240,5 @@ std::shared_ptr<Separator> eval_file(const std::string & filename)
 
   std::any exp = scm::read(code);
   std::any sep = scm::eval(exp, env);
-  return std::any_cast<std::shared_ptr<Separator>>(sep);
+  return std::any_cast<std::shared_ptr<Node>>(sep);
 }

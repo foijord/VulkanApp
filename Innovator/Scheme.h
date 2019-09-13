@@ -45,7 +45,7 @@ namespace scm {
   };
 
   struct Begin {
-    std::any exp;
+    lst_ptr exps;
   };
 
   template <typename T>
@@ -266,12 +266,9 @@ namespace scm {
     }
     if (exp.type() == typeid(Begin)) {
       auto begin = std::any_cast<Begin>(exp);
-      auto list = std::any_cast<lst_ptr>(begin.exp);
-      std::any result;
-      for (auto exp : *list) {
-        result = eval(exp, env);
-      }
-      return result;
+      std::transform(begin.exps->begin(), begin.exps->end(), begin.exps->begin(), 
+        std::bind(eval, std::placeholders::_1, env));
+      return begin.exps->back();
     }
 
     auto list = std::any_cast<lst_ptr>(exp);
@@ -324,17 +321,23 @@ namespace scm {
             return Lambda{ std::any_cast<lst_ptr>(list[1]), std::any_cast<lst_ptr>(list[2]) };
           }
           if (token == Symbol("define")) {
-            if (list.size() != 3) {
-              throw std::invalid_argument("wrong number of arguments to Define");
+            if (list.size() < 3 || list.size() > 4) {
+              throw std::invalid_argument("wrong number of arguments to define");
             }
             if (list[1].type() != typeid(Symbol)) {
-              throw std::invalid_argument("first argument to Define must be a Symbol");
+              throw std::invalid_argument("first argument to define must be a Symbol");
             }
-            return Define{ std::any_cast<Symbol>(list[1]), list[2] };
+            if (list.size() == 3) {
+              return Define{ std::any_cast<Symbol>(list[1]), list[2] };
+            } 
+            else {
+              auto lambda = Lambda{ std::any_cast<lst_ptr>(list[2]), std::any_cast<lst_ptr>(list[3]) };
+              return Define{ std::any_cast<Symbol>(list[1]), lambda };
+            }
           }
           if (token == Symbol("begin")) {
             if (list.size() < 2) {
-              throw std::invalid_argument("wrong Number of arguments to begin");
+              throw std::invalid_argument("Wrong number of arguments to begin");
             }
             return Begin{ std::make_shared<List>(next(list.begin()), list.end()) };
           }
