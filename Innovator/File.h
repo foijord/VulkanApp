@@ -47,6 +47,11 @@ std::shared_ptr<Type> shared_from_node_list(const List& lst)
   return std::make_shared<Type>(scm::any_cast<ItemType>(lst));
 }
 
+std::shared_ptr<Node> group(const List& lst)
+{
+  return std::make_shared<Group>(scm::any_cast<std::shared_ptr<Node>>(lst));
+}
+
 template <typename T>
 std::shared_ptr<Node> bufferdata(const List & lst)
 {
@@ -90,6 +95,7 @@ std::shared_ptr<Separator> eval_file(const std::string & filename)
     { "textureimage", fun_ptr(node<TextureImage, std::string>) },
     { "image", fun_ptr(node<Image, VkSampleCountFlagBits, VkImageTiling, VkImageUsageFlags, VkSharingMode, VkImageCreateFlags, VkImageLayout>) },
     { "imageview", fun_ptr(node<ImageView, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle, VkComponentSwizzle>) },
+    { "group", fun_ptr(group) },
     { "separator", fun_ptr(shared_from_node_list<Separator, std::shared_ptr<Node>>) },
     { "bufferdata_float", fun_ptr(bufferdata<float>) },
     { "bufferdata_uint32", fun_ptr(bufferdata<uint32_t>) },

@@ -44,6 +44,10 @@ namespace scm {
     std::any exp;
   };
 
+  struct Begin {
+    std::any exp;
+  };
+
   template <typename T>
   std::vector<T> any_cast(const List& lst)
   {
@@ -260,6 +264,15 @@ namespace scm {
       auto quote = std::any_cast<Quote>(exp);
       return quote.exp;
     }
+    if (exp.type() == typeid(Begin)) {
+      auto begin = std::any_cast<Begin>(exp);
+      auto list = std::any_cast<lst_ptr>(begin.exp);
+      std::any result;
+      for (auto exp : *list) {
+        result = eval(exp, env);
+      }
+      return result;
+    }
 
     auto list = std::any_cast<lst_ptr>(exp);
     std::transform(list->begin(), list->end(), list->begin(), std::bind(eval, std::placeholders::_1, env));
@@ -286,37 +299,45 @@ namespace scm {
   {
     if (exp.type() == typeid(List)) {
       auto list = std::any_cast<List>(exp);
-      std::transform(list.begin(), list.end(), list.begin(), parse);
+      if (!list.empty()) {
+        std::transform(list.begin(), list.end(), list.begin(), parse);
 
-      if (list[0].type() == typeid(Symbol)) {
-        auto token = std::any_cast<Symbol>(list[0]);
+        if (list[0].type() == typeid(Symbol)) {
+          auto token = std::any_cast<Symbol>(list[0]);
 
-        if (token == Symbol("quote")) {
-          if (list.size() != 2) {
-            throw std::invalid_argument("wrong number of arguments to quote");
+          if (token == Symbol("quote")) {
+            if (list.size() != 2) {
+              throw std::invalid_argument("wrong number of arguments to quote");
+            }
+            return Quote{ list[1] };
           }
-          return Quote{ list[1] };
-        }
-        if (token == Symbol("if")) {
-          if (list.size() != 4) {
-            throw std::invalid_argument("wrong number of arguments to if");
+          if (token == Symbol("if")) {
+            if (list.size() != 4) {
+              throw std::invalid_argument("wrong number of arguments to if");
+            }
+            If{ list[1], list[2], list[3] };
           }
-          If{ list[1], list[2], list[3] };
-        }
-        if (token == Symbol("lambda")) {
-          if (list.size() != 3) {
-            throw std::invalid_argument("wrong Number of arguments to lambda");
+          if (token == Symbol("lambda")) {
+            if (list.size() != 3) {
+              throw std::invalid_argument("wrong Number of arguments to lambda");
+            }
+            return Lambda{ std::any_cast<lst_ptr>(list[1]), std::any_cast<lst_ptr>(list[2]) };
           }
-          return Lambda{ std::any_cast<lst_ptr>(list[1]), std::any_cast<lst_ptr>(list[2]) };
-        }
-        if (token == Symbol("define")) {
-          if (list.size() != 3) {
-            throw std::invalid_argument("wrong number of arguments to Define");
+          if (token == Symbol("define")) {
+            if (list.size() != 3) {
+              throw std::invalid_argument("wrong number of arguments to Define");
+            }
+            if (list[1].type() != typeid(Symbol)) {
+              throw std::invalid_argument("first argument to Define must be a Symbol");
+            }
+            return Define{ std::any_cast<Symbol>(list[1]), list[2] };
           }
-          if (list[1].type() != typeid(Symbol)) {
-            throw std::invalid_argument("first argument to Define must be a Symbol");
+          if (token == Symbol("begin")) {
+            if (list.size() < 2) {
+              throw std::invalid_argument("wrong Number of arguments to begin");
+            }
+            return Begin{ std::make_shared<List>(next(list.begin()), list.end()) };
           }
-          return Define{ std::any_cast<Symbol>(list[1]), list[2] };
         }
       }
       return std::make_shared<List>(list);
