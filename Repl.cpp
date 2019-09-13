@@ -1,5 +1,5 @@
 
-#include <Innovator/Scheme/Scheme.h>
+#include <Innovator/Scheme.h>
 
 #include <string>
 #include <chrono>
